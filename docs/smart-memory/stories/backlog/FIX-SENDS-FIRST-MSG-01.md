@@ -39,8 +39,8 @@ A entrega da observabilidade é estrutural (define como debugamos delivery dali 
 - [ ] AC3: A correção mantém a invariante de que `sends_contacts.status='sent'` somente é setado após o handoff bem-sucedido para `omni-delivery-engine` (ou equivalente). Estados intermediários permitidos: `pending` (aguardando delivery worker) e `dispatching` se introduzido.
 - [ ] AC4: Reprodução do cenário descrito pelo usuário (primeiro disparo de uma campanha nova): mensagem aparece no Omni (`Conversas`) **e** no histórico de envios da Meta Graph (Manager → Mensagens) — ambos populados, com `status='sent'` em `messages` e `delivered`/`read` quando o destinatário interagir.
 - [ ] AC5: Test adversarial — campanha com 5 contatos com `wa_phone_number_id` válido; a primeira mensagem de cada chega ao cliente; nenhuma fica parada em `pending` indefinidamente.
-- [ ] AC6: Documentação do root cause registrada em `[[../../agents/research/sends-first-message-bug]]` com hipótese descartada vs. confirmada e link para o(s) commit(s) de correção.
-- [ ] AC7: Sem regressão em fluxos não-WhatsApp (Email/SMS/Phone). `npm run typecheck` passa.
+- [x] AC6: Documentação do root cause registrada em `[[../../agents/research/sends-first-message-bug]]` com hipótese descartada vs. confirmada e link para o(s) commit(s) de correção.
+- [x] AC7: Sem regressão em fluxos não-WhatsApp (Email/SMS/Phone). `npm run typecheck` passa.
 
 ### Observabilidade — schema (AC8-AC10)
 
@@ -179,13 +179,16 @@ CREATE TABLE message_delivery_attempts (
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | — |
+| Agente     | Rex (dev-dev-beta) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 (parcial — AC1-AC7 bug fix + AC6 RCA; AC8-AC15 blocked on migration + other agents) |
+| Branch     | feature/04-terminologia-referral |
 
 ## File List
 <!-- Dev preenche ao concluir -->
+- `supabase/functions/omni-delivery-engine/index.ts` — AC1/AC2: fix key name `wa_phone_number_id` → `phone_number_id` in request to whatsapp-outbound
+- `supabase/functions/whatsapp-outbound/index.ts` — AC1/AC2: add `phone_number_id` lookup path for channel credentials
+- `docs/smart-memory/agents/research/sends-first-message-bug.md` — AC6: RCA completa com H1-H4 investigadas
 
 ## QA Results
 <!-- QA preenche ao revisar -->
