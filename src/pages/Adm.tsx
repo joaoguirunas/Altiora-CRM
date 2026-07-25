@@ -1,6 +1,7 @@
 /**
  * Adm.tsx — ADM control plane main page.
  * REL-02: AC4 (Bulk button), AC7 (new-release notification).
+ * REL-03: AC9 (StatsBar "Com drift" card).
  * Tabs: Clientes / Sync Jobs / Audit Log.
  */
 import * as React from 'react';
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, Search, Zap, ServerCog } from 'lucide-react';
+import { Plus, Search, Zap, ServerCog, AlertTriangle, Users, GitMerge } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useAdmClients,
@@ -31,6 +32,7 @@ import { UpdateClientModal } from '@/components/adm/UpdateClientModal';
 import { BulkUpdateModal } from '@/components/adm/BulkUpdateModal';
 import { AdmSyncPanel } from '@/components/adm/AdmSyncPanel';
 import { AdmAuditLogPanel } from '@/components/adm/AdmAuditLogPanel';
+import { useAllClientsDrift } from '@/hooks/useClientDrift';
 
 // ─── AC7: New-release notification ────────────────────────────────────────────
 
@@ -54,6 +56,71 @@ function useNewReleaseNotification() {
     });
     localStorage.setItem(LAST_SEEN_KEY, latest.version);
   }, [latest, navigate]);
+}
+
+// ─── StatsBar — REL-03 AC9 ────────────────────────────────────────────────────
+
+interface StatCardProps {
+  label: string;
+  value: number | string;
+  icon: React.ReactNode;
+  accent?: boolean;
+}
+
+function StatCard({ label, value, icon, accent }: StatCardProps) {
+  return (
+    <div className={cn(
+      'flex items-center gap-2.5 px-3 py-2 rounded-[4px] border border-border bg-card',
+      accent && 'border-red-500/30 bg-red-500/5',
+    )}>
+      <span className={cn('flex-shrink-0', accent ? 'text-red-500' : 'text-muted-foreground')}>
+        {icon}
+      </span>
+      <div>
+        <p className="text-[18px] font-semibold leading-none text-foreground tabular-nums">
+          {value}
+        </p>
+        <p className={cn(
+          'text-[10px] font-medium uppercase tracking-wide mt-0.5',
+          accent ? 'text-red-500/80' : 'text-muted-foreground',
+        )}>
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+interface AdmStatsBarProps {
+  totalClients: number;
+  outdatedCount: number;
+}
+
+function AdmStatsBar({ totalClients, outdatedCount }: AdmStatsBarProps) {
+  const { data: driftSummary } = useAllClientsDrift();
+  const driftCount = driftSummary?.clientsWithDrift ?? 0;
+
+  return (
+    <div className="flex items-center gap-2 px-6 py-3 border-b border-border bg-muted/20 flex-wrap">
+      <StatCard
+        label="Clientes"
+        value={totalClients}
+        icon={<Users className="w-4 h-4" />}
+      />
+      <StatCard
+        label="Desatualizados"
+        value={outdatedCount}
+        icon={<GitMerge className="w-4 h-4" />}
+        accent={outdatedCount > 0}
+      />
+      <StatCard
+        label="Com drift"
+        value={driftCount}
+        icon={<AlertTriangle className="w-4 h-4" />}
+        accent={driftCount > 0}
+      />
+    </div>
+  );
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
@@ -231,6 +298,12 @@ export default function Adm() {
       </div>
 
       <Separator />
+
+      {/* REL-03 AC9 — Stats cards */}
+      <AdmStatsBar
+        totalClients={allClients.length}
+        outdatedCount={outdatedClients.length}
+      />
 
       <Tabs defaultValue="clientes" className="flex-1 flex flex-col min-h-0">
         <div className="px-6 pt-3">
