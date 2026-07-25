@@ -69,6 +69,16 @@ interface AdmRelease {
   migrations:      string[];
   min_compat_from: string;
   changelog:       string | null;
+  is_baseline:     boolean;        // REL-05 AC3 — true for squashed baseline releases
+  schema_hash:     string | null;  // REL-03 AC2 — canonical hash for drift detection
+}
+
+/** REL-05 AC4 — Compare semver-like strings ("4.70" > "4.50"). */
+function compareVersions(a: string, b: string): number {
+  const parts = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
+  const [aMaj, aMin = 0] = parts(a);
+  const [bMaj, bMin = 0] = parts(b);
+  return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
 }
 
 interface MigrationError {
@@ -135,7 +145,7 @@ Deno.serve(async (req: Request) => {
   if (target_version) {
     const { data, error } = await db
       .from('adm_releases')
-      .select('id, version, git_sha, migrations, min_compat_from, changelog')
+      .select('id, version, git_sha, migrations, min_compat_from, changelog, is_baseline, schema_hash')
       .eq('version', target_version)
       .maybeSingle();
     if (error || !data) {
@@ -145,7 +155,7 @@ Deno.serve(async (req: Request) => {
   } else {
     const { data, error } = await db
       .from('adm_releases')
-      .select('id, version, git_sha, migrations, min_compat_from, changelog')
+      .select('id, version, git_sha, migrations, min_compat_from, changelog, is_baseline, schema_hash')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -156,6 +166,57 @@ Deno.serve(async (req: Request) => {
   }
 
   const release = releaseData;
+
+  // ── REL-05 AC4: min_compat_from compatibility check ─────────────────────
+  // Skip check if current_version is null (new client — handled by AC3 below).
+  if (clientRecord.current_version && release.min_compat_from) {
+    if (compareVersions(clientRecord.current_version, release.min_compat_from) < 0) {
+      console.error(
+        `[adm-sync-client] ${clientRecord.name} — INCOMPATIBLE: ` +
+        `current=${clientRecord.current_version} min_compat_from=${release.min_compat_from}`
+      );
+      return json({
+        error:
+          `Version incompatible: client is on v${clientRecord.current_version} but ` +
+          `release v${release.version} requires min_compat_from=${release.min_compat_from}. ` +
+          `Apply a baseline squash first or upgrade incrementally.`,
+        code: 'VERSION_INCOMPATIBLE',
+      }, 422);
+    }
+  }
+
+  // ── REL-05 AC3: New client onboarding — detect baseline ─────────────────
+  // When current_version IS NULL, look for the most recent baseline release.
+  // If found (and it differs from the target), apply its migrations first so the
+  // tenant starts from the consolidated schema rather than re-running all history.
+  let baselineSegment: { gitSha: string; migrations: string[] } | null = null;
+  if (!clientRecord.current_version) {
+    const { data: baselineData } = await db
+      .from('adm_releases')
+      .select('version, git_sha, migrations, is_baseline')
+      .eq('is_baseline', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (baselineData) {
+      const bl = baselineData as { version: string; git_sha: string; migrations: string[]; is_baseline: boolean };
+      // Only use as bootstrap if baseline version is <= target (don't apply future baseline)
+      if (compareVersions(bl.version, release.version) <= 0 && bl.version !== release.version) {
+        const blMigrations = (bl.migrations as string[]).filter(path => {
+          const p = path.replace(/\\/g, '/');
+          return p.includes('supabase/migrations/') && !p.includes('migrations_adm');
+        });
+        if (blMigrations.length > 0) {
+          baselineSegment = { gitSha: bl.git_sha, migrations: blMigrations };
+          console.log(
+            `[adm-sync-client] ${clientRecord.name} — new client: prepending baseline ` +
+            `v${bl.version} (${blMigrations.length} migrations) before target v${release.version}`
+          );
+        }
+      }
+    }
+  }
 
   console.log(
     `[adm-sync-client] ${clientRecord.name} — version: ${release.version} ` +
@@ -202,8 +263,8 @@ Deno.serve(async (req: Request) => {
     `${allMigrations.length} total migrations, ${clientMigrations.length} tenant-side`
   );
 
-  // ── No tenant migrations → still valid sync (adm-only release) ───────────
-  if (clientMigrations.length === 0) {
+  // ── No tenant migrations (and no baseline to prepend) → adm-only release ──
+  if (clientMigrations.length === 0 && !baselineSegment) {
     await recordClientVersion(db, client_id, clientRecord.current_version, release.version, 'success', reason);
     await updateClientVersion(db, client_id, release.version);
     await insertAuditLog(db, client_id, release.version, 0, 0, 0, triggered_by, reason);
@@ -214,12 +275,26 @@ Deno.serve(async (req: Request) => {
   // ── Fetch already-applied migrations from client DB ──────────────────────
   const appliedVersions = await getAppliedMigrations(secrets.management_token, projectRef);
 
+  // ── Build ordered migration segments ─────────────────────────────────────
+  // REL-05 AC3: For new clients, prepend baseline segment before the target release.
+  // Each segment has its own git_sha so migrations are fetched from the correct tree.
+  const migrationSegments: Array<{ gitSha: string; migPath: string }> = [];
+
+  if (baselineSegment) {
+    for (const migPath of baselineSegment.migrations) {
+      migrationSegments.push({ gitSha: baselineSegment.gitSha, migPath });
+    }
+  }
+  for (const migPath of clientMigrations) {
+    migrationSegments.push({ gitSha: release.git_sha, migPath });
+  }
+
   // ── Apply each migration ─────────────────────────────────────────────────
   let applied = 0;
   let skipped = 0;
   const errors: MigrationError[] = [];
 
-  for (const migPath of clientMigrations) {
+  for (const { gitSha, migPath } of migrationSegments) {
     const filename = migPath.replace(/\\/g, '/').split('/').pop() ?? migPath;
     // Extract timestamp prefix — the first 14 digits of the filename
     const versionMatch = filename.match(/^(\d{14})/);
@@ -235,7 +310,7 @@ Deno.serve(async (req: Request) => {
     // Fetch SQL from GitHub using the release's git_sha
     let sql: string;
     try {
-      sql = await fetchMigrationSql(release.git_sha, migPath);
+      sql = await fetchMigrationSql(gitSha, migPath);
     } catch (fetchErr) {
       const errMsg = (fetchErr as Error).message;
       console.error(`[adm-sync-client]   ${filename} — GitHub fetch failed: ${errMsg}`);
@@ -270,12 +345,41 @@ Deno.serve(async (req: Request) => {
   await recordClientVersion(db, client_id, clientRecord.current_version, release.version, status, reason);
 
   // Only update current_version if at least some migrations succeeded
-  if (applied > 0 || (failed === 0 && skipped === clientMigrations.length)) {
+  const totalMigs = migrationSegments.length;
+  if (applied > 0 || (failed === 0 && skipped === totalMigs)) {
     // All were either applied or already done — client is at this version
     await updateClientVersion(db, client_id, release.version);
   }
 
   await insertAuditLog(db, client_id, release.version, applied, failed, skipped, triggered_by, reason);
+
+  // ── REL-03 AC2 support: store schema_hash after successful sync ───────────
+  // After a clean sync, compute the tenant's schema hash and cache it in
+  // adm_releases.schema_hash (if not already set). adm-drift-check uses this
+  // as the expected baseline for future drift comparisons.
+  if (failed === 0 && !release.schema_hash && secrets.service_role_key) {
+    try {
+      const tenantDb = createClient(clientRecord.supabase_url, secrets.service_role_key, {
+        auth: { persistSession: false },
+      });
+      const { data: hashData, error: hashErr } = await tenantDb.rpc('compute_schema_hash');
+      if (!hashErr && hashData) {
+        await db
+          .from('adm_releases')
+          .update({ schema_hash: hashData as string })
+          .eq('version', release.version)
+          .is('schema_hash', null); // race-safe: only update if still null
+        console.log(
+          `[adm-sync-client] ${clientRecord.name} — schema_hash stored for release ` +
+          `${release.version}: ${(hashData as string).slice(0, 12)}...`
+        );
+      } else if (hashErr) {
+        console.warn(`[adm-sync-client] compute_schema_hash non-fatal: ${hashErr.message}`);
+      }
+    } catch (e) {
+      console.warn(`[adm-sync-client] schema_hash compute threw (non-fatal): ${(e as Error).message}`);
+    }
+  }
 
   console.log(
     `[adm-sync-client] ${clientRecord.name} done: ` +

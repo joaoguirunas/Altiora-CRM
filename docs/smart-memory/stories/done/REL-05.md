@@ -29,14 +29,15 @@ Consolidar 100+ migrations em 1 baseline `_baseline_v{N}.sql` quando o históric
   - Trigger: label `baseline-squash-approved` em PR
   - Steps: detect candidate → dry-run psql → rename → archive originals → INSERT adm_releases → commit + push → comment PR
 
-- [ ] **AC3 — Onboarding novos clientes** ⏳ (dev-beta — adm-sync-client adjust)
-  - Lógica `current_version IS NULL` → aplica baseline + delta
+- [x] **AC3 — Onboarding novos clientes** ✅ 2026-07-25 (dev-beta)
+  - Lógica `current_version IS NULL` → detecta baseline release → prepend baseline migrations antes do target
 
-- [ ] **AC4 — Compatibilidade tenants existentes** ⏳ (dev-beta — adm-sync-client + min_compat_from)
+- [x] **AC4 — Compatibilidade tenants existentes** ✅ 2026-07-25 (dev-beta)
+  - `compareVersions()` helper + check `min_compat_from` → 422 VERSION_INCOMPATIBLE se client.current_version < release.min_compat_from
 
-- [x] **AC5 — Política automática: cron `adm-baseline-check`** ✅ (parte DB)
-  - Migration `20260725330000_adm_releases_is_baseline.sql`: flag `is_baseline` + cron sábados 5h UTC
-  - Edge fn `adm-baseline-check` → dev-beta (notificação super-admin)
+- [x] **AC5 — Política automática: cron `adm-baseline-check`** ✅ (completo 2026-07-25)
+  - Migration `20260725330000_adm_releases_is_baseline.sql`: flag `is_baseline` + cron sábados 5h UTC ✅
+  - Edge fn `adm-baseline-check` ✅ — conta incrementais desde último baseline, INSERT adm_audit_log se > threshold
 
 - [x] **AC6 — Restore workflow `.github/workflows/baseline-restore.yml`** ✅
   - Trigger: `workflow_dispatch` manual
@@ -55,6 +56,13 @@ Consolidar 100+ migrations em 1 baseline `_baseline_v{N}.sql` quando o históric
 | Concluído (parte DB) | 2026-07-25 |
 | Branch | feature/04-terminologia-referral |
 
+| Campo | Valor |
+|---|---|
+| Agente | dev-dev-beta (Rex) — AC3 + AC4 + AC5-fn |
+| Iniciado | 2026-07-25 |
+| Concluído | 2026-07-25 |
+| Branch | feat/rel-03-drift-badge-hooks |
+
 ## File List
 
 ### Criados por Bythak (DB + scripts + workflows + docs)
@@ -65,9 +73,9 @@ Consolidar 100+ migrations em 1 baseline `_baseline_v{N}.sql` quando o históric
 - `supabase/migrations_adm/rollbacks/20260725330000_adm_releases_is_baseline.rollback.sql`
 - `docs/smart-memory/conventions/baseline-squashing.md` — AC7 — documentação
 
-### Pendente (dev-beta)
-- Edge fn `supabase/functions/adm-baseline-check/` — AC5 edge fn — notificação super-admin
-- `adm-sync-client` adjusts para AC3 e AC4
+### Criados/modificados por Rex (dev-dev-beta) — AC3 + AC4 + AC5-fn
+- `supabase/functions/adm-sync-client/index.ts` — AC3: baselineSegment prepend + AC4: compareVersions + min_compat_from check + schema_hash store after sync
+- `supabase/functions/adm-baseline-check/index.ts` — AC5: conta incrementais desde último baseline, notifica via adm_audit_log se > threshold
 
 ## QA Results
 <!-- Axikar preenche ao revisar -->

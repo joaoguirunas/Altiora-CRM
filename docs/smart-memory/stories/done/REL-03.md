@@ -25,7 +25,7 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
   - Índices: `(client_id, detected_at DESC)` + `(status) WHERE status='detected'`
   - RLS: super_admin policy + service_role FOR ALL
 
-- [ ] **AC2 — Edge fn `adm-drift-check`** ⏳ (dev-beta)
+- [x] **AC2 — Edge fn `adm-drift-check`** ✅ 2026-07-25
   - Fallback: RPC `compute_schema_hash()` implementado (AC4 ✅)
   - Lógica de hash compare + INSERT adm_client_drift
 
@@ -45,7 +45,7 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 
 - [x] **AC5 — Badge "Drift detectado" em `AdmClientRow`** ✅ (Novik 2026-07-25)
 - [x] **AC6 — Modal "Drift" com Repair button** ✅ (Serak/dev-dev-gamma 2026-07-25 — commits 4ba3d1b + 999b283)
-- [ ] **AC7 — Edge fn `adm-drift-repair`** ⏳ (dev-beta)
+- [x] **AC7 — Edge fn `adm-drift-repair`** ✅ 2026-07-25
 - [x] **AC8 — Hooks frontend** ✅ (Novik 2026-07-25: useClientDrift, useAllClientsDrift, useRepairDrift — alinhado por Serak 2026-07-25; alpha valida/complementa)
 - [x] **AC9 — Stats card "Com drift" em `Adm.tsx`** ✅ (Serak/dev-dev-gamma 2026-07-25 — commit 999b283)
 
@@ -91,11 +91,10 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 - `src/hooks/useClientDrift.ts` — AC8: revisado/alinhado com Novik (interface `clientsWithDrift: string[], count`)
 - `src/hooks/useRepairDrift.ts` — AC8: revisado para invocar `adm-drift-repair` edge fn (AC7)
 
-### Pendente (outros agentes)
-- `supabase/functions/adm-drift-check/` — AC2 (dev-beta)
-- `supabase/functions/adm-drift-repair/` — AC7 (dev-beta)
-- `src/components/adm/DriftModal.tsx` — AC6 (Gamma — em paralelo)
-- Update `Adm.tsx` StatsBar — AC9 (dev-beta)
+### Criados por Rex (dev-dev-beta) — AC2 + AC7
+- `supabase/functions/adm-drift-check/index.ts` — AC2: itera clientes, compute_schema_hash() por tenant, lazy baseline, INSERT adm_client_drift se drifted
+- `supabase/functions/adm-drift-repair/index.ts` — AC7: aceita super-admin JWT + service_role, invoca adm-sync-client, UPDATE adm_client_drift status='repaired'
+- `supabase/migrations_adm/20260725360000_adm_releases_schema_hash.sql` — AC2 suporte: coluna schema_hash em adm_releases
 
 ## QA Results
 
