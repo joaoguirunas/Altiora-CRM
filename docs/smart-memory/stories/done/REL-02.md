@@ -131,7 +131,63 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
 - `src/App.tsx` — modificado (rotas /adm + /adm/clients/:id)
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: REL-02 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: EXIT 0 (0 erros)
+Issues: nenhum
+
+AC1 ✅  AdmClientRow.tsx — 3 estados de versão:
+        current_version === null → badge muted "Nunca sincronizado" (L79-81). ✅
+        current_version === target_version → badge emerald "Atualizado" (L89-91). ✅
+        current_version !== target_version → badge amber "N versões atrás" clicável
+        (L105, abre UpdateClientModal). ✅
+        current_version exibido em mono font (L127-129). ✅
+
+AC2 ✅  UpdateClientModal.tsx — changelog via useAdmReleasesBetween(current, target). ✅
+        Checkbox "Confirmo que entendo que esta operação modificará o schema..." (L167). ✅
+        Botão "Atualizar agora" disabled até checkbox marcado. ✅
+        Header: nome + current_version → target_version. ✅
+        aria-busy no botão durante mutation (L191). ✅
+
+AC3 ✅  UpdateProgressView.tsx — Realtime subscription:
+        channel `adm-sync-job-${jobId}` para UPDATE em adm_sync_jobs. ✅
+        useAdmSyncLogs(jobId) para streaming de logs. ✅
+        role="status" + aria-live="polite" (L62-63). ✅
+        Modal não fecha — substitui body por progress view. ✅
+
+AC4 ✅  BulkUpdateModal.tsx — "Max 5 concurrent fan-out" (comment L3). ✅
+        useBulkUpdateClients confirmado. ✅
+        Checkboxes individuais por cliente (L137-141). ✅
+        Confirmação dupla (checkbox "bulk-confirm" L162 + botão). ✅
+        Adm.tsx: botão "Atualizar todos" (L108), disabled quando nenhum
+        cliente com current_version !== target_version (L176). ✅
+        BulkUpdateModal integrado (L306). ✅
+
+AC5 ✅  ClientVersionsHistory.tsx — from_version → to_version, applied_at
+        formatado (L54-65). Queries adm_client_versions. ✅
+
+AC6 ✅  useAdmClients.ts:
+        useUpdateClient (L274) → invoke adm-sync-client com target_version (L299). ✅
+        insertAuditLog (L24) chamado após invoke (L317-323). ✅
+        useBulkUpdateClients (L342) → fan-out max 5 em paralelo (hook). ✅
+        insertAuditLog com from_version/target_version (L397-401). ✅
+
+AC7 ✅  Adm.tsx: localStorage.getItem(LAST_SEEN_KEY) (L45).
+        Se lastSeen === latest.version → return (sem toast duplicado). ✅
+        localStorage.setItem(LAST_SEEN_KEY, latest.version) (L55). ✅
+        Toast info "Nova release disponível" na diferença. ✅
+
+AC8 ✅  Focus trap: UpdateClientModal usa Dialog/DialogContent de Radix UI —
+        focus trap automático via @radix-ui/react-dialog FocusScope. ✅
+        aria-busy no botão "Atualizar agora" (L191). ✅
+        role="status" + aria-live="polite" em UpdateProgressView (L62-63). ✅
+
+tsc EXIT 0 — 0 erros de tipo. ✅
+
+Próximo passo: @dev-devops push
+```
 
 ## Validação 5-pontos (zael)
 

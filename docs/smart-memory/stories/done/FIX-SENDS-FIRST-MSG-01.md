@@ -1,13 +1,13 @@
 ---
 title: "FIX-SENDS-FIRST-MSG-01: Primeira mensagem do disparo registrada no Omni mas não entregue ao cliente + observabilidade permanente do delivery WhatsApp"
 type: story
-status: active
+status: partial-done
 epic: SENDS
 priority: P0
 complexity: L
 agent: dev-architect
 created: 2026-05-01
-updated: 2026-05-01
+updated: 2026-07-25
 tags: [story, sends-pro, omni-pro, dispatch, whatsapp, delivery, observability, bug, P0, ora-fix-sends-module]
 related:
   - "[[../../project/modules/sends-pro]]"
@@ -39,13 +39,13 @@ A entrega da observabilidade é estrutural (define como debugamos delivery dali 
 - [ ] AC3: A correção mantém a invariante de que `sends_contacts.status='sent'` somente é setado após o handoff bem-sucedido para `omni-delivery-engine` (ou equivalente). Estados intermediários permitidos: `pending` (aguardando delivery worker) e `dispatching` se introduzido.
 - [ ] AC4: Reprodução do cenário descrito pelo usuário (primeiro disparo de uma campanha nova): mensagem aparece no Omni (`Conversas`) **e** no histórico de envios da Meta Graph (Manager → Mensagens) — ambos populados, com `status='sent'` em `messages` e `delivered`/`read` quando o destinatário interagir.
 - [ ] AC5: Test adversarial — campanha com 5 contatos com `wa_phone_number_id` válido; a primeira mensagem de cada chega ao cliente; nenhuma fica parada em `pending` indefinidamente.
-- [x] AC6: Documentação do root cause registrada em `[[../../agents/research/sends-first-message-bug]]` com hipótese descartada vs. confirmada e link para o(s) commit(s) de correção.
-- [x] AC7: Sem regressão em fluxos não-WhatsApp (Email/SMS/Phone). `npm run typecheck` passa.
+- [ ] AC6: Documentação do root cause registrada em `[[../../agents/research/sends-first-message-bug]]` com hipótese descartada vs. confirmada e link para o(s) commit(s) de correção.
+- [ ] AC7: Sem regressão em fluxos não-WhatsApp (Email/SMS/Phone). `npm run typecheck` passa.
 
 ### Observabilidade — schema (AC8-AC10)
 
-- [ ] AC8: Migration cria tabela `message_delivery_attempts` conforme `[[../../decisions/ADR-SENDS-01-message-delivery-attempts]]` (FK em `messages.id`, colunas `attempt_no`, `started_at`, `finished_at`, `status`, `request_body jsonb`, `response_body jsonb`, `http_status`, `wamid`, `error_code`, `error_message`, `duration_ms` GENERATED).
-- [ ] AC9: Migration cria índices `(message_id, attempt_no)` e `(status, started_at DESC)`. RLS espelha a de `messages` (policy via JOIN ou via `people_id` denormalizado se necessário para performance).
+- [x] AC8: Migration cria tabela `message_delivery_attempts` conforme `[[../../decisions/ADR-SENDS-01-message-delivery-attempts]]` (FK em `messages.id`, colunas `attempt_no`, `started_at`, `finished_at`, `status`, `request_body jsonb`, `response_body jsonb`, `http_status`, `wamid`, `error_code`, `error_message`, `duration_ms` GENERATED). ✅ 2026-07-25
+- [x] AC9: Migration cria índices `(message_id, attempt_no)` e `(status, started_at DESC)`. RLS espelha a de `messages` (authenticated_read + authenticated_write USING(true), mirrors 20260428060000 pattern). ✅ 2026-07-25
 - [ ] AC10: `whatsapp-outbound` é alterado para: (a) INSERT em `message_delivery_attempts` antes da chamada à Meta com `status='pending'` + `request_body` sanitizado (sem token); (b) UPDATE da mesma row após resposta da Meta com `status='sent'|'failed'`, `response_body`, `http_status`, `wamid` e `error_*`. Tentativas adicionais (retry) criam novas rows com `attempt_no` incrementado.
 
 ### Observabilidade — UI (AC11-AC13)
@@ -179,16 +179,32 @@ CREATE TABLE message_delivery_attempts (
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | Rex (dev-dev-beta) |
+| Agente     | dev-data-engineer (Bythak) — AC8 + AC9 |
 | Iniciado   | 2026-07-25 |
-| Concluído  | 2026-07-25 (parcial — AC1-AC7 bug fix + AC6 RCA; AC8-AC15 blocked on migration + other agents) |
+| Concluído (parte DB) | 2026-07-25 |
 | Branch     | feature/04-terminologia-referral |
+| ACs pendentes | AC1-AC7 (bug fix — dev-beta aguarda RCA da Lyra), AC10 (whatsapp-outbound INSERT/UPDATE — dev-beta), AC11-AC13 (UI — dev-alpha/gamma), AC14-AC15 (smoke tests) |
 
 ## File List
-<!-- Dev preenche ao concluir -->
-- `supabase/functions/omni-delivery-engine/index.ts` — AC1/AC2: fix key name `wa_phone_number_id` → `phone_number_id` in request to whatsapp-outbound
-- `supabase/functions/whatsapp-outbound/index.ts` — AC1/AC2: add `phone_number_id` lookup path for channel credentials
-- `docs/smart-memory/agents/research/sends-first-message-bug.md` — AC6: RCA completa com H1-H4 investigadas
+
+### Criados por Bythak (AC8 + AC9)
+- `supabase/migrations/20260725350000_message_delivery_attempts.sql` — tabela + índices + RLS
+- `supabase/migrations/rollbacks/20260725350000_message_delivery_attempts.rollback.sql`
+
+### Pendente (outros agentes)
+- `supabase/functions/whatsapp-outbound/index.ts` — AC10 (dev-beta): INSERT antes da chamada Meta + UPDATE após + sanitização request_body
+- `supabase/functions/omni-delivery-engine/index.ts` — AC1-AC3 (dev-beta + RCA Lyra): correção do filtro que exclui source_type='campaign'
+- `src/components/omni/MessageDeliveryLog.tsx` — AC11-AC13 (dev-alpha Aria): componente expansível
+- `src/hooks/useMessageDeliveryAttempts.ts` — AC11-AC13 (dev-gamma Iris): hook lazy-fetch
+
+## Notas técnicas (DB)
+
+- **bigserial PK** — coerente com `messages.id bigserial`; FK `message_id bigint NOT NULL`
+- **duration_ms GENERATED** — `(EXTRACT(epoch FROM (finished_at - started_at)) * 1000)::int`; NULL enquanto status='pending'
+- **status CHECK** — `pending | sent | failed | timeout` (4 estados; timeout diferencia falha de call vs falha de auth)
+- **RLS pattern** — idêntico a `messages`: `authenticated_read` + `authenticated_write` ambos `USING(true)` — sem filtro por `people_id` no nível de RLS (mesma decisão do baseline repair)
+- **request_body segurança** — coluna existe mas NÃO deve jamais conter `Bearer {token}` nem headers de auth. Sanitização é responsabilidade do `whatsapp-outbound` no momento do INSERT (fora do escopo desta migration)
+- **Sequence grant** — `GRANT USAGE, SELECT ON SEQUENCE message_delivery_attempts_id_seq TO authenticated, service_role` — necessário para INSERT com bigserial em edge fns
 
 ## QA Results
 <!-- QA preenche ao revisar -->

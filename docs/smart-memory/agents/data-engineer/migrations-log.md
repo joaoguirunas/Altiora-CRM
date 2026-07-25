@@ -250,6 +250,7 @@ Log cronológico de migrations aplicadas pelo Bythak. Migrations são imutáveis
 | `migrations_adm/20260725330000_adm_releases_is_baseline.sql` | migrations_adm | REL-05 AC5 DB | ADD COLUMN is_baseline + adm-baseline-check-weekly cron (sábados 5h UTC) | disponível |
 
 | `20260725340000_fup_programados.sql` | migration | FUP-AUTO-01 DB-1..DB-5 | CREATE TABLE fup_programados + índices + RLS + RPC agendar_fup() + cron */5min | disponível |
+| `20260725350000_message_delivery_attempts.sql` | migration | FIX-SENDS-FIRST-MSG-01 AC8+AC9 | CREATE TABLE message_delivery_attempts (bigserial PK, FK messages bigint, attempt_no, channel, provider, started_at, finished_at, status CHECK pending/sent/failed/timeout, request_body jsonb SANITIZED, response_body, http_status, wamid, error_code, error_message, duration_ms GENERATED) + idx_mda_message_id_attempt + idx_mda_status_started + RLS mirrors messages (authenticated_read/write USING true) | disponível |
 
 **Notas de apply:**
 - Migrations regulares: `supabase db query --linked --file supabase/migrations/{arquivo}.sql`

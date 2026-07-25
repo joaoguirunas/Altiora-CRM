@@ -31,12 +31,76 @@ const SUMMARY_MAX_OUTPUT = 400;
 const SUMMARY_TAIL = " Veja o painel para detalhes completos.";
 const NUMBER_HINT_RE = /\d|%|R\$|\bporcento\b/i;
 
+// ── Chart type → Portuguese label ────────────────────────────────────────────
+
+const CHART_TYPE_LABELS: Record<string, string> = {
+  bar:       'barras',
+  line:      'linhas',
+  area:      'área',
+  pie:       'pizza',
+  doughnut:  'rosca',
+  scatter:   'dispersão',
+  bubble:    'bolhas',
+  radar:     'radar',
+  heatmap:   'calor',
+};
+
+function chartBlockToPhrase(fenceContent: string): string {
+  // Extract the JSON body (everything between the opening fence line and closing ```)
+  const jsonStart = fenceContent.indexOf('\n');
+  if (jsonStart === -1) return '';
+
+  const closeIdx = fenceContent.lastIndexOf('```');
+  const jsonBody = fenceContent.slice(jsonStart + 1, closeIdx).trim();
+
+  try {
+    const spec = JSON.parse(jsonBody) as { type?: string; title?: string };
+    const typeLabel = CHART_TYPE_LABELS[String(spec.type ?? '').toLowerCase()] ?? String(spec.type ?? '');
+    const title = String(spec.title ?? '').trim();
+
+    if (typeLabel && title) return `Gráfico de ${typeLabel}: ${title}.`;
+    if (title) return `Gráfico: ${title}.`;
+    if (typeLabel) return `Gráfico de ${typeLabel}.`;
+    return '';  // JSON parsed but no useful fields — AC2: empty string
+  } catch {
+    return '';  // JSON parse failure — AC2: return empty string (no JSON noise)
+  }
+}
+
+function tableBlockToPhrase(tableBody: string): string {
+  const lines = tableBody.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return 'Veja a tabela no painel.';
+
+  // Extract columns from the header row: | col1 | col2 | …
+  const headerCols = lines[0]
+    .split('|')
+    .map(c => c.trim())
+    .filter(c => c.length > 0 && !/^[-:]+$/.test(c));  // remove empty and separator cells
+
+  // Count data rows: skip header row + separator row (lines[1] is the |---|---| row)
+  const dataRowCount = Math.max(0, lines.length - 2);
+
+  const colList = headerCols.slice(0, 5).join(', ');
+  const moreCols = headerCols.length > 5 ? ` e mais ${headerCols.length - 5}` : '';
+
+  return `Tabela com ${dataRowCount} linha${dataRowCount !== 1 ? 's' : ''} comparando ${colList}${moreCols}.`;
+}
+
 function stripFormatting(input: string): string {
   let out = input;
 
-  out = out.replace(CHART_FENCE_RE, "\nVeja o gráfico no painel.\n");
+  // AC2: chart blocks → semantic phrase or empty
+  out = out.replace(CHART_FENCE_RE, (match) => {
+    const phrase = chartBlockToPhrase(match);
+    return phrase ? `\n${phrase}\n` : '\n';
+  });
   out = out.replace(ANY_FENCE_RE, " ");
-  out = out.replace(TABLE_BLOCK_RE, (_m, lead) => `${lead}Veja a tabela no painel.\n`);
+
+  // AC3: table blocks → "Tabela com N linhas comparando col1, col2, …"
+  out = out.replace(TABLE_BLOCK_RE, (_m, lead, tableBody: string) => {
+    const phrase = tableBlockToPhrase(tableBody);
+    return `${lead}${phrase}\n`;
+  });
 
   out = out.replace(HTML_TAG_RE, " ");
   out = out.replace(IMAGE_RE, (_m, alt) => alt || " ");
@@ -105,13 +169,17 @@ function summarize(text: string): string {
   return result + SUMMARY_TAIL;
 }
 
-export function markdownToVoiceText(markdown: string): string {
+export function markdownToVoiceText(
+  markdown: string,
+  opts?: { maxChars?: number },
+): string {
   if (!markdown) return "";
 
   const stripped = stripFormatting(markdown);
   const normalized = normalizeWhitespace(stripped);
   if (!normalized) return "";
 
-  if (normalized.length <= SUMMARY_THRESHOLD) return normalized;
+  const threshold = opts?.maxChars ?? SUMMARY_THRESHOLD;
+  if (normalized.length <= threshold) return normalized;
   return summarize(normalized);
 }

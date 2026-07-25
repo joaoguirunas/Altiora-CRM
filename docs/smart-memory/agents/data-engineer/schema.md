@@ -283,6 +283,36 @@ Histórico de chats n8n (session_id, message jsonb).
 ### `canned_responses`
 Respostas rápidas pré-configuradas por tenant.
 
+### `message_delivery_attempts` ← NEW 2026-07-25 (FIX-SENDS-FIRST-MSG-01 AC8-AC9)
+Observability log de delivery WhatsApp — 1:N com `messages`.
+
+| Coluna | Tipo | Constraints | Descrição |
+|---|---|---|---|
+| id | bigserial | PK | — |
+| message_id | bigint | NOT NULL, FK → messages(id) ON DELETE CASCADE | — |
+| attempt_no | int | NOT NULL DEFAULT 1 | Monotônico por mensagem |
+| channel | text | NOT NULL | whatsapp / email / sms / phone |
+| provider | text | nullable | meta_graph / sendgrid / twilio |
+| started_at | timestamptz | NOT NULL DEFAULT now() | — |
+| finished_at | timestamptz | nullable | NULL enquanto pending |
+| status | text | NOT NULL CHECK (pending/sent/failed/timeout) | — |
+| request_body | jsonb | nullable, SANITIZED | Sem Bearer token nem credenciais |
+| response_body | jsonb | nullable | Resposta completa do provider |
+| http_status | int | nullable | — |
+| wamid | text | nullable | ID da Meta Graph API |
+| error_code | text | nullable | — |
+| error_message | text | nullable | — |
+| duration_ms | int | GENERATED ALWAYS AS STORED | (finished_at - started_at) * 1000 :: int |
+
+**Índices:**
+- `idx_mda_message_id_attempt` — (message_id, attempt_no) — primary lookup
+- `idx_mda_status_started` — (status, started_at DESC) — monitoramento / ops
+
+**RLS:** ativo — mirrors messages: `authenticated_read` + `authenticated_write` ambos `USING(true)`  
+**Grants:** SELECT/INSERT/UPDATE → authenticated; ALL → service_role; USAGE/SELECT on sequence → authenticated, service_role  
+**Migration:** `supabase/migrations/20260725350000_message_delivery_attempts.sql`  
+**ADR:** `docs/smart-memory/decisions/ADR-SENDS-01-message-delivery-attempts.md`
+
 ---
 
 ## Módulo: Agendamentos / Schedule PRO
