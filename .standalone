@@ -1,0 +1,3 @@
+Este projeto está em modo standalone (base de template).
+Multi-tenant sync está desativado — scripts/sync-clients.js e scripts/register-migrations.js recusam execução enquanto este arquivo existir.
+Para ativar o modo multi-tenant num projeto derivado: delete este arquivo e configure as env vars CONTROL_PLANE_URL e CONTROL_PLANE_SERVICE_ROLE_KEY.

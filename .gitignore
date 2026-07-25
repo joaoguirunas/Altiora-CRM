@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+dist-ssr/
+
+# Env files — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Supabase local
+.supabase/
+
+# Logs
+*.log
+.migration-watcher.log
+.migration-watcher.pid
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

@@ -74,7 +74,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
         const { count } = await supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .eq('lead_id', leadId)
+          .eq('leads_id', leadId)
           .eq('altiora_tipo', 'R1')
           .neq('status', 'cancelada');
         return (count ?? 0) > 0;
@@ -89,7 +89,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
         const { count } = await supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .eq('lead_id', leadId)
+          .eq('leads_id', leadId)
           .eq('altiora_tipo', 'R1')
           .eq('altiora_compareceu', true);
         return (count ?? 0) > 0;
@@ -118,7 +118,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
         const { count } = await supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .eq('lead_id', leadId)
+          .eq('leads_id', leadId)
           .eq('altiora_tipo', 'R2')
           .neq('status', 'cancelada');
         return (count ?? 0) > 0;
@@ -133,7 +133,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
         const { count } = await supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .eq('lead_id', leadId)
+          .eq('leads_id', leadId)
           .eq('altiora_tipo', 'R2')
           .eq('altiora_compareceu', true);
         return (count ?? 0) > 0;
@@ -148,7 +148,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
         const { count } = await supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .eq('lead_id', leadId)
+          .eq('leads_id', leadId)
           .eq('altiora_tipo', 'R3')
           .neq('status', 'cancelada');
         return (count ?? 0) > 0;
@@ -163,7 +163,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
         const { count } = await supabase
           .from('meetings')
           .select('id', { count: 'exact', head: true })
-          .eq('lead_id', leadId)
+          .eq('leads_id', leadId)
           .eq('altiora_tipo', 'R3')
           .eq('altiora_compareceu', true);
         return (count ?? 0) > 0;

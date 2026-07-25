@@ -148,7 +148,7 @@ const NovoReferralModal = ({ isOpen, onClose, currentUserId }: NovoReferralModal
       return [];
     }
 
-    return (data ?? []) as DuplicateResult[];
+    return (data ?? []) as unknown as DuplicateResult[];
   };
 
   // ── Create referral ────────────────────────────────────────────────────────
