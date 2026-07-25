@@ -7,6 +7,22 @@ tags: [ops]
 
 # Status Board — Altiora-CRM Base
 
+## Team ativo: Altiora-CRM-completar-backlog (2026-07-25)
+
+**Objetivo:** Completar 65 stories do backlog
+
+| Teammate | Status | Missão atual |
+|---|---|---|
+| dev-architect | 🟡 iniciando | Revisar backlog, criar wave-plan.md |
+| dev-dev-alpha | ✅ pronto | Aguardando wave 1 do architect (ALTIORA UI, REL, BI) |
+| dev-dev-beta | ✅ pronto | Aguardando wave 1 do architect (AUTH-V2, FIX backend) |
+| dev-dev-gamma | ✅ pronto | Aguardando wave 1 do architect (ALTIORA cross-layer, SENDS) |
+| dev-data-engineer | ✅ pronto | Aguardando wave plan + decisão do usuário sobre sim-* |
+| dev-qa | ✅ ativo | ALTIORA-04: PASS emitido — pronto para próximas revisões |
+| dev-devops | ✅ pronto | Aguardando aprovações QA para push |
+
+**Próximo marco:** `docs/smart-memory/ops/wave-plan.md` (architect)
+
 Projeto em modo **standalone (base de template)**. SaaS single-tenant operando contra um único Supabase project. Sem control plane, sem catálogo de clientes, sem resolução de tenant em runtime.
 
 > Banco anterior `wotuyxscsfralqpoiyfv` desconectado em 2026-07-25. Credenciais completas em [[ops/supabase-credentials]].

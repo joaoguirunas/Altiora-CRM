@@ -974,6 +974,24 @@ Deploy final via CLI (dev-devops, autenticado/linkado a `wotuyxscsfralqpoiyfv`):
 - dev-dev-gamma — fullstack: reuniões, registro contato/R1/R2/R3, contratação, ganho/perda
 - dev-qa — gate de qualidade nos entregáveis críticos
 
-**Status:** ativo
+**Status:** encerrado
+**Encerrado:** 2026-07-25T00:00:00Z
 **Stories:** ver [[../stories/BACKLOG]]
 **Contexto produto:** [[../project/use-cases-v1]]
+
+## 2026-07-25 — Team Altiora-CRM-completar-backlog
+
+**Objetivo:** Completar backlog — 65 stories pendentes (ALTIORA, SENDS, FIX, AUTH, BI, sim, ARCH)
+**Lead:** team-os (skill)
+**Composição:**
+- dev-architect — validar stories, priorizar backlog, coordenar ARCH-RBAC-02
+- dev-dev-alpha — frontend: ALTIORA UI, REL, BI dashboards
+- dev-dev-beta — backend: AUTH-V2, FUP-AUTO, OBS, backend FIX
+- dev-dev-gamma — fullstack: ALTIORA cross-layer, SENDS
+- dev-data-engineer — DB: ARCH-RBAC-02, sim stories, CLEAN
+- dev-qa — gate de qualidade formal
+- dev-devops — push e PRs
+
+**Status:** ativo
+**Início:** 2026-07-25T11:55:00Z
+**Stories:** ver [[../stories/BACKLOG]]

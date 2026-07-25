@@ -1,7 +1,7 @@
 ---
 title: "ALTIORA-04: Terminologia UI — \"Negócio\" → \"Referral\" no pipeline Altiora"
 type: story
-status: active
+status: done
 epic: ALTIORA-A
 complexity: S
 agent: dev-architect
@@ -60,4 +60,38 @@ Substituir o termo "Negócio" por "Referral" em todos os textos visíveis da UI 
 - `src/pages/NegocioSingle.tsx` — modificado (passa `entityLabel` ao `useUpdateNegocio`)
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: ALTIORA-04 | Data: 2026-07-25
+Checklist: 8/8 verificados
+Issues: nenhum
+
+AC1 ✅ — document.title usa entityLabelPlural (Negocios.tsx:165); NegociosToolbar
+         renderiza "Novo {entityLabel}" (toolbar:303); quando Altiora → "Referrals /
+         Novo Referral". Breadcrumb atualizado via document.title.
+
+AC2 ✅ — useNegocios.ts:343 aceita options?.entityLabel; toasts em :372/:375/:416/:420
+         usam o label dinâmico. NegocioSingle.tsx:77 passa negocioEntityLabel
+         computado via getEntityLabel(pipeline?.name).
+
+AC3 ✅ — NegocioSidebar.tsx:105 computa entityLabel = getEntityLabel(currentPipeline?.name)
+         a partir do pipeline do lead (não do pipeline selecionado globalmente);
+         exibido em :452. Sidebar sempre reflete o pipeline do lead.
+
+AC4 ✅ — isAltioraPipeline() case-insensitive inclui 'altiora' no nome; padrão é
+         'Negócio'. Outros pipelines sem toque no comportamento.
+
+AC5 ✅ — src/utils/pipelineLabels.ts criado com getEntityLabel / getEntityLabelPlural /
+         isAltioraPipeline. Todos os 6 arquivos importam desta fonte única.
+         Zero strings "Negócio"/"Referral" hardcoded na UI — só em JSDoc/comentários.
+
+tsc --noEmit: EXIT 0
+ESLint (pipelineLabels.ts): zero issues
+ESLint (arquivos modificados): erros no-explicit-any e no-case-declarations
+   são PRÉ-EXISTENTES de stories ALTIORA-02..09 (confirmado via git log);
+   capturados no gate ALTIORA-V1 rodada 2 como CONCERN-2 LOW.
+   Nenhuma regressão introduzida por ALTIORA-04.
+
+Próximo passo: @dev-devops push
+```
