@@ -62,4 +62,28 @@ Tornar o fallbackProfile menos permissivo, adicionar rate limit no login, e remo
 - `src/components/auth/SimpleAuthProvider.tsx` — DELETADO
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-AUTH-01 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: EXIT 0 | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  useAuth.ts: PROFILE_FETCH_TIMEOUT_MS configurável via VITE_AUTH_PROFILE_TIMEOUT_MS.
+        isProvisional flag. PROFILE_MAX_RETRIES=3. profileRetryExhausted state (linha 108).
+        Retry com backoff até 3 tentativas. Fail-fast em vez de timeout permissivo.
+AC2 ✅  auth-login/index.ts: rate limit via auth_login_attempts (ip_hash + email_hash).
+        blocked_until + login_max_attempts de settings. 429 com retry_after_seconds.
+        useAuth.ts:371 chama auth-login edge fn; 378 fallback gracioso se unreachable.
+AC3 ✅  Stubs deletados confirmados:
+        - src/hooks/useTenants.ts → NÃO EXISTE (deletado)
+        - src/hooks/useSimpleAuthSingleTenant.ts → NÃO EXISTE (deletado)
+        - src/components/auth/SimpleAuthProvider.tsx → NÃO EXISTE (deletado)
+        Nota: crm_tenants em types.ts são FK refs auto-geradas (Supabase) — corretamente
+        não removidas (requerem DROP TABLE no banco, fora do escopo desta story).
+AC4 ✅  Fluxo normal: PROFILE_FETCH_TIMEOUT_MS + retry + isProvisional são adições
+        não-destrutivas ao fluxo existente. Sem remoção de lógica canônica de auth.
+
+Próximo passo: @dev-devops push
+```

@@ -72,4 +72,22 @@ if (claimErr || !claimed || claimed.length === 0) {
 - `supabase/functions/sends-dispatch-batch/index.ts` — substituído SELECT+JS cadence check+UPDATE separados por UPDATE+RETURNING atômico com `.or('last_batch_at.is.null,last_batch_at.lte.${lastDueIso}')` embutido
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-DISPATCH-01 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: EXIT 0 | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  Atomic UPDATE: dois workers simultâneos → apenas um retorna claimed.length=1.
+        Compare-and-swap via UPDATE+RETURNING é atomicamente serializado pelo Postgres.
+AC2 ✅  Single UPDATE query — sem SELECT pré-claim. Janela de race eliminada.
+        Condição de cadência embutida no WHERE: .or('last_batch_at.is.null,last_batch_at.lte.${lastDueIso}').
+AC3 ✅  claimed.length === 0 → skipped++; continue. Skip silencioso correto.
+AC4 ✅  lastDueIso = nowIso - send_interval_seconds. Funciona para 5s / 30s / 3600s.
+AC5 ✅  .eq('status', 'running') no WHERE — paused e completed nunca satisfazem a condição.
+        Invariante mantida: sends não-running nunca processados.
+
+Próximo passo: @dev-devops push
+```

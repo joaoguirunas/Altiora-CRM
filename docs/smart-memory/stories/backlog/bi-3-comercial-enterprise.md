@@ -95,4 +95,16 @@ Reduzir density e estabelecer hierarquia visual enterprise no BIProComercialTab 
 - `npx eslint src/components/dashboard/BIPro*.tsx src/components/dashboard/bipro-shared.ts` → 0 erros, 1 warning não-bloqueante (`useCallback` deps em InsightsTab — pré-existente, fora do escopo)
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: CONCERNS
+Story: bi-3 | Data: 2026-07-25
+tsc EXIT 0; eslint 0 errors (1 warning pre-existente InsightsTab).
+ACs: AC1✅ AC2✅ AC3🔄(spec) AC4✅ AC5⏭️(spec) AC6✅ AC7✅(funcional,sem rotate) AC8✅(3q≤5) AC9🔲(smoke) AC10🔲parcial.
+
+[CONCERN-1 MEDIUM] A11y: <tr onClick> expandível CloserTable (linha 908) sem
+  role="button"/aria-expanded/aria-controls. Screen readers não detectam expand.
+[CONCERN-2 LOW] A11y: <caption className="sr-only"> ausente nas 3 tabelas.
+[CONCERN-3 LOW] AC7: chevron troca de ícone vs rotate()-animado da spec.
+Push LIBERADO.
+```

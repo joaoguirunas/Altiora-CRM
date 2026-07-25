@@ -7,6 +7,57 @@ tags: [story, altiora, webhook-inbound, pipeline-consolidation]
 
 # Backlog de Stories
 
+---
+
+## 🗺️ PRIORITY ORDER — Wave Plan (2026-07-25, Zaelor)
+
+> Plano completo em [[../ops/wave-plan]]. Regra: FIX críticos > ALTIORA restantes > AUTH-V2 > SENDS fixes > sim/seed > BI/REL > ARCH.
+
+### ⚠️ Limpeza Necessária — Stories Done Ainda em backlog/
+
+Os arquivos abaixo estão em `backlog/` mas já foram concluídos (mover para `done/` ou remover):
+`FIX-SENDS-01` · `CLEAN-SENDS-MIGRATION-01` · `SENDS-IMPORT-02` · `AUTH-V2-01` · `AUTH-V2-09` · `FIX-OMNI-01` · `FIX-SCH-02` · `FIX-SP-01` · `ALTIORA-08` · `ALTIORA-17` · `ALTIORA-18` · `ALTIORA-20` · `ALTIORA-21` · `ALTIORA-22` · `ALTIORA-24` · `ALTIORA-25`
+
+### 🌊 Wave 1 — Iniciar Imediatamente (sem dependências bloqueantes)
+
+| Story | Complexidade | Assignee |
+|---|---|---|
+| **FIX-PP-01** — Prospect edge fns quebradas (v1 schema) | M | dev-data-engineer |
+| **FIX-COACH-01** — Fix view name coach_meeting_evaluations | S | dev-data-engineer |
+| **FIX-SENDS-FILTER-01** — Corrigir filtro person_status ignorado | S | dev-dev-beta |
+| **FIX-SENDS-FILTER-02** — Corrigir has_more com count real | S | dev-dev-beta |
+| **FIX-SENDS-DISPATCH-01** — Atomic claim no sends-dispatch-batch | M | dev-dev-beta |
+| **FIX-SENDS-CRON-LEGACY-URLS** — Sanear 3 crons com URLs legadas | S | dev-data-engineer |
+| **FIX-SENDS-UI-01** — Não sobrescrever started_at ao retomar | S | dev-dev-alpha |
+| **FIX-SENDS-UI-02** — Corrigir timezone em scheduled_at | S | dev-dev-alpha |
+| **ARCH-RBAC-02** — Drop RBAC granular (ADR-AUTH-09 decidido) | S | dev-data-engineer |
+| **AUTH-V2-08** — CSP + COOP/COEP headers no Vercel | S | dev-dev-gamma |
+
+### 🌊 Wave 2 — Médio Prazo (dependências leves ou M complexity)
+
+| Story | Complexidade | Assignee | Dep. |
+|---|---|---|---|
+| **FIX-SENDS-STATUS-BRIDGE-01** — Bridge delivered/read Meta → sends_contacts | M | dev-dev-beta + dev-data-engineer | — |
+| **FIX-SENDS-FE-VALIDATION** — 3 gaps cross-layer FE↔BE SENDS PRO | M | dev-dev-alpha | — |
+| **FIX-SENDS-DISPATCH-02** — Reduzir retry delays no batch | S | dev-dev-beta | DISPATCH-01 |
+| **FIX-IG-AUT-02** — UI Automações IG: distinguir tipos de falha | S | dev-dev-alpha | — |
+| **FIX-AUTH-01** — Hardening auth: fallbackProfile + rate limit | M | dev-dev-beta | — |
+| **FIX-ADM-01** — Rollback adm-create-user + remover hints plaintext | M | dev-dev-beta | — |
+| **FIX-COACH-02** — Auto-trigger pós-transcrição + cron weekly_summary | M | dev-data-engineer | — |
+| **FIX-BI-01** — OAuth token refresh BI + TikTok sync | M | dev-analyst | — |
+| **ALTIORA-12** — Validação campos obrigatórios por transição de etapa | L | dev-dev-gamma | ⚠️ ALTIORA-01 |
+| **sim-1** — Dados de configuração base (pipelines, stages, usuários demo) | M | dev-data-engineer | — |
+
+### 🌊 Wave 3 — Dependentes e Complexos
+
+sim-2 · sim-3 · sim-4 · sim-5 · sim-6 (todos dependem de sim-1) · AUTH-V2-03 · FIX-SENDS-IMPORT-03/04/05/06 · FIX-SCORE-01 · bi-1-voice-sanitizer · BI-VOICE-04 · SENDS-FIX-01 · SENDS-IMPORT-01
+
+### 🌊 Wave 4 — Tech Debt e Infraestrutura
+
+REL-04 → REL-01 → REL-02 → REL-03 → REL-05 · OBS-DISPATCH-HEALTH-01 · FUP-AUTO-01 · FWUP-18b · CLEAN-CRM-01 · CLEAN-SENDS-01
+
+---
+
 ## 🏢 ALTIORA CRM V1 — Pipeline de Referrals Altiora Advisory Group (2026-07-25)
 
 Épico: `altiora-crm-v1`. Objetivo: adaptar o CRM GrowthSales para o pipeline de referrals da Altiora Advisory Group com 13 etapas, 3 perfis de usuário (Closer/Gestor/Admin), entrada automática por e-mail, workflow completo de R1/R2/R3, análise Finvity e indicadores operacionais.

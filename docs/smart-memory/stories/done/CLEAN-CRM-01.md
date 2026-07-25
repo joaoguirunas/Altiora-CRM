@@ -62,3 +62,24 @@ CRM PRO tem split legado (`crm_*`) vs moderno. Atribuição é só manual hoje �
 - [x] AC4: Nenhuma regressão no Kanban — apenas MotivoPerdasModal e MotivosConfig afetados
 
 ## QA Results
+
+```
+VEREDICTO: CONCERNS
+Story: CLEAN-CRM-01 | Data: 2026-07-25
+tsc: EXIT 0 | lint: sem novos erros
+Aprovado com observações:
+
+AC1 ✅  useRoundRobinAssign.ts: mutation chama supabase.rpc('assign_lead_round_robin').
+        Migration 20260423014000_crm_round_robin_rpc.sql cria o RPC.
+AC2 ✅  .nome → .name em NegocioSingle.tsx:178, MotivosConfig.tsx, MotivoPerdasModal.tsx.
+        Outros .nome em NegocioSingle (pipeline.nome, stage.nome) são objetos distintos
+        de MotivoPerda — não são regressões.
+AC3 ✅  useMotivosPerda.ts: useQuery + useMutation (add, update, delete) — padrão TanStack.
+AC4 ✅  Apenas MotivoPerdasModal e MotivosConfig afetados. Kanban intocado.
+
+[CONCERN-1 LOW] Paperwork: seção de ACs original (linhas 20-24) ainda mostra [ ].
+  A seção dev (linhas 57-61) tem [x] corretos.
+  AÇÃO: dev deve unificar as duas seções de ACs na story.
+
+Push LIBERADO.
+```

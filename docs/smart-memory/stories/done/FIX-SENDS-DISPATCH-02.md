@@ -53,4 +53,26 @@ Max por contato: 13s. 5 contatos × 13s = 65s < 150s timeout. ✓
 - `supabase/functions/send-dispatch-worker/index.ts` — delays `[5000,15000,45000]` → `[1000,3000,9000]`
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-DISPATCH-02 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: N/A (Deno edge fn) | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  Delays [1000,3000,9000] → max por contato = 1+3+9 = 13s.
+        5 contatos × 13s = 65s < 150s timeout. Invariante verificada.
+AC2 ✅  Batch com todos falhando: 5×13s=65s < 150s. Edge fn conclui dentro do timeout.
+AC3 ✅  isRetryableError intocado (4xx não-retentável, 429 com Retry-After preservado).
+        linha 590: retry usa retryAfterMs se 429 — não usa delay array neste caso.
+AC4 ✅  retry_count incrementado por retryWithBackoff; lido em seguida (linha 1194).
+        Banco reflete contagem correta de tentativas.
+
+Fix confirmado em send-dispatch-worker/index.ts linha 545:
+  // FIX-SENDS-DISPATCH-02: reduzido de [5000,15000,45000] (max 65s/contato) para
+  // [1000,3000,9000] (max 13s/contato). Com batch_size=5: 5×13s=65s < 150s timeout.
+  delays: number[] = [1000, 3000, 9000],
+
+Próximo passo: @dev-devops push
+```

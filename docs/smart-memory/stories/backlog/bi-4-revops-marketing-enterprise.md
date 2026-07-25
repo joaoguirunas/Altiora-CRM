@@ -93,4 +93,18 @@ Aplicar o sistema visual enterprise (consolidado em bi-2/bi-3) às abas RevOps (
 - `src/components/dashboard/BIProComercialTab.tsx` — (PR-G2 prévio) Sub-headers texto curto (Agend./Real./Show%/N/S), filter chips `rounded-md` com count, padding tabela `px-4 py-3.5`, hover `bg-muted/40`, expanded row `bg-muted/60`, CloserLeadTable `bg-muted/30`. **Colunas Temperatura mantidas visíveis** conforme decisão D1 do lead (colapso → task #15 separada).
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: CONCERNS
+Story: bi-4 | Data: 2026-07-25
+tsc EXIT 0; eslint 0 errors (1 warning pre-existente InsightsTab).
+ACs: AC1✅(LOW:chart legend 10px) AC2🔄(2D Linear funnel) AC3⏭️ AC4⏭️ AC5✅ AC6⏭️ AC7⏭️ AC8✅(≤5q) AC9🔲 AC10🔲parcial.
+
+[CONCERN-1 MEDIUM] A11y: <button> expand diagnóstico RevOps (linha 521) sem
+  aria-expanded/aria-controls. Fix: aria-expanded={isExpanded} + id no conteúdo.
+[CONCERN-2 LOW] AC1: MarketingTab:104 text-[10px] em legend de série gráfica.
+  Borderline "label de métrica"; recomendar text-[11px] para unificar escala.
+[CONCERN-3 LOW] A11y: botões Edit/Save/Cancel benchmark (linhas 430,436,445)
+  sem aria-label explícito.
+Push LIBERADO.
+```

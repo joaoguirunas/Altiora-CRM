@@ -61,4 +61,19 @@ sendData.scheduled_at = new Date(`${scheduledDate}T${scheduledTime}:00`).toISOSt
 - `src/pages/CriarDisparo.tsx` — já estava correto (verificado, sem alteração necessária)
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-UI-02 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: EXIT 0 | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  CriarDisparoModal.tsx linha 101: new Date(`${date}T${time}:00`).toISOString()
+        Browser em GMT-3: "09:00" local → "12:00:00.000Z" UTC. Sem ambiguidade Postgres.
+AC2 ✅  UI exibe horário local naturalmente via Date formatting do browser.
+AC3 ✅  Fluxo de disparo imediato não toca scheduled_at — sem regressão.
+        CriarDisparo.tsx verificado: já correto, sem alteração necessária.
+
+Próximo passo: @dev-devops push
+```

@@ -86,4 +86,38 @@ Reduzir o fluxo de importação CSV a três passos lineares — upload → mapea
 - `public/lista_recomendacao.csv` — removido
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: CONCERNS
+Story: SENDS-IMPORT-01 | Data: 2026-07-25
+tsc: EXIT 0 | lint: sem novos erros
+Aprovado com observações:
+
+AC1 ✅  Blocos "Modelos de planilha" removidos. Zero refs a lista_*.csv em src/.
+AC2 ✅  Preset selector removido. useImportPresets, ImportPreset, activePreset, leadControl,
+        applyPreset, preset badge no mapping — todos removidos.
+AC3 ✅  Imports Layers, Badge, Download, useImportPresets, ImportPreset removidos.
+        useImportPresets.ts deletado (zero callers confirmados via grep).
+AC4 ⚠️  DESVIO INTENCIONAL documentado pelo dev: implementação usa estado select_matrix
+        (grade LeadType da DB) em vez de idle+FileUploadZone direto.
+        Avaliação Axikar: espírito do AC atendido (nenhum template estático nem preset
+        selector de mapeamento). select_matrix é simplificação contextual, não um preset.
+        Diferença da AC literal: tela inicial não é "APENAS o dropzone" — há uma grade
+        de seleção de tipo antes do upload.
+AC5 ✅  Badge "Modelo: {nome}" removido do estado mapping. Confirmado por grep.
+AC6 ✅  public/lista_*.csv: nenhum arquivo encontrado (todos removidos).
+AC7 ✅  tsc EXIT 0. imports limpos.
+AC8 ⚠️  Smoke test não executável estaticamente. Desvio AC4 implica que o estado
+        inicial não é "APENAS o dropzone" — mas não exibe dropdown de modelo nem grid
+        de download (o que o AC realmente visava proibir).
+AC9 ✅  grep src/ supabase/: zero refs a useImportPresets e lista_*.csv além de types.ts
+        auto-gerado e migration de cleanup (20260725280000).
+
+[CONCERN-1 LOW] Desvio AC4/AC8: select_matrix step adicional antes do upload.
+  Espírito da simplificação mantido — presets e templates estáticos eliminados.
+  select_matrix é contextual/dinâmico (DB-driven), não um template pré-definido.
+  Ação: lead deve confirmar se select_matrix step é aceitável como comportamento final.
+  Se sim: atualizar AC4 na story para refletir desvio aprovado.
+
+Push LIBERADO.
+```

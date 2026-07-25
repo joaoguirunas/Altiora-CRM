@@ -51,4 +51,37 @@ Deep-dive §9 débito #10: "Sem CSP / Trusted Types — credenciais no JS bundle
 - `vercel.json` — CSP tightened: `connect-src * ws: wss:` → `connect-src 'self' https: wss:` (main `/(.*)`  rule). Alinha com ADR-AUTH-05. Demais headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS) já presentes e conformes.
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: AUTH-V2-08 | Data: 2026-07-25
+Checklist: 8/8 verificados
+Issues: CONCERN-1 LOW (paperwork — checkboxes ACs não marcados no arquivo)
+
+DIFF analisado (commit 792d4a7 — único arquivo modificado: vercel.json):
+  - connect-src * ws: wss:
+  + connect-src 'self' https: wss:
+
+Remoções validadas:
+  • '*' wildcard: grep src/ confirma ZERO fetch() com http:// hardcoded.
+    xmlns="http://..." em SVGs são declarações XML, não network requests.
+  • 'ws:' scheme: grep src/ confirma ZERO conexões ws://. Código usa
+    exclusivamente wss:// (Supabase Realtime, Gemini Live, derivado via
+    supabaseUrl.replace(https→wss)). Todos cobertos por wss:.
+
+AC1 ✅  CSP presente; connect-src 'self' https: wss: segue ADR-AUTH-05
+        (accepted). ADR justificou scheme-based vs host-allowlist original:
+        webhooks user-defined, multi-tenant subdomains, OAuth client-side.
+AC2 ✅  X-Frame-Options: DENY (vercel.json:16)
+AC3 ✅  X-Content-Type-Options: nosniff (vercel.json:20)
+AC4 ✅  Todos os flows OAuth e WSS verificados; ws: removido sem regressão.
+        Rota /f/(.*) com frame-ancestors * pré-existente, não tocada.
+AC5 ✅  Referrer-Policy: strict-origin-when-cross-origin (vercel.json:24)
+
+Bônus presentes: Permissions-Policy + HSTS 2 anos preload.
+
+CONCERN-1 (LOW): Checkboxes ACs deixados como - [ ] no arquivo da story.
+                 Paperwork — sem impacto funcional.
+
+Próximo passo: @dev-devops push
+```

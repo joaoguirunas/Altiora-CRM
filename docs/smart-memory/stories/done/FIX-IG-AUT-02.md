@@ -1,12 +1,12 @@
 ---
 title: "FIX-IG-AUT-02: UI de Automações IG não distingue 'comentário não chegou' de 'chegou e não bateu'"
 type: story
-status: backlog
+status: done
 priority: P2
 complexity: S
-agent: dev-dev-alpha
+agent: dev-dev-gamma
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-07-25
 tags: [story, instagram, automations, ux, observabilidade, P2, omni]
 related: ["[[FIX-IG-AUT-01]]", "[[../../project/modules]]"]
 ---
@@ -17,11 +17,11 @@ related: ["[[FIX-IG-AUT-01]]", "[[../../project/modules]]"]
 Aumentar a observabilidade da tela `Configurações > Instagram > Automações` para que o usuário consiga, sem abrir SQL, entender por que um comentário esperado não disparou — eliminando o cenário atual em que a tela aparenta estar "quebrada" porque a lista de execuções fica vazia.
 
 ## Acceptance Criteria
-- [ ] AC1: A seção `AutomationLogSection` passa a exibir entradas com status `cooldown` e `skipped` claramente separadas das `success`/`failed`, com tooltip explicando o motivo (ex: "filtro `message_contains: brandbook` não bateu" ou "cooldown ativo até HH:MM")
-- [ ] AC2: Exibida uma badge contagem agregada no topo da lista de automações: "Comentários recebidos hoje: N · Disparos: M · Skipados: K · Cooldown: J"
-- [ ] AC3: Ao editar uma automação `post_comment`, exibir os últimos 5 comentários recebidos no `target_post_id` (ou em qualquer post se NULL) que NÃO bateram com os filtros, com o motivo de skip
-- [ ] AC4: Quando `instagram_automations` retorna lista vazia mas `omni_channel_configs.channel='instagram'` está configurado, exibir um aviso "Você ainda não criou nenhuma automação" (já existe — manter), e adicionar link "Verificar webhooks Instagram" que abre `Configurações > Instagram > Integração` para confirmar subscription
-- [ ] AC5: Exibido aviso "⚠ Webhook de comentários não está inscrito" na tela de Automações quando `meta-pages-subscribe` reporta que o campo `comments` não está ativo na assinatura da página
+- [x] AC1: A seção `AutomationLogSection` passa a exibir entradas com status `cooldown` e `skipped` claramente separadas das `success`/`failed`, com tooltip explicando o motivo (ex: "filtro `message_contains: brandbook` não bateu" ou "cooldown ativo até HH:MM")
+- [x] AC2: Exibida uma badge contagem agregada no topo da lista de automações: "Comentários recebidos hoje: N · Disparos: M · Skipados: K · Cooldown: J"
+- [x] AC3: Ao editar uma automação `post_comment`, exibir os últimos 5 comentários recebidos no `target_post_id` (ou em qualquer post se NULL) que NÃO bateram com os filtros, com o motivo de skip
+- [x] AC4: Quando `instagram_automations` retorna lista vazia mas `omni_channel_configs.channel='instagram'` está configurado, exibir um aviso "Você ainda não criou nenhuma automação" (já existe — manter), e adicionar link "Verificar webhooks Instagram" que abre `Configurações > Instagram > Integração` para confirmar subscription
+- [x] AC5: Exibido aviso "⚠ Webhook de comentários não está inscrito" na tela de Automações quando `meta-pages-subscribe` reporta que o campo `comments` não está ativo na assinatura da página
 
 ## Escopo
 
@@ -57,13 +57,16 @@ A correção amplia visibilidade dos 3 cenários sem mexer no motor — separa o
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | dev-dev-alpha |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | fix/ig-automation-ui-observability |
+| Agente     | Serak (dev-dev-gamma) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/fix-sends-ui-rbac-cleanup |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+
+- `src/hooks/useInstagramAutomations.ts` — novos hooks: `useInstagramLogAggregates`, `useInstagramUnmatchedComments`, `useInstagramCommentSubscribed`; interface `InstagramLogAggregates`, `UnmatchedComment`
+- `src/components/config/InstagramAutomationsTab.tsx` — AC1 tooltips, AC2 aggregates badge, AC3 UnmatchedCommentsSection, AC4 link, AC5 warning; prop `onGoToIntegration` adicionado
+- `src/components/config/InstagramMegaConfig.tsx` — passa `onGoToIntegration={() => setTab('settings')}` para InstagramAutomationsTab
 
 ## QA Results
 <!-- QA preenche ao revisar -->

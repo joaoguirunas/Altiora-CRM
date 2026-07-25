@@ -66,4 +66,19 @@ const handleStart = () => {
 - `src/components/disparos/DisparoControls.tsx` — modificado
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-UI-01 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: EXIT 0 | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  Resume: updateSend payload = { status: 'running' } — sem started_at.
+        isResume check: send.status === 'paused'. Correto.
+AC2 ✅  Start (novo): payload = { status: 'running', started_at: new Date().toISOString() }.
+AC3 ✅  PerformanceCard usa started_at do banco; com valor preservado, duração correta.
+        Sem outras mudanças em hooks ou schema — isolado a DisparoControls.tsx.
+
+Próximo passo: @dev-devops push
+```

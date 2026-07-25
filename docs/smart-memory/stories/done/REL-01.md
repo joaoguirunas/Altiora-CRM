@@ -123,7 +123,36 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 <!-- Dev preenche ao concluir -->
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: FAIL
+Story: REL-01 | Data: 2026-07-25
+Story status no arquivo: backlog — Dev Agent Record vazio (sem agente, sem datas, sem File List).
+Issues bloqueantes:
+
+[CRITICAL] AC2 — release-tag.yml GitHub Action: NÃO EXISTE.
+  .github/workflows/ não contém release-tag.yml.
+  Sem o workflow, releases versionadas não são geradas automaticamente.
+
+[CRITICAL] AC3 — Migrations control plane: NÃO VERIFICADAS.
+  Dev Agent Record vazio → nenhuma migration adm_releases/adm_client_versions criada
+  por esta story (release.json v4.69 pré-existe com data 2026-07-22, anterior à story
+  que data de 2026-04-24 — não é output desta story).
+
+[CRITICAL] AC4 — adm-releases-register edge fn: NÃO VERIFICADA (sem dev record).
+
+[HIGH] AC5 — useAdmReleases hook: NÃO VERIFICADO (sem dev record).
+[HIGH] AC6 — adm-sync-client refactor: NÃO VERIFICADO (sem dev record).
+[HIGH] AC7 — sync-clients.yml refactor: NÃO VERIFICADO (sem dev record).
+[HIGH] AC8 — Documentação: NÃO VERIFICADA (sem dev record).
+
+Story está em done/ mas é documento de especificação sem implementação.
+release.json existente (v4.69) precede a story e não é output dela.
+
+Próximo passo: @dev-data-engineer + @dev-devops implementar story completa:
+  AC2 (GH Action), AC3 (migrations adm), AC4 (edge fn), AC5 (hook), AC6 (refactor),
+  AC7 (sync-clients refactor), AC8 (docs). Resubmeter com Dev Agent Record preenchido.
+```
 
 ## Validação 5-pontos (zael)
 

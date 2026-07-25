@@ -1,12 +1,12 @@
 ---
 title: "AUTH-V2-03: MFA opcional via TOTP (Supabase Auth)"
 type: story
-status: backlog
+status: done
 epic: auth-v2
 complexity: L
-agent: dev-dev-alpha
+agent: dev-dev-beta
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-07-25
 tags: [story, auth, security, mfa, P2]
 related: ["[[../../project/modules/auth-tenant-bootstrap]]", "[[../../stories/backlog/US-CFG-01]]"]
 ---

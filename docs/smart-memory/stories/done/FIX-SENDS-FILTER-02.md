@@ -56,4 +56,24 @@ Corrigir o cálculo de `has_more` em `filter-leads-for-send` para que a paginaç
 - `supabase/functions/filter-leads-for-send/index.ts` — adicionado `{ count: 'exact' }` no select; destructuring `count: totalCount`; `hasMore = (offset + rawCount) < totalCount`; `count_total` exposto no response
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-FILTER-02 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: EXIT 0 | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  { count: 'exact' } no select → PostgREST retorna totalCount via Content-Range.
+        has_more = (offset + rawCount) < totalCount.
+        1200 contatos / limit=500: chamada 1 (0+500<1200 → true), 2 (500+500<1200 → true),
+        3 (1000+200<1200 → false). Paginação correta.
+AC2 ✅  has_more=false só na última página. Sem paginação infinita.
+AC3 ✅  count_total = totalCount ?? rawCount exposto no response.
+AC4 ✅  Deduplicação (Map por people_id) intocada. Sem duplicatas.
+
+Fallback ✅  Se totalCount=null (PostgREST sem count suporte): rawCount === limit.
+             Conservador — pode indicar mais páginas mesmo na última. Aceitável.
+
+Próximo passo: @dev-devops push
+```

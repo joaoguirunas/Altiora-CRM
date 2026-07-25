@@ -58,3 +58,22 @@ Garantir type safety completo para `sends_contacts` e adicionar constraints de F
 - [x] AC4: Nenhuma regressão no filter builder de SENDS
 
 ## QA Results
+
+```
+VEREDICTO: CONCERNS
+Story: CLEAN-SENDS-01 | Data: 2026-07-25
+tsc: EXIT 0 | lint: sem novos erros
+Aprovado com observações:
+
+AC1 ✅  useSendContacts.ts: import SendContact adicionado; (row: any) removido;
+        cast final as SendContact[] aplicado. Type safety completo para sends_contacts.
+AC2 ✅  20260423015000_sends_fk_constraints.sql: CHECK validate_stage_ids para stage_ids.
+AC3 ✅  FK template_id → whatsapp_templates.id ON DELETE SET NULL confirmada na migration.
+AC4 ✅  Mudança isolada a useSendContacts.ts — filter builder não regrediu.
+
+[CONCERN-1 LOW] Paperwork: seção de ACs original (linhas 19-24) ainda mostra [ ].
+  A seção dev (linhas 53-58) tem [x] corretos.
+  AÇÃO: dev deve unificar as duas seções de ACs na story.
+
+Push LIBERADO.
+```

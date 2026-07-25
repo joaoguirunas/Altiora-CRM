@@ -71,4 +71,23 @@ if (filters.person_status && filters.person_status.length > 0) {
 - `supabase/functions/filter-leads-for-send/index.ts` — removido `.eq('status','active')` hardcoded; adicionado `else { query = query.eq('status','active') }` na seção person_status
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-FILTER-01 | Data: 2026-07-25
+Checklist: 8/8 verificados
+tsc: EXIT 0 | lint: sem novos erros
+Issues: nenhum
+
+AC1 ✅  person_status=['inactive']: query.in('status', ['inactive']) → só inativos.
+AC2 ✅  person_status=['active','inactive']: .in() aceita array → OR semântico no SQL.
+AC3 ✅  person_status omitido → else branch: query.eq('status', 'active'). Default correto.
+AC4 ✅  person_status=['archived'] → .in() retorna só arquivados. Lógica universal.
+AC5 ✅  Fix isolado ao bloco person_status (linhas 260-266). Q-fields, score, UTM,
+        stage não tocados. Sem regressão nos outros filtros.
+
+Bug raiz eliminado: conflito SQL
+  `status = 'active' AND status IN ('inactive')` → sempre falso. Removido.
+
+Próximo passo: @dev-devops push
+```

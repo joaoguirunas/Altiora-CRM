@@ -118,7 +118,35 @@ Enforce padrões obrigatórios em migrations via lint script + CI gate; cada mig
 <!-- Dev preenche ao concluir -->
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: FAIL
+Story: REL-04 | Data: 2026-07-25
+Story status no arquivo: backlog — Dev Agent Record vazio (sem agente, sem datas, sem File List).
+Issues bloqueantes:
+
+[CRITICAL] AC2 — lint-migrations.yml GitHub Action: NÃO EXISTE.
+  .github/workflows/ não contém lint-migrations.yml.
+  Sem o workflow, o lint script não é integrado ao CI — o gate obrigatório não existe.
+
+[CRITICAL] AC3 — migrations-dry-run.yml GitHub Action: NÃO EXISTE.
+  Dry-run em snapshot/container não implementado.
+
+[HIGH] AC6 — Backfill report: NÃO EXISTE.
+  docs/smart-memory/ops/migrations-lint-baseline-*.md ausente.
+  Baseline de débito histórico não gerado.
+
+O que EXISTE (parcialmente implementado):
+  AC1 ✅  scripts/lint-migrations.js existe com todas as 8 regras (MIG001-MIG008).
+  AC4 ✅  _TEMPLATE.sql e _TEMPLATE.rollback.sql existem em supabase/migrations/.
+  AC5 ✅  docs/smart-memory/conventions/migrations-discipline.md existe.
+  AC7 N/A pre-commit hook (opcional) — não verificado.
+
+Story física está em done/ mas conteúdo é de backlog (Dev Agent Record sem agente/datas/files).
+
+Próximo passo: @dev-devops implementar AC2 (lint-migrations.yml), AC3 (dry-run workflow),
+  AC6 (rodar lint --all e gerar baseline report). Resubmeter após implementação completa.
+```
 
 ## Validação 5-pontos (zael)
 
