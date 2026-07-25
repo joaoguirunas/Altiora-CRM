@@ -254,7 +254,7 @@ const NegocioSingle = () => {
       const currentResponsavel = negocio?.user_id;
       const isResponsavelInNewTeam = currentResponsavel &&
         filteredUsuarios.find(u => u.id === currentResponsavel);
-      const updateData: any = { id: id!, teams_id: newTimeId };
+      const updateData: { id: string; teams_id: string; user_id?: null } = { id: id!, teams_id: newTimeId };
       if (currentResponsavel && !isResponsavelInNewTeam) updateData.user_id = null;
       await updateNegocio.mutateAsync(updateData);
       setSelectedTimeId(newTimeId);
@@ -317,7 +317,7 @@ const NegocioSingle = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
   };
 
-  const handleUpdatePessoa = async (field: string, value: any) => {
+  const handleUpdatePessoa = async (field: string, value: string | number | boolean | null) => {
     if (!negocio?.pessoa) return;
     const fieldMap: Record<string, string> = {
       'nome': 'name', 'renda': 'income', 'momento': 'moment',
@@ -334,7 +334,7 @@ const NegocioSingle = () => {
 
   const validateWhatsApp = (value: string): string | null => {
     if (!value) return null;
-    const phoneRegex = /^\+?[\d\s\-\(\)]{10,}$/;
+    const phoneRegex = /^\+?[\d\s\-()]{10,}$/;
     return phoneRegex.test(value) ? null : "Formato de WhatsApp inválido";
   };
 
@@ -390,6 +390,23 @@ const NegocioSingle = () => {
 
   const currentPipeline = pipelines.find(p => p.id === negocio.pipeline_id);
   const filteredStages = stages.filter(stage => stage.pipeline_id === negocio.pipeline_id);
+
+  // ALTIORA-19: campos tipados sem usar `as any`
+  // Os campos altiora_* existem na tabela leads (migration 20260725120000) mas não nos tipos gerados
+  type NegocioAltiora = typeof negocio & {
+    altiora_etapa_perda?: string | null;
+    altiora_possibilidade_retomada?: boolean | null;
+    lost_at?: string | null;
+  };
+  const negocioAltiora = negocio as NegocioAltiora;
+
+  // Campos alternados de pessoa (IA pode gravar em português — objetivo/momento — enquanto o schema usa goal/moment)
+  type PessoaExtended = typeof negocio.pessoa & {
+    objetivo?: string | null;
+    momento?: string | null;
+  };
+  const pessoaExtended = negocio.pessoa as PessoaExtended | undefined;
+
   const currentStage = stages.find(stage => stage.id === selectedStageId);
 
   const showGanharButton = negocio.status === 'in_progress';
@@ -618,13 +635,13 @@ const NegocioSingle = () => {
                   <span>Motivo: <span className="font-medium">{getMotivoPerda()}</span></span>
                 </>
               )}
-              {(negocio as any).altiora_etapa_perda && (
+              {negocioAltiora.altiora_etapa_perda && (
                 <>
                   <span className="text-red-500/50">·</span>
-                  <span>Etapa: <span className="font-medium">{(negocio as any).altiora_etapa_perda}</span></span>
+                  <span>Etapa: <span className="font-medium">{negocioAltiora.altiora_etapa_perda}</span></span>
                 </>
               )}
-              {(negocio as any).altiora_possibilidade_retomada && (
+              {negocioAltiora.altiora_possibilidade_retomada && (
                 <>
                   <span className="text-red-500/50">·</span>
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
@@ -633,10 +650,10 @@ const NegocioSingle = () => {
                   </span>
                 </>
               )}
-              {negocio.lost_at && (
+              {negocioAltiora.lost_at && (
                 <>
                   <span className="text-red-500/50">·</span>
-                  <span>{new Date((negocio as any).lost_at).toLocaleDateString('pt-BR')}</span>
+                  <span>{new Date(negocioAltiora.lost_at).toLocaleDateString('pt-BR')}</span>
                 </>
               )}
             </div>
@@ -785,20 +802,20 @@ const NegocioSingle = () => {
                     </div>
 
                     {/* Dados do Lead — Objetivo & Momento (preenchidos pelo agente IA) */}
-                    {(negocio.pessoa?.goal || (negocio.pessoa as any)?.objetivo || negocio.pessoa?.moment || (negocio.pessoa as any)?.momento) && (
+                    {(pessoaExtended?.goal || pessoaExtended?.objetivo || pessoaExtended?.moment || pessoaExtended?.momento) && (
                       <div className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Dados do Lead</p>
                         <div className="border border-border rounded-[2px] overflow-hidden">
                           <div className="flex items-start justify-between px-5 py-2.5 border-b border-border gap-4">
                             <span className="text-[12px] text-muted-foreground/60 shrink-0">Objetivo</span>
                             <span className="text-[12px] font-medium text-foreground/80 text-right">
-                              {negocio.pessoa?.goal || (negocio.pessoa as any)?.objetivo || '—'}
+                              {pessoaExtended?.goal || pessoaExtended?.objetivo || '—'}
                             </span>
                           </div>
                           <div className="flex items-start justify-between px-5 py-2.5 gap-4">
                             <span className="text-[12px] text-muted-foreground/60 shrink-0">Momento</span>
                             <span className="text-[12px] font-medium text-foreground/80 text-right">
-                              {negocio.pessoa?.moment || (negocio.pessoa as any)?.momento || '—'}
+                              {pessoaExtended?.moment || pessoaExtended?.momento || '—'}
                             </span>
                           </div>
                         </div>

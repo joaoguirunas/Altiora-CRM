@@ -78,6 +78,13 @@ const Negocios = () => {
   const [motivoFilter, setMotivoFilter] = useState<string | null>(null);
   const [productFilter, setProductFilter] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  /**
+   * Filtro por Closer Altiora (ALTIORA-10 AC1).
+   * - Quando Closer autenticado: auto-setado com profile.id
+   * - Quando Gestor/Admin: controlado pelo seletor "Ver carteira de:"
+   * - Quando string vazia: sem filtro (todos os referrals)
+   */
+  const [closerIdFilter, setCloserIdFilter] = useState<string>('');
 
   const handleStatusFilterChange = (value: string | null) => {
     setStatusFilter(value);
@@ -132,6 +139,8 @@ const Negocios = () => {
   // Labels dinâmicos baseados no pipeline selecionado (AC4 + AC5)
   const entityLabel = getEntityLabel(selectedPipeline?.name ?? '');
   const entityLabelPlural = getEntityLabelPlural(selectedPipeline?.name ?? '');
+  // Flag para renderização condicional Altiora
+  const isAltioraPipelineSelected = isAltioraPipeline(selectedPipeline?.name ?? '');
 
   // Atualiza o document.title com o label correto (AC1)
   useEffect(() => {
