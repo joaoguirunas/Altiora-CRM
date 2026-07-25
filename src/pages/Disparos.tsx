@@ -27,6 +27,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { DispatchHealthCard } from '@/components/disparos/DispatchHealthCard';
 
 // ─── Status display ───────────────────────────────────────────────────────────
 const STATUS_MAP: Record<SendStatus, { label: string; color: string }> = {
@@ -218,6 +219,9 @@ export default function Disparos() {
             <KpiCard label="Mensagens enviadas"   value={kpis.totalSent} icon={Users} />
           </div>
         )}
+
+        {/* ── OBS-DISPATCH-HEALTH-01 AC5: global cron health bar ── */}
+        {kpis.running > 0 && <DispatchHealthCard />}
 
         {/* ── Filters ────────────────────────────────────────────────────── */}
         <Card className="p-3 border border-border bg-card rounded-[2px]">

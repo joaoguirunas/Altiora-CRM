@@ -10,6 +10,7 @@ import { PerformanceCard } from '@/components/disparos/PerformanceCard';
 import { ConfigurationSection } from '@/components/disparos/ConfigurationSection';
 import DisparoControls from '@/components/disparos/DisparoControls';
 import TabelaContatos from '@/components/disparos/TabelaContatos';
+import { DispatchHealthCard } from '@/components/disparos/DispatchHealthCard';
 import { Users, Send, XCircle, Clock } from 'lucide-react';
 
 export default function DisparoDetalhes() {
@@ -116,6 +117,9 @@ export default function DisparoDetalhes() {
         </div>
 
         <DisparoControls send={send} />
+
+        {/* OBS-DISPATCH-HEALTH-01 AC5: per-send health card */}
+        <DispatchHealthCard sendId={send.id} sendStatus={send.status} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ProgressCard
