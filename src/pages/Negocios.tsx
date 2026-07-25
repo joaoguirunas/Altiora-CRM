@@ -19,6 +19,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { isAltioraPipeline } from "@/utils/pipelineLabels";
 import NovoReferralModal from "@/components/negocios/NovoReferralModal";
+import AltioraPendenciasPanel from "@/components/negocios/AltioraPendenciasPanel";
 
 const Negocios = () => {
   const { pipelines: allPipelines = [], stages = [], isLoading } = usePipelines();
@@ -389,6 +390,13 @@ const Negocios = () => {
         />
       ) : (
         <Clientes />
+      )}
+
+      {/* ALTIORA-25: Painel de pendências — apenas Altiora + Gestor/Admin */}
+      {isAltioraPipeline(selectedPipeline?.name ?? '') && isManager && viewMode !== 'clientes' && (
+        <div className="px-4 pb-4">
+          <AltioraPendenciasPanel isManager={isManager} />
+        </div>
       )}
 
       {/* ALTIORA-06 AC4: Modal diferente para pipeline Altiora + Gestor/Admin */}
