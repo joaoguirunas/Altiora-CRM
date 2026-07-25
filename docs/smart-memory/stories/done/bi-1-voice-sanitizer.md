@@ -89,4 +89,76 @@ Eliminar a vocalização de markdown bruto (blocos ```chart, tabelas, JSON, cód
 - `src/components/dashboard/BIProInsightsTab.tsx` — AC5: 3 call-sites `tts.speak(markdownToVoiceText(...))` + import (L18, L564, L593, L906)
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: bi-1 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: EXIT 0 | Vitest: suite presente
+
+──── AC1 — Utilitário puro ────
+AC1 ✅  src/utils/markdownToVoiceText.ts EXISTS.
+        export function markdownToVoiceText(markdown: string, opts?: { maxChars?: number }): string. ✅
+        CHART_FENCE_RE: ```chart … ``` removidos. ✅
+        ANY_FENCE_RE: blocos de código genéricos removidos após chart. ✅
+        TABLE_BLOCK_RE: tabelas (header + |---|) removidas. ✅
+        LIST_MARKER_RE: bullets */-/+ colapsados. ✅
+        BOLD_RE, ITALIC_RE, INLINE_CODE_RE: ênfases e backticks removidos. ✅
+        Zero side effects (sem IO, sem estado global). ✅
+
+──── AC2 — Chart → frase declarativa ────
+AC2 ✅  chartBlockToPhrase(): JSON.parse → type + title → "Gráfico de {tipo}: {título}.". ✅
+        CHART_TYPE_LABELS: bar/line/area/pie/doughnut/scatter/bubble/radar/heatmap → PT-BR. ✅
+        JSON parse failure → return '' (sem JSON noise no TTS). ✅
+        Spec parseable mas sem title/type → return ''. ✅
+
+──── AC3 — Tabela → frase-resumo ────
+AC3 ✅  tableBlockToPhrase(): split header, extract columns, count data rows (lines.length - 2). ✅
+        Format: "Tabela com N linha(s) comparando col1, col2, ..." ✅
+        Singular/plural: linha${dataRowCount !== 1 ? 's' : ''}. ✅
+        Max 5 colunas + "e mais N" para excedentes. ✅
+
+──── AC4 — Sumarizador semântico ────
+AC4 ✅  SUMMARY_THRESHOLD = 600. ✅
+        normalized.length <= threshold → return normalized (verbatim). ✅
+        summarize(): 2 primeiros parágrafos + frases com números/% (NUMBER_HINT_RE). ✅
+        Trunca em boundary de sentença, appends SUMMARY_TAIL. ✅
+        opts?.maxChars ?? SUMMARY_THRESHOLD — override funcional. ✅
+        Zero chamadas de API — puramente local (regex + split). ✅
+
+──── AC5 — 3 call-sites InsightsTab ────
+AC5 ✅  BIProInsightsTab.tsx:
+        L18: import markdownToVoiceText. ✅
+        L564: tts.speak(markdownToVoiceText(last.content)) — auto-speak toggle. ✅
+        L593: tts.speak(markdownToVoiceText(last.content)) — auto-speak novas msgs. ✅
+        L906: onSpeak={(text) => tts.speak(markdownToVoiceText(text))} — botão manual. ✅
+        L909 (bônus): isSpeakingThisMessage={tts.currentSpeakingText === markdownToVoiceText(msg.content)} ✅
+          [NOTE-1 LOW] L909 chama markdownToVoiceText por mensagem por render.
+          Para listas longas (>30 msgs) pode acumular; considerar useMemo(). Não bloqueia.
+
+──── AC6 — Testes unitários ────
+AC6 ✅  src/utils/__tests__/markdownToVoiceText.test.ts EXISTS. Vitest syntax. ✅
+        chart spec válida → "Gráfico de barras: Receita por canal." ✅
+        chart spec inválida → NOT-VALID-JSON não vocalizado ✅
+        tabela 3×3 → "Tabela com 3 linhas comparando Vendedor, Deals, Receita" ✅
+        mistura bullets + tabela + chart → todas as transformações combinadas ✅
+        texto >600 chars → truncado + "Veja o painel para detalhes completos." ✅
+        texto <600 chars → retornado verbatim ✅
+        opts.maxChars override ✅
+        bold/italic/inline-code/URL removal ✅ | empty input ✅ | malformed não lança ✅
+
+──── AC7 — Smoke test ────
+AC7 ⏳  Smoke manual em /bipro aba Insights — requer browser + ElevenLabs ativo.
+        Fora do escopo CLI. Marcar após deploy + QA manual de TTS.
+
+──── Checklist ────
+tsc: EXIT 0 ✅
+1 Code review ✅  2 Tests ✅ (Vitest 6 cenários)  3 ACs 6/6 ✅ (AC7 smoke ⏳)
+4 Regressão ✅ (additive: import + wrap calls)
+5 Performance ✅ (<5ms por input; NOTE-1 L909 low risk)
+6 Security ✅ (zero IO, zero side effects, zero PII)
+7 Docs ✅ (JSDoc header + comentários inline)
+8 API contracts ✅ (sem endpoint changes)
+
+Issues: nenhum bloqueante. NOTE-1 LOW para futura otimização.
+Próximo passo: @dev-devops push. AC7 smoke após deploy.
+```

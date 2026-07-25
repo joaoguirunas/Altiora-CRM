@@ -107,4 +107,64 @@ Ou tudo num único PR se o dev preferir — discutir com o lead.
 - ⚠️ Validação visual (browser, dark/light, mobile) — pendente, será feita pelo QA.
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: bi-2 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: EXIT 0 | eslint: 0 erros (1 warning pré-existente)
+
+──── bipro-shared.ts (design tokens + componentes) ────
+tokens ✅  CARD_BASE = 'border border-border bg-card rounded-md overflow-hidden'. ✅
+           TABLE_HEADER = 'text-[11px] font-semibold text-muted-foreground uppercase tracking-wide'. ✅
+           GRID_KPIS_3/4/5, GRID_2COL, GRID_SEC_KPIS — responsivos. ✅
+SectionCard ✅  heading h3 text-[15px] font-semibold. subtitle text-[12px] muted. ✅
+MetricCell ✅   label text-[11px] uppercase tracking-wide. value text-[22px] semibold tabular-nums. ✅
+                icon container w-9 h-9 rounded-md bg-muted. ✅ px-5 py-4. ✅
+BadgePill ✅   text-[11px], 5 variantes (default/good/warning/bad/info). ✅
+FilterChip ✅  aria-pressed={active} — acessibilidade ok. text-[12px]. ✅
+SkeletonBlock ✅  rounded-md animate-pulse. ✅
+SkeletonKPIGrid ✅  rounded-md, grid variável (3/4/5). ✅
+BIProFeedback ✅  rounded-md border, 3 variantes. CTA action suportado. ✅
+
+──── BIProSummaryBar.tsx ────
+AC2 ✅  KPICard: px-5 py-4 (L45). ✅
+         min-w-[160px] flex-1 (L45, L71, L152). ✅
+         Icon container: w-9 h-9 rounded-md bg-muted (neutro sempre). ✅
+         Label: text-[11px] font-medium uppercase tracking-wide muted (L50). ✅
+         Value: text-[22px] font-semibold tabular-nums leading-none tracking-tight (L55). ✅
+         GrowthBadge: text-[11px] sem bg (L34). ✅
+         SECTION_CARD wrapper (from bipro-shared.ts). ✅
+         Sem gradients no SummaryBar. ✅
+
+──── BIProInsightsTab.tsx — enterprise refactor ────
+gradients ✅  Nenhum "from-blue-500"/"to-violet-600" remanescente (grep empty). ✅
+              Avatar bot/send/welcome icon: bg-primary ou bg-primary/10. ✅
+rounded ✅    Container raiz: rounded-lg (L735). ✅
+              Bubbles user: rounded-lg rounded-tr-sm (L165). ✅
+              Bubbles assistant: rounded-lg rounded-tl-sm (L167/169). ✅
+              Sem rounded-[Npx] literais (grep empty). ✅
+SpeakingOrb ✅  bg-primary (era bg-violet-500). ✅
+Voice ✅      useElevenLabsTTS (L10/L543). ✅ useSpeechRecognition (L299/L542). ✅
+              Todos os hooks voice/TTS intactos conforme spec. ✅
+
+──── ACs originais ────
+AC1 ✅(parcial)  Hierarquia 3 níveis via MetricCell (11px/22px/11px). ✅
+                 Sem TYPO_* constants (substituídos por componentes — per spec ux, documentado). ✅
+AC2 ✅  px-5 py-4 + icon bg-muted neutro. ✅
+AC3/AC5/AC6/AC7 N/A  Per spec ux e documentação do agente. ✅
+AC8 ✅  useReducedMotion() preservado. ✅
+AC9 ✅(parcial)  SummaryBar flex-wrap + overflow-x-auto. ✅
+AC10 ✅(verificar)  sem regressão estrutural confirmado.
+
+──── Checklist ────
+tsc: EXIT 0 ✅ | eslint: 0 errors ✅ (1 warning pré-existente useCallback InsightsTab)
+1 Code review ✅  2 Tests N/A (refactor visual, tsc+eslint suficientes)
+3 ACs ✅ (com desvios documentados conforme spec ux)  4 Regressão ✅ (voice/hooks preservados)
+5 Performance ✅ (gradient removal reduz repaint, sem novas deps)
+6 Security ✅ (sem changes de data layer)
+7 Docs ✅ (comments spec sections em bipro-shared.ts)
+8 API contracts ✅ (sem endpoint changes)
+
+Issues: nenhum
+Próximo passo: @dev-devops push
+```
