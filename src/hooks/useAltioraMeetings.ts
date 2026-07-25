@@ -15,24 +15,26 @@ export type AltioraMeetingType = 'R1' | 'R2' | 'R3';
 
 export interface AltioraMeeting {
   id: string;
+  /** Component-facing alias for leads_id */
   lead_id: string;
+  /** Component-facing alias for users_id */
   user_id?: string | null;
+  /** ISO datetime — mapped from altiora_data_hora (DB stores date+start_time separately) */
   start_time: string;
+  /** ISO datetime — mapped from date+end_time */
   end_time: string;
   status: string;
-  title?: string | null;
   notes?: string | null;
   location?: string | null;
+  /** Component-facing alias for google_meet_link */
   meeting_link?: string | null;
   google_event_id?: string | null;
-  /** Altiora-specific */
   altiora_tipo?: AltioraMeetingType | null;
   altiora_duracao_minutos?: number | null;
   altiora_data_hora?: string | null;
   altiora_compareceu?: boolean | null;
   altiora_resultado?: string | null;
   created_at: string;
-  /** Joins */
   settings_users?: { id: string; name: string; email?: string } | null;
 }
 
@@ -66,18 +68,27 @@ export const useAltioraMeetings = (leadId: string) => {
       const { data, error } = await supabase
         .from('meetings')
         .select(`
-          id, lead_id, user_id, start_time, end_time, status, title, notes,
-          location, meeting_link, google_event_id,
+          id, leads_id, users_id, date, start_time, end_time, status, notes,
+          location, google_meet_link, google_event_id,
           altiora_tipo, altiora_duracao_minutos, altiora_data_hora,
           altiora_compareceu, altiora_resultado, created_at,
           settings_users ( id, name, email )
         `)
-        .eq('lead_id', leadId)
+        .eq('leads_id', leadId)
         .not('altiora_tipo', 'is', null)
-        .order('start_time', { ascending: true });
+        .order('altiora_data_hora', { ascending: true, nullsFirst: false });
 
       if (error) throw error;
-      return (data ?? []) as AltioraMeeting[];
+
+      // Map DB column names to component-facing interface
+      return (data ?? []).map(r => ({
+        ...r,
+        lead_id: r.leads_id,
+        user_id: r.users_id,
+        start_time: r.altiora_data_hora ?? (r.date ? `${r.date}T${r.start_time ?? '00:00:00'}` : (r.start_time ?? '')),
+        end_time: r.date && r.end_time ? `${r.date}T${r.end_time}` : (r.end_time ?? ''),
+        meeting_link: r.google_meet_link,
+      })) as unknown as AltioraMeeting[];
     },
     enabled: !!leadId,
     staleTime: 2 * 60 * 1000,
@@ -92,21 +103,27 @@ export const useCreateAltioraMeeting = () => {
   return useMutation({
     mutationFn: async (params: CreateAltioraMeetingParams) => {
       // 1. Inserir meeting com campos Altiora
+      // DB meetings uses: leads_id, users_id, date (date), start_time (time), end_time (time)
+      const startIso = params.startTime;
+      const endIso   = params.endTime;
+      const dateStr      = startIso.includes('T') ? startIso.split('T')[0] : startIso;
+      const startTimeStr = startIso.includes('T') ? (startIso.split('T')[1]?.substring(0, 8) ?? '00:00:00') : '00:00:00';
+      const endTimeStr   = endIso.includes('T')   ? (endIso.split('T')[1]?.substring(0, 8) ?? '00:00:00')   : '00:00:00';
+
       const { data: meeting, error: insertError } = await supabase
         .from('meetings')
         .insert({
-          lead_id:               params.leadId,
-          people_id:             params.peopleId ?? null,
-          user_id:               params.closerId,
-          title:                 `${params.tipo} — Altiora`,
-          start_time:            params.startTime,
-          end_time:              params.endTime,
+          leads_id:              params.leadId,
+          users_id:              params.closerId,
+          date:                  dateStr,
+          start_time:            startTimeStr,
+          end_time:              endTimeStr,
           notes:                 params.notes ?? null,
-          meeting_link:          params.meetingLink ?? null,
+          google_meet_link:      params.meetingLink ?? null,
           status:                'agendado',
           altiora_tipo:          params.tipo,
           altiora_duracao_minutos: params.duracaoMinutos,
-          altiora_data_hora:     params.startTime,
+          altiora_data_hora:     startIso,
           altiora_created_by:    params.closerId,
         })
         .select('id')
@@ -183,15 +200,22 @@ export const useUpdateAltioraMeeting = () => {
 
   return useMutation({
     mutationFn: async (params: UpdateAltioraMeetingParams & { leadId: string; tipo: AltioraMeetingType }) => {
-      // 1. Atualizar meeting
+      // 1. Atualizar meeting — split ISO into date + time components
+      const startIso = params.startTime;
+      const endIso   = params.endTime;
+      const dateStr      = startIso.includes('T') ? startIso.split('T')[0] : startIso;
+      const startTimeStr = startIso.includes('T') ? (startIso.split('T')[1]?.substring(0, 8) ?? '00:00:00') : '00:00:00';
+      const endTimeStr   = endIso.includes('T')   ? (endIso.split('T')[1]?.substring(0, 8) ?? '00:00:00')   : '00:00:00';
+
       const { error: updateError } = await supabase
         .from('meetings')
         .update({
-          start_time:              params.startTime,
-          end_time:                params.endTime,
+          date:                    dateStr,
+          start_time:              startTimeStr,
+          end_time:                endTimeStr,
           notes:                   params.notes ?? null,
           altiora_duracao_minutos: params.duracaoMinutos,
-          altiora_data_hora:       params.startTime,
+          altiora_data_hora:       startIso,
         })
         .eq('id', params.meetingId);
 
@@ -267,6 +291,88 @@ export const useCancelAltioraMeeting = () => {
   });
 };
 
+// ── Hook: registrar resultado de reunião (ALTIORA-14) ─────────────────────────
+
+export type ResultadoMeetingStatus = 'realizada' | 'noshow' | 'cancelada';
+
+export interface ResultadoMeetingParams {
+  meetingId: string;
+  leadId: string;
+  tipo: AltioraMeetingType;
+  actorId: string;
+  status: ResultadoMeetingStatus;
+  resultado?: string;
+  /** Para no-show: motivo */
+  motivoNoShow?: string;
+}
+
+export const useRegistrarResultadoMeeting = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: ResultadoMeetingParams) => {
+      const { meetingId, leadId, tipo, actorId, status, resultado, motivoNoShow } = params;
+
+      const compareceu = status === 'realizada';
+      const dbStatus   = status === 'realizada' ? 'realizada'
+                       : status === 'noshow'    ? 'cancelada'
+                       : 'cancelada';
+
+      // 1. Atualizar meeting
+      const { error: updateError } = await supabase
+        .from('meetings')
+        .update({
+          status:             dbStatus,
+          altiora_compareceu: compareceu,
+          altiora_resultado:  resultado ?? null,
+        })
+        .eq('id', meetingId);
+
+      if (updateError) throw new Error(updateError.message);
+
+      // 2. Registrar interação
+      const interacaoType = status === 'noshow' ? 'meeting_noshow' : 'meeting_completed';
+      const description =
+        status === 'realizada'
+          ? `${tipo} realizada — cliente compareceu${resultado ? `: ${resultado.slice(0, 80)}` : ''}`
+          : status === 'noshow'
+          ? `${tipo} — no-show${motivoNoShow ? ` (${motivoNoShow})` : ''}`
+          : `${tipo} cancelada`;
+
+      const { error: interacaoError } = await supabase
+        .from('altiora_lead_interactions')
+        .insert({
+          lead_id:     leadId,
+          actor_id:    actorId,
+          type:        interacaoType,
+          description,
+          payload: {
+            meeting_id:      meetingId,
+            tipo,
+            compareceu,
+            resultado:       resultado ?? null,
+            motivo_noshow:   motivoNoShow ?? null,
+          },
+        });
+
+      if (interacaoError) throw new Error(interacaoError.message);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['altiora-meetings', variables.leadId] });
+      queryClient.invalidateQueries({ queryKey: ['altiora-interacoes', variables.leadId] });
+      queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
+
+      const label = variables.status === 'realizada' ? 'Reunião registrada como realizada!'
+                  : variables.status === 'noshow'    ? 'No-show registrado'
+                  : 'Reunião cancelada';
+      toast.success(label);
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao registrar resultado: ${error.message}`);
+    },
+  });
+};
+
 // ── Hook: verificar conflito de agenda ────────────────────────────────────────
 
 export const useCheckAltioraConflict = () => {
@@ -285,19 +391,25 @@ export const useCheckAltioraConflict = () => {
       // Verificar conflito no banco local primeiro (meetings do CRM)
       let query = supabase
         .from('meetings')
-        .select('id, start_time, end_time, title, altiora_tipo')
-        .eq('user_id', userId)
+        .select('id, altiora_data_hora, date, start_time, end_time, altiora_tipo')
+        .eq('users_id', userId)
         .neq('status', 'cancelada')
         .neq('status', 'cancelado')
-        .lt('start_time', endTime)
-        .gt('end_time', startTime);
+        .lt('altiora_data_hora', endTime)
+        .not('altiora_data_hora', 'is', null);
 
       if (excludeMeetingId) {
         query = query.neq('id', excludeMeetingId);
       }
 
       const { data: conflicts } = await query;
-      const conflictingSlots = (conflicts ?? []).map(c => ({ start: c.start_time, end: c.end_time }));
+      // Filter client-side for end overlap (DB stores end_time as time, not timestamptz)
+      const startTimeStr = startTime.includes('T') ? startTime.split('T')[1]?.substring(0, 8) : startTime;
+      const filtered = (conflicts ?? []).filter(c => !c.end_time || c.end_time > (startTimeStr ?? ''));
+      const conflictingSlots = filtered.map(c => ({
+        start: c.altiora_data_hora ?? (c.date ? `${c.date}T${c.start_time ?? ''}` : c.start_time ?? ''),
+        end:   c.date && c.end_time ? `${c.date}T${c.end_time}` : (c.end_time ?? ''),
+      }));
 
       return {
         hasConflict: conflictingSlots.length > 0,

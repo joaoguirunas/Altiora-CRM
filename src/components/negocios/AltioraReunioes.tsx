@@ -43,6 +43,7 @@ import {
   useCancelAltioraMeeting,
 } from '@/hooks/useAltioraMeetings';
 import { AltioraAgendarReuniaoModal } from './AltioraAgendarReuniaoModal';
+import RegistrarResultadoDrawer from './RegistrarResultadoDrawer';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,9 @@ interface AltioraReunioesProps {
   clientName?: string | null;
   /** Se true, Closer pode agendar */
   canSchedule?: boolean;
+  /** ALTIORA-14: callbacks pós-resultado para encadear ações no pai */
+  onRealizadaSuccess?: () => void;
+  onMeetingPerder?: () => void;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -92,15 +96,17 @@ interface MeetingCardProps {
   leadId: string;
   onReschedule: (meeting: AltioraMeeting) => void;
   onCancel: (meeting: AltioraMeeting) => void;
+  onRegistrarResultado: (meeting: AltioraMeeting) => void;
   canSchedule: boolean;
 }
 
-const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, canSchedule }: MeetingCardProps) => {
+const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, onRegistrarResultado, canSchedule }: MeetingCardProps) => {
   const startDate = new Date(meeting.start_time);
   const endDate   = new Date(meeting.end_time);
   const status    = (meeting.status ?? 'agendado').toLowerCase();
   const isCancelled = status === 'cancelada' || status === 'cancelado';
   const isCompleted = status === 'compareceu' || status === 'realizada';
+  const isPast      = endDate < new Date();
 
   const badgeClass  = STATUS_BADGE[status] ?? 'text-muted-foreground bg-muted border-border';
   const statusLabel = STATUS_LABEL[status] ?? meeting.status;
@@ -158,26 +164,41 @@ const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, canSchedule }: Mee
       )}
 
       {/* Ações */}
-      {canSchedule && !isCancelled && !isCompleted && (
+      {!isCancelled && !isCompleted && (
         <div className="flex items-center gap-2 pt-1 border-t border-border/50">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onReschedule(meeting)}
-            className="h-7 px-2.5 text-[11px] gap-1.5 rounded-[3px]"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Reagendar
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onCancel(meeting)}
-            className="h-7 px-2.5 text-[11px] gap-1.5 rounded-[3px] text-destructive hover:text-destructive hover:bg-destructive/10"
-          >
-            <X className="w-3 h-3" />
-            Cancelar
-          </Button>
+          {/* ALTIORA-14 AC1: Registrar resultado — apenas reuniões com horário passado */}
+          {isPast && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onRegistrarResultado(meeting)}
+              className="h-7 px-2.5 text-[11px] gap-1.5 rounded-[3px] border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+            >
+              Registrar resultado
+            </Button>
+          )}
+          {canSchedule && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onReschedule(meeting)}
+                className="h-7 px-2.5 text-[11px] gap-1.5 rounded-[3px]"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Reagendar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onCancel(meeting)}
+                className="h-7 px-2.5 text-[11px] gap-1.5 rounded-[3px] text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <X className="w-3 h-3" />
+                Cancelar
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -193,6 +214,8 @@ export const AltioraReunioes = ({
   clientEmail,
   clientName,
   canSchedule = true,
+  onRealizadaSuccess,
+  onMeetingPerder,
 }: AltioraReunioesProps) => {
   const { data: meetings = [], isLoading } = useAltioraMeetings(leadId);
   const cancelMutation = useCancelAltioraMeeting();
@@ -201,6 +224,8 @@ export const AltioraReunioes = ({
   const [selectedTipo, setSelectedTipo] = useState<AltioraMeetingType>('R1');
   const [meetingToEdit, setMeetingToEdit] = useState<AltioraMeeting | undefined>(undefined);
   const [cancelTarget, setCancelTarget] = useState<AltioraMeeting | undefined>(undefined);
+  // ALTIORA-14: drawer de resultado
+  const [resultadoTarget, setResultadoTarget] = useState<AltioraMeeting | undefined>(undefined);
 
   const openScheduleModal = (tipo: AltioraMeetingType) => {
     setSelectedTipo(tipo);
@@ -296,6 +321,7 @@ export const AltioraReunioes = ({
                 leadId={leadId}
                 onReschedule={openRescheduleModal}
                 onCancel={m => setCancelTarget(m)}
+                onRegistrarResultado={m => setResultadoTarget(m)}
                 canSchedule={canSchedule}
               />
             ) : (
@@ -308,6 +334,29 @@ export const AltioraReunioes = ({
           </div>
         );
       })}
+
+      {/* ALTIORA-14: Drawer de resultado */}
+      {resultadoTarget && (
+        <RegistrarResultadoDrawer
+          open={!!resultadoTarget}
+          onOpenChange={open => !open && setResultadoTarget(undefined)}
+          meetingId={resultadoTarget.id}
+          leadId={leadId}
+          tipo={resultadoTarget.altiora_tipo!}
+          onRealizadaSuccess={() => {
+            setResultadoTarget(undefined);
+            onRealizadaSuccess?.();
+          }}
+          onNoShowRemarcar={() => {
+            setResultadoTarget(undefined);
+            openScheduleModal(resultadoTarget?.altiora_tipo ?? 'R1');
+          }}
+          onNoShowPerder={() => {
+            setResultadoTarget(undefined);
+            onMeetingPerder?.();
+          }}
+        />
+      )}
 
       {/* Modal de agendamento / reagendamento */}
       <AltioraAgendarReuniaoModal

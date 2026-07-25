@@ -46,6 +46,10 @@ import CamposExtrasSection from "@/components/negocios/CamposExtrasSection";
 import { ExtraFieldsCard } from "@/components/pessoas/ExtraFieldsCard";
 import { getEntityLabel, isAltioraPipeline } from "@/utils/pipelineLabels";
 import AltioraFinvitySection from "@/components/negocios/AltioraFinvitySection";
+import AltioraR1Section from "@/components/negocios/AltioraR1Section";
+import RegistrarContatoModal, { type ContatoFormData } from "@/components/negocios/RegistrarContatoModal";
+import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
+import { useRegistrarContato, useSalvarProximaAcao } from "@/hooks/useAltioraContatos";
 
 const NegocioSingle = () => {
   const { id } = useParams<{ id: string }>();
@@ -67,6 +71,9 @@ const NegocioSingle = () => {
   const { usuariosTimes } = useUsuariosTimes();
   const { motivos } = useMotivosPerda();
   const atualizarPessoa = useUpdatePessoa();
+  // ALTIORA-11: mutations de contato e próxima ação
+  const registrarContato = useRegistrarContato();
+  const salvarProximaAcao = useSalvarProximaAcao();
 
   // NOTA: guard client-side por user_id===currentUserId foi removido daqui —
   // ficou redundante e MAIS restritivo que o modelo real de acesso desde que
@@ -89,6 +96,9 @@ const NegocioSingle = () => {
   const [showMotivoPerdasModal, setShowMotivoPerdasModal] = useState(false);
   // ALTIORA-19 AC4: modal de reabertura de referral perdido
   const [showReobrirModal, setShowReobrirModal] = useState(false);
+  // ALTIORA-11: modais de contato e próxima ação
+  const [showContatoModal, setShowContatoModal] = useState(false);
+  const [showProximaAcaoModal, setShowProximaAcaoModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -223,6 +233,36 @@ const NegocioSingle = () => {
     } catch {
       toast.error("Erro ao reabrir referral.");
     }
+  };
+
+  // ALTIORA-11: registrar contato → abre modal de próxima ação encadeada
+  const handleContatoConfirm = async (data: ContatoFormData) => {
+    if (!id || !user?.id) return;
+    await registrarContato.mutateAsync({
+      leadId: id,
+      actorId: user.id,
+      currentStageId: negocio?.leads_stages_id ?? '',
+      dataContato: data.dataContato,
+      canal: data.canal,
+      resposta: data.resposta,
+      resultado: data.resultado,
+    });
+    setShowContatoModal(false);
+    // AC3: encadeia o modal de próxima ação
+    setShowProximaAcaoModal(true);
+  };
+
+  const handleProximaAcaoConfirm = async (data: ProximaAcaoFormData) => {
+    if (!id || !user?.id) return;
+    await salvarProximaAcao.mutateAsync({
+      leadId: id,
+      actorId: user.id,
+      tipo: data.tipo,
+      descricao: data.descricao,
+      responsavelId: data.responsavelId,
+      prazo: data.prazo,
+    });
+    setShowProximaAcaoModal(false);
   };
 
   // Verifica se usuário é Gestor ou Admin (AC4 — só eles podem reabrir)
@@ -398,6 +438,7 @@ const NegocioSingle = () => {
     altiora_etapa_perda?: string | null;
     altiora_possibilidade_retomada?: boolean | null;
     altiora_closer_id?: string | null;
+    altiora_data_handoff?: string | null;
     lost_at?: string | null;
   };
   const negocioAltiora = negocio as NegocioAltiora;
@@ -533,6 +574,18 @@ const NegocioSingle = () => {
               >
                 <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} strokeWidth={1.5} />
               </Button>
+              {/* ALTIORA-11 AC1: botão Registrar contato — pipeline Altiora + in_progress */}
+              {showGanharButton && isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                <Button
+                  onClick={() => setShowContatoModal(true)}
+                  size="sm"
+                  variant="outline"
+                  className="h-[30px] px-3 text-xs gap-1.5 rounded-[4px]"
+                >
+                  <Phone className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  Registrar contato
+                </Button>
+              )}
               {showGanharButton && (
                 <Button
                   onClick={() => handleStatusChange('won')}
@@ -847,6 +900,16 @@ const NegocioSingle = () => {
                       />
                     )}
 
+                    {/* ALTIORA-15: Diagnóstico R1 — apenas para pipeline Altiora */}
+                    {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                      <AltioraR1Section
+                        leadId={id!}
+                        currentStagePosition={
+                          filteredStages.findIndex(s => s.id === selectedStageId) + 1
+                        }
+                      />
+                    )}
+
                     {/* ALTIORA-16: Seção Análise Finvity — apenas para pipeline Altiora */}
                     {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
                       <AltioraFinvitySection
@@ -930,6 +993,24 @@ const NegocioSingle = () => {
         isLoading={updateNegocio.isPending}
         stages={stages}
         pipelineId={negocio.pipeline_id || negocio.leads_pipelines_id}
+      />
+
+      {/* ALTIORA-11 AC1-AC2: modal de registro de contato */}
+      <RegistrarContatoModal
+        isOpen={showContatoModal}
+        onClose={() => setShowContatoModal(false)}
+        onConfirm={handleContatoConfirm}
+        isLoading={registrarContato.isPending}
+        altioraDataHandoff={negocioAltiora.altiora_data_handoff}
+      />
+
+      {/* ALTIORA-11 AC3-AC4: modal de próxima ação (encadeado após contato) */}
+      <ProximaAcaoModal
+        isOpen={showProximaAcaoModal}
+        onClose={() => setShowProximaAcaoModal(false)}
+        onConfirm={handleProximaAcaoConfirm}
+        isLoading={salvarProximaAcao.isPending}
+        defaultResponsavelId={negocioAltiora.altiora_closer_id ?? ''}
       />
 
       <ConfirmarExclusaoModal
