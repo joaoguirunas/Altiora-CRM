@@ -185,17 +185,25 @@ CREATE TABLE message_delivery_attempts (
 | Branch     | feature/04-terminologia-referral |
 | ACs pendentes | AC1-AC7 (bug fix — dev-beta aguarda RCA da Lyra), AC10 (whatsapp-outbound INSERT/UPDATE — dev-beta), AC11-AC13 (UI — dev-alpha/gamma), AC14-AC15 (smoke tests) |
 
+| Agente     | Novik (dev-dev-alpha) — AC11 + AC12 + AC13 |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feat/fix-sends-first-msg-01-ui |
+
 ## File List
 
 ### Criados por Bythak (AC8 + AC9)
 - `supabase/migrations/20260725350000_message_delivery_attempts.sql` — tabela + índices + RLS
 - `supabase/migrations/rollbacks/20260725350000_message_delivery_attempts.rollback.sql`
 
+### Criados por Novik (AC11-AC13)
+- `src/hooks/useMessageDeliveryAttempts.ts` — criado: hook lazy-fetch TanStack Query, enabled=false por padrão
+- `src/components/conversas/MessageDeliveryLog.tsx` — criado: componente expansível com AC12 cutoff + AttemptRow + PayloadAccordion
+- `src/pages/Conversas.tsx` — modificado: import + integração MessageDeliveryLog no bubble de mensagem outgoing WhatsApp
+
 ### Pendente (outros agentes)
 - `supabase/functions/whatsapp-outbound/index.ts` — AC10 (dev-beta): INSERT antes da chamada Meta + UPDATE após + sanitização request_body
 - `supabase/functions/omni-delivery-engine/index.ts` — AC1-AC3 (dev-beta + RCA Lyra): correção do filtro que exclui source_type='campaign'
-- `src/components/omni/MessageDeliveryLog.tsx` — AC11-AC13 (dev-alpha Aria): componente expansível
-- `src/hooks/useMessageDeliveryAttempts.ts` — AC11-AC13 (dev-gamma Iris): hook lazy-fetch
 
 ## Notas técnicas (DB)
 
