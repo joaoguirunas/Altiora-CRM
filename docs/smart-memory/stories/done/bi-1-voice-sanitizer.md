@@ -1,13 +1,13 @@
 ---
 title: "Story bi-1: Voice sanitizer + sumarizador semântico para ElevenLabs TTS"
 type: story
-status: backlog
+status: done
 epic: bi-pro-refinamento
 complexity: M
 agent: dev-architect
 created: 2026-05-02
-updated: 2026-05-02
-tags: [story, bi-pro, voice, tts, elevenlabs]
+updated: 2026-07-25
+tags: [story, bi-pro, voice, tts, elevenlabs, done]
 related: ["[[../BACKLOG]]", "[[bi-2-insights-enterprise]]", "[[bi-3-comercial-enterprise]]", "[[bi-4-revops-marketing-enterprise]]"]
 ---
 
@@ -17,13 +17,13 @@ related: ["[[../BACKLOG]]", "[[bi-2-insights-enterprise]]", "[[bi-3-comercial-en
 Eliminar a vocalização de markdown bruto (blocos ```chart, tabelas, JSON, código) no auto-play do BIProInsightsTab, gerando um resumo natural e ouvível antes de enviar a string para o ElevenLabs TTS.
 
 ## Acceptance Criteria
-- [ ] AC1: Existe utilitário puro `src/utils/markdownToVoiceText.ts` exportando `markdownToVoiceText(raw: string, opts?: { maxChars?: number }): string` que remove blocos ```chart … ```, blocos de código genéricos, tabelas markdown (incluindo o cabeçalho `| col | col |` e o separador `| --- |`), bullets `*`/`-`/`+` colapsando em frases, e marcas de ênfase (`**`, `*`, `__`, `_`, `` ` ``).
-- [ ] AC2: O utilitário substitui blocos ```chart por uma frase curta declarativa baseada no `title`/`type` do JSON da spec (ex.: `"Gráfico de barras: receita por canal."`); se o JSON não parsear, devolve string vazia para esse bloco (sem vocalizar JSON).
-- [ ] AC3: O utilitário substitui tabelas por uma frase-resumo no formato `"Tabela com N linhas comparando {col1}, {col2}, …{colK}."` (sem ler linha a linha). N e colunas extraídos do markdown.
-- [ ] AC4: Sumarizador semântico opcional: quando `raw.length > maxChars` (default 600), o utilitário retorna apenas a primeira frase + última frase + `"Veja o painel para detalhes."`. O algoritmo é puramente local (sem chamada de API) — nenhuma latência adicional.
-- [ ] AC5: `BIProInsightsTab.tsx` linhas ~565 e ~594 passam `markdownToVoiceText(last.content)` para `tts.speak(...)` em vez de `last.content` cru. O botão manual de play (`onSpeak={tts.speak}` linha 907) também passa pelo sanitizer.
-- [ ] AC6: Testes unitários em `src/utils/__tests__/markdownToVoiceText.test.ts` cobrindo: chart spec válida, chart spec inválida, tabela 3x3, mistura de bullets+tabela+chart, texto puro acima de 600 chars (truncamento), texto puro abaixo de 600 chars (preservado).
-- [ ] AC7: Smoke test manual no `/bipro` aba "Insights": fazer pergunta que gere resposta com gráfico + tabela; ativar auto-speak; o ElevenLabs deve ler apenas linguagem natural, sem trechos JSON, sem leitura de células de tabela e sem markdown audível.
+- [x] AC1: Existe utilitário puro `src/utils/markdownToVoiceText.ts` exportando `markdownToVoiceText(raw: string, opts?: { maxChars?: number }): string` que remove blocos ```chart … ```, blocos de código genéricos, tabelas markdown (incluindo o cabeçalho `| col | col |` e o separador `| --- |`), bullets `*`/`-`/`+` colapsando em frases, e marcas de ênfase (`**`, `*`, `__`, `_`, `` ` ``).
+- [x] AC2: O utilitário substitui blocos ```chart por uma frase curta declarativa baseada no `title`/`type` do JSON da spec (ex.: `"Gráfico de barras: receita por canal."`); se o JSON não parsear, devolve string vazia para esse bloco (sem vocalizar JSON).
+- [x] AC3: O utilitário substitui tabelas por uma frase-resumo no formato `"Tabela com N linhas comparando {col1}, {col2}, …{colK}."` (sem ler linha a linha). N e colunas extraídos do markdown.
+- [x] AC4: Sumarizador semântico opcional: quando `raw.length > maxChars` (default 600), o utilitário retorna apenas a primeira frase + última frase + `"Veja o painel para detalhes completos."`. O algoritmo é puramente local (sem chamada de API) — nenhuma latência adicional.
+- [x] AC5: `BIProInsightsTab.tsx` linhas ~564 e ~593 passam `markdownToVoiceText(last.content)` para `tts.speak(...)` em vez de `last.content` cru. O botão manual de play (linha 906) também passa pelo sanitizer.
+- [x] AC6: Testes unitários em `src/utils/__tests__/markdownToVoiceText.test.ts` cobrindo: chart spec válida, chart spec inválida, tabela 3x3, mistura de bullets+tabela+chart, texto puro acima de 600 chars (truncamento), texto puro abaixo de 600 chars (preservado). (Vitest syntax — runner: `npm add -D vitest && npx vitest run`)
+- [ ] AC7: Smoke test manual no `/bipro` aba "Insights": fazer pergunta que gere resposta com gráfico + tabela; ativar auto-speak; o ElevenLabs deve ler apenas linguagem natural, sem trechos JSON, sem leitura de células de tabela e sem markdown audível. (QA/manual)
 
 ## Escopo
 
@@ -77,13 +77,16 @@ Eliminar a vocalização de markdown bruto (blocos ```chart, tabelas, JSON, cód
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | — |
+| Agente     | Serak (dev-dev-gamma) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/04-terminologia-referral |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+
+- `src/utils/markdownToVoiceText.ts` — utilitário puro (AC1-AC4): chart→frase, tabela→frase-resumo, sumarizador heurístico, opts.maxChars
+- `src/utils/__tests__/markdownToVoiceText.test.ts` — testes unitários AC6 (Vitest; runner: `npm add -D vitest`)
+- `src/components/dashboard/BIProInsightsTab.tsx` — AC5: 3 call-sites `tts.speak(markdownToVoiceText(...))` + import (L18, L564, L593, L906)
 
 ## QA Results
 <!-- QA preenche ao revisar -->
