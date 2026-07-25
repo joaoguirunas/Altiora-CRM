@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { DateRange } from "react-day-picker";
-import { TrendingUp, Briefcase, Megaphone, Sparkles, RefreshCw, Loader2 } from "lucide-react";
+import { TrendingUp, Briefcase, Megaphone, Sparkles, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBIProAdAccounts } from "@/hooks/useBIProAdAccounts";
 
@@ -38,6 +38,18 @@ const Dashboard = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Token expiry detection — AC3/AC4
+  const _now = new Date();
+  const _sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const expiredTokenAccounts = accounts.filter(
+    a => a.is_active && a.token_expires_at && new Date(a.token_expires_at) <= _now,
+  );
+  const expiringSoonAccounts = accounts.filter(a => {
+    if (!a.is_active || !a.token_expires_at) return false;
+    const exp = new Date(a.token_expires_at);
+    return exp > _now && exp.getTime() - _now.getTime() < _sevenDaysMs;
+  });
+
   // Shared filter state
   const [periodFilter,     setPeriodFilter]     = useState('today');
   const [customDateRange,  setCustomDateRange]  = useState<DateRange | undefined>(undefined);
@@ -64,7 +76,11 @@ const Dashboard = () => {
   };
 
   const handleMetaSync = async () => {
-    const active = accounts.filter(a => a.is_active);
+    const now = new Date();
+    // Skip accounts with expired tokens — they need manual reconnection
+    const active = accounts.filter(
+      a => a.is_active && !(a.token_expires_at && new Date(a.token_expires_at) <= now),
+    );
     if (active.length === 0 || isSyncing) return;
     setIsSyncing(true);
     const today = new Date();
@@ -188,6 +204,45 @@ const Dashboard = () => {
       {/* ── Scrollable content ────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-3 sm:p-6">
+
+          {/* ── Token expiry banner — AC4: never silent ─────────────────────────── */}
+          {(expiredTokenAccounts.length > 0 || expiringSoonAccounts.length > 0) && (
+            <div className={`mb-4 rounded-lg border px-4 py-3 flex items-start gap-3 text-sm ${
+              expiredTokenAccounts.length > 0
+                ? 'border-red-200 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30'
+                : 'border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/30'
+            }`}>
+              <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${
+                expiredTokenAccounts.length > 0 ? 'text-red-500' : 'text-amber-500'
+              }`} />
+              <div>
+                {expiredTokenAccounts.length > 0 ? (
+                  <>
+                    <p className="font-medium text-red-700 dark:text-red-300">
+                      {expiredTokenAccounts.length === 1
+                        ? `Token expirado: ${expiredTokenAccounts[0].account_name} (${expiredTokenAccounts[0].platform})`
+                        : `${expiredTokenAccounts.length} tokens de Ads expirados`}
+                    </p>
+                    <p className="text-red-600 dark:text-red-400 mt-0.5 text-xs">
+                      Dados de campanha não serão sincronizados. Reconecte em{' '}
+                      <span className="font-medium">Configurações → Marketing → Ads</span>.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-amber-700 dark:text-amber-300">
+                      {expiringSoonAccounts.length === 1
+                        ? `Token expirando: ${expiringSoonAccounts[0].account_name} (${expiringSoonAccounts[0].platform})`
+                        : `${expiringSoonAccounts.length} tokens de Ads expiram em breve`}
+                    </p>
+                    <p className="text-amber-600 dark:text-amber-400 mt-0.5 text-xs">
+                      Clique em <span className="font-medium">Meta Sync</span> para renovar automaticamente.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Executive Summary Bar — only on RevOps (other tabs have their own KPIs) ──── */}
           {activeTab === 'revops' && (

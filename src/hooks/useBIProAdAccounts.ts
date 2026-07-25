@@ -133,7 +133,11 @@ export function useBIProAdAccounts() {
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error ?? 'Sync failed');
+      if (!data?.success) {
+        const syncErr = new Error(data?.error ?? 'Sync failed') as Error & { tokenExpired?: boolean };
+        if (data?.tokenExpired) syncErr.tokenExpired = true;
+        throw syncErr;
+      }
 
       return data;
     },
@@ -144,6 +148,15 @@ export function useBIProAdAccounts() {
       toast.success(`Sincronizado: ${data.synced} registros, R$ ${data.total_spend?.toFixed(2) ?? '0'} importados`);
     },
     onError: (err: Error) => {
+      // Token expired — user must reconnect
+      if ((err as Error & { tokenExpired?: boolean }).tokenExpired) {
+        toast.error('Token Meta expirado.', {
+          description: 'Reconecte a conta em Configurações > Marketing > Meta Ads para retomar a sincronização.',
+          duration: 10000,
+        });
+        return;
+      }
+
       // Developer Token not approved for production accounts
       if (err.message.includes('DEVELOPER_TOKEN_NOT_APPROVED')) {
         toast.error('Developer Token sem acesso a contas reais.', {
