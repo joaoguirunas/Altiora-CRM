@@ -69,4 +69,35 @@ A correção amplia visibilidade dos 3 cenários sem mexer no motor — separa o
 - `src/components/config/InstagramMegaConfig.tsx` — passa `onGoToIntegration={() => setTab('settings')}` para InstagramAutomationsTab
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-IG-AUT-02 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: N/A (sem arquivo novo TS isolado — componente verificado via grep)
+Issues: nenhum
+
+AC1 ✅  STATUS_CONFIG inclui estados cooldown+skipped com tooltip explicativo
+        (InstagramAutomationsTab.tsx:467 — className, label, icon por status).
+        Tooltip importado L15; renderizado com motivo de skip/cooldown. ✅
+
+AC2 ✅  Badge contagem agregada no topo: "Comentários recebidos hoje: N · Disparos: M ·
+        Skipados: K · Cooldown: J" — useInstagramLogAggregates() consumido L539;
+        rendering condicional L609-630 (aggregates.commentsReceived/success/skipped/cooldown). ✅
+
+AC3 ✅  Hook useInstagramUnmatchedComments() confirmado (useInstagramAutomations.ts L249,256,262);
+        UnmatchedCommentsSection renderiza últimos 5 comentários sem match com motivo. ✅
+
+AC4 ✅  Prop onGoToIntegration passada (L496,529) e link "Verificar webhooks Instagram"
+        renderizado condicionalmente L591-596; link navega para tab Integração. ✅
+        InstagramMegaConfig.tsx passa onGoToIntegration={() => setTab('settings')}. ✅
+
+AC5 ✅  useInstagramCommentSubscribed() consumido L540 (commentSubscribed);
+        hook confirmado em useInstagramAutomations.ts L262,312.
+        Aviso "⚠ Webhook de comentários não está inscrito" renderizado quando
+        commentSubscribed retorna false/null. ✅
+
+Segurança ✅  Zero dangerouslySetInnerHTML novo. Queries parametrizadas via supabase client.
+Performance ✅  Hooks com useQuery (TanStack) — sem N+1 óbvio; agregados em 1 query. ✅
+
+Próximo passo: @dev-devops push
+```

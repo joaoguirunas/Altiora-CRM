@@ -150,3 +150,11 @@ Verificações originais OK (FWUP-11 base):
 
 Próximo passo: @dev-devops push autorizado. Regenerar types.ts em follow-up cosmético.
 ```
+
+## WAIVER (2026-07-25)
+
+**Decisão:** WAIVED — supersedido por drop do módulo CallPro.
+
+`useCallProFollowups.ts` referenciado no laudo QA foi deletado em `20260609000000_drop_coach_pro_and_call_pro.sql`. O módulo CallPro foi completamente removido — não há consumer da coluna `people_id` no frontend. O fix é inviável e desnecessário.
+
+**Status final:** WAIVED (mesmo padrão de FIX-COACH-01 e FIX-COACH-02)

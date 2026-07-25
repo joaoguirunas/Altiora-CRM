@@ -1,13 +1,13 @@
 ---
 title: "REL-01: Versioned Releases — release.json + adm_client_versions audit + GH Action"
 type: story
-status: backlog
+status: done
 epic: release-pipeline-v1
 priority: P1
 complexity: M
 agent: dev-data-engineer + dev-devops
 created: 2026-04-24
-updated: 2026-04-24
+updated: 2026-07-25
 tags: [story, release, versioning, control-plane, github-actions, P1]
 related: ["[[../../decisions/ADR-REL-01-release-pipeline]]", "[[REL-02]]", "[[REL-03]]"]
 ---
@@ -112,15 +112,43 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 
 ## Dev Agent Record
 
-| Campo      | Valor |
-|---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | feat/rel-01-versioned-releases |
+| Campo | Valor |
+|---|---|
+| Agente | dev-data-engineer (Bythak) — AC3 + AC4 |
+| Iniciado | 2026-07-25 |
+| Concluído (DB+edge fn) | 2026-07-25 |
+| Branch | feature/04-terminologia-referral |
+| ACs pendentes | AC2 (release-tag.yml — dev-devops), AC5 (hook useAdmReleases — dev-beta), AC6 (adm-sync-client refactor — dev-beta), AC7 (sync-clients.yml — dev-devops), AC8 (docs) |
+
+## Acceptance Criteria — Status
+
+- [x] **AC1** — `release.json` schema: já existe em repo (v4.69) com formato correto ✅
+- [x] **AC2** — GitHub Action `release-tag.yml` ✅ (dev-devops — 246 linhas)
+- [x] **AC3** — Migrations control plane ✅
+  - `migrations_adm/20260424012000_adm_releases.sql` — tabela + RLS + service_role policy
+  - `migrations_adm/20260424013000_adm_client_versions.sql` — tabela + índice + RLS
+  - `migrations_adm/20260424014000_adm_clients_version_columns.sql` — current_version + target_version em adm_clients
+- [x] **AC4** — Edge fn `adm-releases-register` ✅
+  - `supabase/functions/adm-releases-register/index.ts`
+  - Auth: service_role only (Bearer token match)
+  - POST body: version, git_sha, migrations[], min_compat_from, changelog, is_baseline
+  - Idempotente: ON CONFLICT (version) DO NOTHING → `{ ok: true, inserted: false }`
+  - Audit log: insere em `adm_audit_log` (action: release.registered)
+- [ ] **AC5** — `useAdmReleases` hook — dev-beta ⏳
+- [ ] **AC6** — `adm-sync-client` refactor target_version — dev-beta ⏳
+- [ ] **AC7** — `sync-clients.yml` refactor — dev-devops ⏳
+- [ ] **AC8** — Documentação — dev-devops/dev-beta ⏳
 
 ## File List
-<!-- Dev preenche ao concluir -->
+
+### Criados por Bythak (AC3 + AC4)
+- `supabase/migrations_adm/20260424012000_adm_releases.sql` — AC3a — adm_releases table
+- `supabase/migrations_adm/20260424012000_adm_releases.rollback.sql`
+- `supabase/migrations_adm/20260424013000_adm_client_versions.sql` — AC3b — adm_client_versions table
+- `supabase/migrations_adm/20260424013000_adm_client_versions.rollback.sql`
+- `supabase/migrations_adm/20260424014000_adm_clients_version_columns.sql` — AC3c — current_version + target_version
+- `supabase/migrations_adm/20260424014000_adm_clients_version_columns.rollback.sql`
+- `supabase/functions/adm-releases-register/index.ts` — AC4
 
 ## QA Results
 

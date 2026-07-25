@@ -109,8 +109,8 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
+| Agente     | Novik (dev-dev-alpha) |
+| Iniciado   | 2026-07-25 |
 | Concluído  | — |
 | Branch     | feat/rel-02-adm-update-ui |
 

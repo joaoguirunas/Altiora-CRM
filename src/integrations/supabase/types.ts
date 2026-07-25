@@ -5065,6 +5065,79 @@ export type Database = {
           },
         ]
       }
+      // ── Manually added 2026-07-25 (FIX-SCORE-01) — pending supabase gen types ──
+      score_categories: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      score_category_items: {
+        Row: {
+          active: boolean
+          category_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          order_index: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          order_index?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "score_category_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "score_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // ── End manually added ────────────────────────────────────────────────────
       score_framings: {
         Row: {
           created_at: string | null

@@ -231,6 +231,31 @@ Log cronológico de migrations aplicadas pelo Bythak. Migrations são imutáveis
 
 ---
 
+---
+
+## 2026-07-25 — Wave 2: Backlog completion (REL-03, REL-05, FIX-SENDS-STATUS-BRIDGE-01, OBS-DISPATCH-HEALTH-01)
+
+**Objetivo:** Fechar backlog completo Altiora CRM. Migrations pendentes de apply via Grav (supabase db query --linked --file).
+
+| Arquivo | Tipo | AC | Descrição | Rollback |
+|---|---|---|---|---|
+| `20260725250000_fix_legacy_cron_urls.sql` | migration | FIX-SENDS-CRON-LEGACY-URLS | fn_cron_http_call() + 3 crons + 2 trigger functions (url_legacy→fn) | disponível |
+| `20260725260000_drop_rbac_granular.sql` | migration | ARCH-RBAC-02 | DROP tenant_roles, tenant_role_permissions, feature_key, role_id, seed_default_tenant_roles | disponível |
+| `20260725270000_messages_to_sends_contacts_bridge.sql` | migration | FIX-SENDS-STATUS-BRIDGE-01 AC3+AC4 | Trigger trg_messages_to_sends_contacts: status WhatsApp→sends_contacts monotônico (STATUS_RANK) | disponível |
+| `20260725280000_drop_sends_import_presets.sql` | migration | SENDS-IMPORT-02 cleanup | DROP sends_import_presets (órfã após SENDS-IMPORT-01) | disponível |
+| `20260725290000_obs_dispatch_health.sql` | migration | OBS-DISPATCH-HEALTH-01 AC1-AC3 | _get_cron_health_metrics() SECDEF + v_dispatch_health VIEW + get_send_health(uuid) RPC | disponível |
+| `20260725320000_compute_schema_hash.sql` | migration | REL-03 AC4 | compute_schema_hash() SECDEF — SHA-256 determinístico do schema public (tabelas, colunas, constraints, índices, funções, triggers) | disponível |
+| `migrations_adm/20260725300000_adm_client_drift.sql` | migrations_adm | REL-03 AC1 | CREATE TABLE adm_client_drift (drift detection log) + RLS super_admin | disponível |
+| `migrations_adm/20260725310000_adm_drift_cron.sql` | migrations_adm | REL-03 AC3 | pg_cron adm-drift-check-daily (4h UTC) via GUC app.supabase_url | disponível |
+| `migrations_adm/20260725330000_adm_releases_is_baseline.sql` | migrations_adm | REL-05 AC5 DB | ADD COLUMN is_baseline + adm-baseline-check-weekly cron (sábados 5h UTC) | disponível |
+
+**Notas de apply:**
+- Migrations regulares: `supabase db query --linked --file supabase/migrations/{arquivo}.sql`
+- Migrations ADM: `supabase db query --linked --file supabase/migrations_adm/{arquivo}.sql` (control plane apenas — NÃO propagar a tenants)
+- Após apply: INSERT manual em schema_migrations para cada migration regular
+
+---
+
 ## Operação DML 2026-06-16 — Criar agente "Qualificação Consultoria" + desativar "Diagnóstico"
 
 DML em tabelas de aplicação (`ai_agents`, `ai_agents_steps`, `ai_agents_history`) — NÃO migration versionada. Via `db query --linked --file`, transação única.

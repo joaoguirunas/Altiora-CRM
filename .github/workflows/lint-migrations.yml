@@ -1,0 +1,200 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# lint-migrations.yml — REL-04 AC2
+#
+# CI gate que executa scripts/lint-migrations.js em cada PR com migrations
+#
+# Trigger: pull_request em supabase/migrations/** ou supabase/migrations_adm/**
+#
+# Passos:
+#   1. Detecta migrations alteradas vs base branch
+#   2. Executa node scripts/lint-migrations.js com os arquivos alterados
+#   3. Posta comentário no PR com summary (pass ou errors detalhados)
+#   4. Falha o check (exit 1) se houver erros — bloqueia merge via required check
+#
+# Regras verificadas (MIG001–MIG008):
+#   MIG001 — timestamp 14-dígitos no nome do arquivo
+#   MIG002 — CREATE TABLE sem IF NOT EXISTS
+#   MIG003 — CREATE INDEX sem IF NOT EXISTS
+#   MIG004 — ADD COLUMN sem IF NOT EXISTS
+#   MIG005 — DROP TABLE sem @allow-destructive
+#   MIG006 — rollback file ausente (a menos que @no-rollback)
+#   MIG007 — arquivo > 500 linhas (warning)
+#   MIG008 — CREATE FUNCTION sem OR REPLACE (warning)
+#
+# Para ignorar uma regra por arquivo:
+#   Adicione no início do .sql: -- @lint-skip MIG002 reason: <justificativa>
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Lint Migrations
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/migrations_adm/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Setup Node.js ───────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── 3. Detectar migrations alteradas ──────────────────────────────────
+      - name: Detect changed migrations
+        id: changed
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            -- 'supabase/migrations/*.sql' \
+               'supabase/migrations_adm/*.sql' \
+            | grep -v '_TEMPLATE' \
+            | grep -v '\.rollback\.sql' \
+            | grep -v '/archived/' \
+            | grep -v '/rollbacks/' \
+            | sort || true)
+
+          if [ -z "$CHANGED" ]; then
+            echo "ℹ️  Nenhuma migration alterada detectada"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            COUNT=$(echo "$CHANGED" | wc -l | tr -d ' ')
+            echo "✅ ${COUNT} migration(s) alterada(s):"
+            echo "$CHANGED"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "changed_files<<CHANGED_EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED" >> $GITHUB_OUTPUT
+            echo "CHANGED_EOF" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 4. Executar lint-migrations ────────────────────────────────────────
+      - name: Run lint-migrations
+        if: steps.changed.outputs.has_changes == 'true'
+        id: lint
+        run: |
+          set +e  # não aborta no erro — capturamos o exit code manualmente
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          # Obter lista de arquivos alterados para passar explicitamente ao script
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            -- 'supabase/migrations/*.sql' \
+               'supabase/migrations_adm/*.sql' \
+            | grep -v '_TEMPLATE' \
+            | grep -v '\.rollback\.sql' \
+            | grep -v '/archived/' \
+            | grep -v '/rollbacks/' \
+            | sort)
+
+          # Executa o lint passando arquivos explicitamente
+          # Compatível tanto com --changed-only (git-based) quanto explicit paths
+          LINT_OUTPUT=$(node scripts/lint-migrations.js $CHANGED 2>&1)
+          LINT_EXIT=$?
+
+          echo "lint_exit=$LINT_EXIT" >> $GITHUB_OUTPUT
+
+          # Salva output para o comentário no PR (multiline)
+          {
+            echo 'lint_output<<LINT_EOF'
+            echo "$LINT_OUTPUT"
+            echo 'LINT_EOF'
+          } >> $GITHUB_OUTPUT
+
+          # Log no runner
+          echo "$LINT_OUTPUT"
+
+          if [ "$LINT_EXIT" -eq 0 ]; then
+            echo "✅ Lint passou"
+          else
+            echo "❌ Lint falhou com exit code $LINT_EXIT"
+          fi
+
+          set -e
+
+      # ── 5. Comentário no PR ────────────────────────────────────────────────
+      - name: Comment on PR
+        if: steps.changed.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lintExit  = parseInt('${{ steps.lint.outputs.lint_exit }}' || '0');
+            const lintOutput = `${{ steps.lint.outputs.lint_output }}`;
+            const icon   = lintExit === 0 ? '✅' : '❌';
+            const status = lintExit === 0 ? 'PASSOU' : 'FALHOU';
+
+            const footerPass = '_Todas as migrations passaram nas verificações de disciplina._';
+            const footerFail = [
+              '**Este PR está bloqueado até que as violações de lint sejam corrigidas.**',
+              '',
+              'Para exceções justificadas, adicione no início do arquivo `.sql`:',
+              '```sql',
+              '-- @lint-skip MIG002 reason: <justificativa clara>',
+              '-- @no-rollback reason: data seed only',
+              '-- @allow-destructive reason: cleanup de tabela legada aprovado em ADR-XX',
+              '```',
+              '',
+              'Veja `docs/smart-memory/conventions/migrations-discipline.md` para guia completo.',
+            ].join('\n');
+
+            const body = [
+              `## ${icon} Migration Lint — ${status}`,
+              '',
+              '```',
+              lintOutput || '(sem output)',
+              '```',
+              '',
+              lintExit === 0 ? footerPass : footerFail,
+            ].join('\n');
+
+            // Tenta atualizar comentário existente (evita spam em multiplos pushes)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c =>
+              c.user?.login === 'github-actions[bot]' &&
+              c.body?.includes('Migration Lint')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # ── 6. Falhar o check se houver erros ─────────────────────────────────
+      - name: Fail check on lint errors
+        if: steps.changed.outputs.has_changes == 'true' && steps.lint.outputs.lint_exit != '0'
+        run: |
+          echo "❌ Migration lint falhou — merge bloqueado"
+          echo "Corrija os erros reportados no comentário do PR antes de fazer merge."
+          exit 1

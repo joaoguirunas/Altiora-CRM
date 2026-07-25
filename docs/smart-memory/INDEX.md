@@ -116,6 +116,7 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 
 ## Convenções
 - [[conventions/migrations-discipline]] — regras lint MIG001-MIG008, rollbacks, templates, CI integration
+- [[conventions/baseline-squashing]] — protocolo completo de squash de migrations: quando/como/quem aprova, checklist, warnings, rollback (REL-05 AC7)
 
 ## Auditoria
 - [[audit/resilience]] — auditoria adversarial: auth, tenant bootstrap, settings — 4 P0 / 6 P1 / 5 P2 (Kronix, 2026-04-26)
@@ -190,6 +191,13 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 ## Clientes
 - [[clientes/README]] — índice de clientes
 - [[clientes/joao-guirunas]] — João Guirunas: configuração single-tenant ativa
+
+## Release Pipeline (REL-01/03/04/05 — 2026-07-25, Bythak)
+- [[stories/done/REL-01]] — **DB+edge fn DONE (dev-devops/beta pendente)**: adm_releases + adm_client_versions migrations + adm-releases-register edge fn; AC2/AC5-AC8 dev-devops/beta
+- [[stories/done/REL-03]] — **DB DONE (dev-beta pendente)**: adm_client_drift table + cron adm-drift-check-daily + compute_schema_hash() RPC per-tenant; AC2/AC5-AC9 dev-beta
+- [[stories/done/REL-04]] — **script+manifest+backfill DONE (dev-devops pendente AC2/AC3)**: lint-migrations.js MIG001-MIG009 + backfill report 1801 erros/21 warnings
+- [[stories/done/REL-05]] — **DONE (dev-beta pendente AC3/AC4/AC5-fn)**: squash-baseline.js + baseline-approve.yml + baseline-restore.yml + is_baseline flag + baseline-squashing.md; AC3/AC4/AC5-fn dev-beta
+- [[ops/migrations-lint-baseline-2026-07-25]] — REL-04 AC6: baseline de débito técnico lint (902 files, 1801 erros históricos)
 
 ## Status
 - [[shared-context]] — status board em tempo real

@@ -112,7 +112,7 @@ Compare com `DisparoControls.handleStart` (linha 23) que **chama `useSendDispatc
 | Branch     | feat/fix-sends-fe-validation |
 
 ## File List
-- `src/pages/CriarDisparo.tsx` — AC1: filtro APPROVED+meta_template_name; AC2: extractTemplateVars + unmappedVars warning + validate block
+- `src/pages/CriarDisparo.tsx` — AC1: filtro APPROVED+meta_template_name; AC2: extractTemplateVars + unmappedVars warning + validate block + inline WhatsappTemplateVariablesModal CTA (commit 8e5041c)
 - `src/components/disparos/ConfiguracaoDisparoTab.tsx` — AC1: mesmo filtro + hint visual
 - `src/pages/Disparos.tsx` — AC3: handleAtivar/handleRetomar invocam worker, spinner por linha
 

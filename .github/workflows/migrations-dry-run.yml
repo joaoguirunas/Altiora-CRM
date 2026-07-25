@@ -1,0 +1,315 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# migrations-dry-run.yml — REL-04 AC3
+#
+# Dry-run de migrations em container Postgres local por PR
+#
+# Trigger:
+#   - pull_request com paths supabase/migrations/** (opened/synchronize/reopened)
+#   - pull_request com label "migration-heavy" (qualquer evento)
+#
+# ⚠️  LIMITAÇÃO (documentada conforme spec):
+#   Usa Postgres oficial em container Docker — não equivale 100% à produção Supabase.
+#   Sem: extensões específicas Supabase, RLS overrides, pg_net, vault, pg_graphql, etc.
+#   Captura: erros de sintaxe SQL, referências inválidas, conflitos DDL, ordem de dependências.
+#   Upgrade futuro: Supabase Branching API (em beta) quando estiver GA.
+#
+# Passos:
+#   1. Detecta migrations alteradas no PR
+#   2. Forward dry-run: cada migration em BEGIN…ROLLBACK (verifica sintaxe e DDL)
+#   3. Rollback dry-run: verifica rollback file correspondente
+#   4. Posta comentário no PR com resultado detalhado
+#   5. Falha o check se forward dry-run tiver erro
+#
+# Secrets necessários:
+#   Nenhum — usa container local sem credenciais externas
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Migrations Dry-Run
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/migrations_adm/**'
+    types: [opened, synchronize, reopened, labeled]
+
+concurrency:
+  group: dry-run-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run:
+    # Executa se: evento não é "labeled" OU se é "labeled" com label "migration-heavy"
+    if: |
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'migration-heavy'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: dry_run_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Instalar psql ───────────────────────────────────────────────────
+      - name: Install psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      # ── 3. Detectar migrations alteradas ──────────────────────────────────
+      - name: Detect changed migrations
+        id: changed
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            -- 'supabase/migrations/*.sql' \
+               'supabase/migrations_adm/*.sql' \
+            | grep -v '_TEMPLATE' \
+            | grep -v '\.rollback\.sql' \
+            | grep -v '/archived/' \
+            | grep -v '/rollbacks/' \
+            | sort || true)
+
+          if [ -z "$CHANGED" ]; then
+            echo "ℹ️  Nenhuma migration alterada detectada"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            COUNT=$(echo "$CHANGED" | wc -l | tr -d ' ')
+            echo "✅ ${COUNT} migration(s) para dry-run:"
+            echo "$CHANGED"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "count=$COUNT" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 4. Forward dry-run (BEGIN…ROLLBACK) ───────────────────────────────
+      - name: Forward dry-run
+        if: steps.changed.outputs.has_changes == 'true'
+        id: forward
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: dry_run_db
+          PGPORT: 5432
+        run: |
+          set +e  # não abortar — capturar resultados individualmente
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            -- 'supabase/migrations/*.sql' \
+               'supabase/migrations_adm/*.sql' \
+            | grep -v '_TEMPLATE' \
+            | grep -v '\.rollback\.sql' \
+            | grep -v '/archived/' \
+            | grep -v '/rollbacks/' \
+            | sort)
+
+          FORWARD_RESULTS=""
+          ALL_PASS=true
+
+          for MIGRATION in $CHANGED; do
+            BASENAME=$(basename "$MIGRATION")
+            echo "=== Forward dry-run: $BASENAME ==="
+
+            # Envolve em BEGIN...ROLLBACK para verificar sem alterar estado
+            OUTPUT=$(psql \
+              --set ON_ERROR_STOP=1 \
+              --quiet \
+              -c "BEGIN;" \
+              -f "$MIGRATION" \
+              -c "ROLLBACK;" 2>&1)
+            EXIT=$?
+
+            if [ "$EXIT" -eq 0 ]; then
+              FORWARD_RESULTS="${FORWARD_RESULTS}✅ PASS: \`${BASENAME}\`\n"
+              echo "  ✅ PASS"
+            else
+              ALL_PASS=false
+              # Trunca output muito longo
+              TRUNCATED=$(echo "$OUTPUT" | head -20)
+              FORWARD_RESULTS="${FORWARD_RESULTS}❌ FAIL: \`${BASENAME}\`\n\`\`\`\n${TRUNCATED}\n\`\`\`\n"
+              echo "  ❌ FAIL: $OUTPUT"
+            fi
+          done
+
+          echo "all_pass=$ALL_PASS" >> $GITHUB_OUTPUT
+          {
+            echo 'forward_results<<FORWARD_EOF'
+            printf "%b" "$FORWARD_RESULTS"
+            echo 'FORWARD_EOF'
+          } >> $GITHUB_OUTPUT
+
+          set -e
+
+      # ── 5. Rollback dry-run ────────────────────────────────────────────────
+      - name: Rollback dry-run
+        if: steps.changed.outputs.has_changes == 'true'
+        id: rollback
+        env:
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: dry_run_db
+          PGPORT: 5432
+        run: |
+          set +e
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            -- 'supabase/migrations/*.sql' \
+               'supabase/migrations_adm/*.sql' \
+            | grep -v '_TEMPLATE' \
+            | grep -v '\.rollback\.sql' \
+            | grep -v '/archived/' \
+            | grep -v '/rollbacks/' \
+            | sort)
+
+          ROLLBACK_RESULTS=""
+
+          for MIGRATION in $CHANGED; do
+            BASENAME=$(basename "$MIGRATION")
+            STEM="${BASENAME%.sql}"
+
+            # Tenta encontrar rollback em supabase/migrations/rollbacks/
+            ROLLBACK_FILE="supabase/migrations/rollbacks/${STEM}.rollback.sql"
+
+            if [ ! -f "$ROLLBACK_FILE" ]; then
+              # Pode estar em migrations_adm/rollbacks/ para migrations ADM
+              ROLLBACK_FILE_ADM="supabase/migrations_adm/rollbacks/${STEM}.rollback.sql"
+              if [ -f "$ROLLBACK_FILE_ADM" ]; then
+                ROLLBACK_FILE="$ROLLBACK_FILE_ADM"
+              else
+                ROLLBACK_RESULTS="${ROLLBACK_RESULTS}⚠️  NO-ROLLBACK: \`${BASENAME}\` (arquivo ausente — adicione \`-- @no-rollback reason:\` se intencional)\n"
+                echo "  ⚠️  Rollback ausente: $BASENAME"
+                continue
+              fi
+            fi
+
+            echo "=== Rollback dry-run: $(basename $ROLLBACK_FILE) ==="
+
+            OUTPUT=$(psql \
+              --set ON_ERROR_STOP=1 \
+              --quiet \
+              -c "BEGIN;" \
+              -f "$ROLLBACK_FILE" \
+              -c "ROLLBACK;" 2>&1)
+            EXIT=$?
+
+            if [ "$EXIT" -eq 0 ]; then
+              ROLLBACK_RESULTS="${ROLLBACK_RESULTS}✅ ROLLBACK-OK: \`${BASENAME}\`\n"
+              echo "  ✅ ROLLBACK-OK"
+            else
+              TRUNCATED=$(echo "$OUTPUT" | head -20)
+              ROLLBACK_RESULTS="${ROLLBACK_RESULTS}❌ ROLLBACK-FAIL: \`${BASENAME}\`\n\`\`\`\n${TRUNCATED}\n\`\`\`\n"
+              echo "  ❌ ROLLBACK-FAIL: $OUTPUT"
+            fi
+          done
+
+          {
+            echo 'rollback_results<<ROLLBACK_EOF'
+            printf "%b" "$ROLLBACK_RESULTS"
+            echo 'ROLLBACK_EOF'
+          } >> $GITHUB_OUTPUT
+
+          set -e
+
+      # ── 6. Comentário no PR ────────────────────────────────────────────────
+      - name: Comment on PR
+        if: steps.changed.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allPass        = '${{ steps.forward.outputs.all_pass }}' === 'true';
+            const forwardResults = `${{ steps.forward.outputs.forward_results }}`;
+            const rollbackResults= `${{ steps.rollback.outputs.rollback_results }}`;
+            const count          = '${{ steps.changed.outputs.count }}';
+            const icon   = allPass ? '✅' : '❌';
+            const status = allPass ? 'APROVADO' : 'FALHOU';
+
+            const limitation = [
+              '> ⚠️ **Limitação documentada:** dry-run usa Postgres 15 em container local.',
+              '> Não equivale 100% à produção Supabase (sem extensões específicas Supabase,',
+              '> pg_net, vault, pg_graphql, RLS overrides).',
+              '> Captura: erros de sintaxe SQL, referências inválidas, conflitos DDL.',
+              '> Upgrade futuro: Supabase Branching API quando estiver GA (REL-04 AC3).',
+            ].join('\n');
+
+            const body = [
+              `## ${icon} Migrations Dry-Run — ${status}`,
+              `**${count} migration(s) testada(s)**`,
+              '',
+              limitation,
+              '',
+              '### Forward (BEGIN…ROLLBACK)',
+              forwardResults || '_Nenhuma migration testada_',
+              '',
+              '### Rollbacks',
+              rollbackResults || '_Nenhum rollback testado_',
+              '',
+              allPass
+                ? '_Dry-run concluído com sucesso. Sem erros estruturais detectados._'
+                : '**⛔ Corrija os erros de forward dry-run antes de fazer merge.**',
+            ].join('\n');
+
+            // Atualiza comentário existente se houver (evita spam)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c =>
+              c.user?.login === 'github-actions[bot]' &&
+              c.body?.includes('Migrations Dry-Run')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # ── 7. Falhar check se forward dry-run tiver erro ─────────────────────
+      - name: Fail check on dry-run errors
+        if: steps.changed.outputs.has_changes == 'true' && steps.forward.outputs.all_pass != 'true'
+        run: |
+          echo "❌ Dry-run falhou — veja comentário no PR"
+          echo "Corrija os erros SQL reportados antes de fazer merge."
+          exit 1
