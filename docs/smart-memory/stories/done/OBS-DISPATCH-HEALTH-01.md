@@ -27,8 +27,8 @@ A RCA de 2026-05-01 mostrou que diagnóstico do bug de disparo exigiu MCP + 6 SQ
 - [x] **AC1:** Migration cria view `public.v_dispatch_health` com colunas: `jobname, schedule, cron_active, runs_5min, failures_30min, last_run_at, pending_5min, error_30min, expired_24h, running_stuck`. View filtra apenas os 3 crons críticos (`omni-delivery-engine`, `sends-dispatch-batch`, `process-message-buffer`).
 - [x] **AC2:** View tem RLS apropriada via WHERE clause — somente `super_admin`, `user_type IN ('gestor','admin')`, ou `service_role` obtém rows. Usuários sem role recebem 0 rows (sem erro).
 - [x] **AC3:** RPC `get_send_health(send_id uuid) RETURNS jsonb` retorna `{ pg_cron_alive, last_dispatch_at, channel_status: { has_token, is_default, active }, template_status: { meta_template_name_present, meta_template_status }, pending_count, error_count_by_reason }`.
-- [ ] **AC4:** Componente `<DispatchHealthCard />` *(dev-dev-alpha — aguardando ARCH-RBAC-02 AC1/AC2/AC4)*
-- [ ] **AC5:** Card integrado em `Disparos.tsx` e `DisparoDetalhes.tsx` *(dev-dev-alpha)*
+- [x] **AC4:** Componente `<DispatchHealthCard />` *(dev-dev-alpha — 2026-07-25)*
+- [x] **AC5:** Card integrado em `Disparos.tsx` e `DisparoDetalhes.tsx` *(dev-dev-alpha — 2026-07-25)*
 - [ ] **AC6:** Smoke-test E2E (cron pause / JWT inválido / dispatch normal) *(QA Axikar)*
 - [x] **AC7:** Migration forward + rollback testados. Pronta para apply via Grav.
 
