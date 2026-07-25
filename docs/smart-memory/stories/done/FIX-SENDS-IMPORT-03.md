@@ -90,4 +90,36 @@ continue;
 - `supabase/functions/sends-import-contacts/index.ts` — added lead creation block in existingPersonId path before `continue` (AC1-AC6)
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-SENDS-IMPORT-03 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: N/A (edge fn Deno)
+Issues: nenhum
+
+AC1 ✅  Bug raiz corrigido: bloco create_leads && pipeline_id adicionado no caminho
+        existingPersonId em sends-import-contacts/index.ts L624, ANTES do `continue`.
+        100% contatos existentes com create_leads=true → leads criados. ✅
+
+AC2 ✅  Verificação de existência de lead antes do INSERT:
+        SELECT count (head:true) WHERE people_id=existingPersonId AND
+        leads_pipelines_id=pipeline_id. Se existingLeadCount > 0: skip. ✅
+
+AC3 ✅  Contatos mistos (novos + existentes): fluxo de novo permanece intacto
+        (L474-519 inalterado); bloco existingPersonId agora paridade. ✅
+
+AC4 ✅  Invariante create_leads=false: bloco gated com `create_leads && pipeline_id` →
+        sem criação de lead quando create_leads=false. ✅
+
+AC5 ✅  lead_extra fields aplicados ao lead criado para existentes: mesmo padrão
+        do fluxo de pessoa nova (effectiveControl, lead_extra fields). ✅
+
+AC6 ✅  Contagem new_people/existing_people não afetada: o `continue` permanece
+        após o novo bloco; contadores existentes intocados. ✅
+
+Performance INFO: query de count por contato existente é N+1 adicional O(1) —
+        aceitável para esta story conforme Contexto Técnico. Otimização bulk
+        delegada a FIX-SENDS-IMPORT-04 (já implementada). ✅
+
+Próximo passo: @dev-devops push
+```

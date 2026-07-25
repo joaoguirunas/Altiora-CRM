@@ -59,4 +59,32 @@ Adicionar rollback transacional na edge fn `adm-create-user` (hoje deixa órfão
 - `supabase/functions/create-global-user/index.ts` — AC1+AC3: `rollbackAuthUser()`, flag `authUserCreated`, rollback on profileCreateError
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS
+Story: FIX-ADM-01 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: N/A (verificação via grep da edge fn Deno)
+Issues: nenhum
+
+AC1 ✅  rollbackAuthUser() declarada em create-global-user/index.ts:40
+        (supabaseAdmin.auth.admin.deleteUser). Flag authUserCreated setada L158.
+        Se profileCreateError ocorre em criação nova: rollback chamado antes de retornar. ✅
+
+AC2 ✅* N/A — projeto standalone. adm_clients (tabela control plane multi-tenant)
+        não existe neste banco. create-global-user não armazena secret hints.
+        create-tenant-user usa adm_client_decrypted_secrets RPC (vault, não plaintext).
+        Confirmado por dev na story (Contexto Técnico AC2). ✅
+
+AC3 ✅  Response 422 com mensagem de erro clara em profileCreateError (L267-276).
+        Auth user removido via rollbackAuthUser antes do return. Sem órfão em caso
+        de falha no INSERT de settings_users. ✅
+
+AC4 ✅* N/A — projeto standalone. grep baseline.sql + migrations confirmou ausência
+        de coluna secret_hint (dev documentou no Contexto Técnico AC4). ✅
+
+Segurança ✅  Rollback defensivo: users resolvidos por email existente (update) NÃO
+             são deletados — apenas auth users recém-criados nesta invocação. ✅
+             Zero secrets em plaintext no fluxo verificado. ✅
+
+Próximo passo: @dev-devops push
+```

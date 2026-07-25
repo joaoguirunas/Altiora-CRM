@@ -1,0 +1,141 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# sync-clients.yml — REL-01 AC7
+#
+# ⚠️  BREAKING CHANGE — leia antes de usar
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# A partir do REL-01, o sync automático de tenants foi REMOVIDO.
+# Push para main NÃO dispara mais sync para clientes.
+#
+# RAZÃO: sync automático aplicava migrations silenciosamente em produção a cada
+# merge. Com releases versionadas (REL-01), cada tenant deve ser atualizado de
+# forma explícita e auditada — operador vê badge "N versões atrás" e clica
+# "Atualizar" na ADM UI (REL-02). O conceito de target_version exige opt-in.
+#
+# ESTE WORKFLOW: emergência / super-admin force-sync.
+#   Use apenas quando REL-02 UI não estiver disponível ou para situações
+#   de incidente que exijam sync imediato de todos os tenants.
+#
+# FLUXO NORMAL (após REL-02):
+#   1. Merge em main → release-tag.yml gera release.json + tag release-v{N}
+#   2. Operador acessa ADM UI → vê clientes "N versões atrás"
+#   3. Clica "Atualizar" por cliente (ou bulk) → UI chama adm-sync-client
+#   4. adm_client_versions registra audit trail de cada aplicação
+#
+# Requer secrets:
+#   CONTROL_PLANE_URL              — Supabase URL do control plane
+#   CONTROL_PLANE_SERVICE_ROLE_KEY — service_role key do control plane
+#   SUPABASE_ACCESS_TOKEN          — para deploy de edge functions (opcional)
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: "Sync Clients — Manual (super-admin)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      client_slug:
+        description: "Slug do cliente alvo (vazio = todos os clientes ativos)"
+        required: false
+        type: string
+        default: ""
+
+      target_version:
+        description: |
+          Versão alvo (ex: 4.70). Vazio = última release.
+          Passado para adm-sync-client como target_version — aplica apenas
+          as migrations daquela release. Requer adm-sync-client AC6 (REL-01).
+        required: false
+        type: string
+        default: ""
+
+      deploy_functions:
+        description: "Fazer deploy de edge functions também? (além de migrations)"
+        required: false
+        type: boolean
+        default: true
+
+      reason:
+        description: |
+          Motivo do sync manual (obrigatório — vai para audit log).
+          Ex: "Incidente P1 — aplicar hotfix urgente", "REL-02 indisponível".
+        required: true
+        type: string
+
+# Sem concurrency aqui — super-admin pode forçar múltiplos syncs se necessário.
+# Se quiser serializar: descomente abaixo.
+# concurrency:
+#   group: sync-clients
+#   cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "Sync tenants — ${{ inputs.client_slug || 'TODOS' }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Aviso de auditoria ──────────────────────────────────────────────
+      - name: Audit log — início do sync manual
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "  SYNC MANUAL INICIADO"
+          echo "  Disparado por : ${{ github.actor }}"
+          echo "  Data/hora     : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "  Alvo          : ${{ inputs.client_slug || 'TODOS os clientes ativos' }}"
+          echo "  Target version: ${{ inputs.target_version || '(última release)' }}"
+          echo "  Deploy fns    : ${{ inputs.deploy_functions }}"
+          echo "  Motivo        : ${{ inputs.reason }}"
+          echo "════════════════════════════════════════════════════════"
+
+          # Valida que o motivo foi preenchido (extra-safety além do required: true)
+          if [ -z "${{ inputs.reason }}" ]; then
+            echo "❌ Campo 'reason' é obrigatório para auditoria."
+            exit 1
+          fi
+
+      # ── 2. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 3. Setup Node.js ───────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── 4. Instalar Supabase CLI (para deploy de edge functions) ──────────
+      - name: Install Supabase CLI
+        if: inputs.deploy_functions == true
+        run: npm install -g supabase --prefer-global 2>/dev/null || npx supabase --version
+
+      # ── 5. Executar sync ───────────────────────────────────────────────────
+      - name: Run sync-clients.js
+        env:
+          CONTROL_PLANE_URL:              ${{ secrets.CONTROL_PLANE_URL }}
+          CONTROL_PLANE_SERVICE_ROLE_KEY: ${{ secrets.CONTROL_PLANE_SERVICE_ROLE_KEY }}
+          SUPABASE_ACCESS_TOKEN:          ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # Variáveis de contexto passadas ao script
+          CLIENT_SLUG:      ${{ inputs.client_slug }}
+          TARGET_VERSION:   ${{ inputs.target_version }}
+          DEPLOY_FUNCTIONS: ${{ inputs.deploy_functions }}
+          TRIGGERED_BY:     "manual:${{ github.actor }}"
+          SYNC_REASON:      ${{ inputs.reason }}
+        run: node scripts/sync-clients.js
+
+      # ── 6. Resumo final ────────────────────────────────────────────────────
+      - name: Resumo
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "  SYNC MANUAL CONCLUÍDO — $STATUS"
+          echo "  Disparado por: ${{ github.actor }}"
+          echo "  Motivo: ${{ inputs.reason }}"
+          echo ""
+          if [ "$STATUS" = "success" ]; then
+            echo "  ✅ Sync concluído. Verifique adm_client_versions para audit trail."
+          else
+            echo "  ❌ Sync falhou ou parcial. Verifique logs acima."
+            echo "  ℹ️  adm_client_versions registra tentativas mesmo em caso de falha."
+          fi
+          echo "════════════════════════════════════════════════════════"
