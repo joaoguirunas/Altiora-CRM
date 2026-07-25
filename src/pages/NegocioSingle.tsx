@@ -50,7 +50,6 @@ import AltioraR1Section from "@/components/negocios/AltioraR1Section";
 import AltioraR2Section from "@/components/negocios/AltioraR2Section";
 import AltioraR3Section, { STAGE_EM_CONTRATACAO } from "@/components/negocios/AltioraR3Section";
 import AltioraContratacaoSection from "@/components/negocios/AltioraContratacaoSection";
-import AltioraContratacaoSection from "@/components/negocios/AltioraContratacaoSection";
 import AltioraTransicaoModal from "@/components/negocios/AltioraTransicaoModal";
 import RegistrarContatoModal, { type ContatoFormData } from "@/components/negocios/RegistrarContatoModal";
 import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
@@ -61,7 +60,7 @@ const NegocioSingle = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isManager } = useUserPermissions();
+  const { isManager, isAdmin } = useUserPermissions();
   const { setNavigationState, clearNavigationState } = useNavigation();
 
   const { data: negocio, isLoading, error, isError } = useNegocio(id || "");
@@ -766,6 +765,7 @@ const NegocioSingle = () => {
             isPendingPessoa={atualizarPessoa.isPending}
             isAltiora={isNegocioAltiora}
             isManager={isManager}
+            isAdmin={isAdmin}
           />
 
           {/* Content area */}
@@ -1097,6 +1097,24 @@ const NegocioSingle = () => {
         confirmText="Excluir"
         cancelText="Cancelar"
       />
+
+      {/* ALTIORA-12: Modal de validação de transição de etapa (pipeline Altiora) */}
+      {transicaoModal && (
+        <AltioraTransicaoModal
+          open={!!transicaoModal}
+          onOpenChange={(open) => { if (!open) setTransicaoModal(null); }}
+          leadId={id!}
+          actorId={user?.id ?? ''}
+          fromStageId={transicaoModal.fromStageId}
+          toStageId={transicaoModal.toStageId}
+          fromStageName={transicaoModal.fromStageName}
+          toStageName={transicaoModal.toStageName}
+          onSuccess={(newStageId) => {
+            setSelectedStageId(newStageId);
+            setTransicaoModal(null);
+          }}
+        />
+      )}
     </TooltipProvider>
   );
 };
