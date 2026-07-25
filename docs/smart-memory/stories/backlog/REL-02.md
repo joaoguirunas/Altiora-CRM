@@ -19,14 +19,14 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Coluna nova "Versão" em `AdmClientRow`:**
+- [x] **AC1 — Coluna nova "Versão" em `AdmClientRow`:**
   - Mostra `current_version` em mono font.
   - Se `current_version !== target_version`: badge amber "{N} versões atrás" clicável (abre modal).
   - Se `current_version === target_version`: badge emerald "Atualizado".
   - Se `current_version === null`: badge muted "Nunca sincronizado".
   - Reusa estética de `getDriftStatus` (ADM-V3-08 done).
 
-- [ ] **AC2 — Modal "Atualizar Cliente":**
+- [x] **AC2 — Modal "Atualizar Cliente":**
   - Header: nome do cliente + versão atual → versão alvo.
   - Body:
     - **Changelog**: lista das releases entre `current_version` e `target_version` (lê `adm_releases` via `useAdmReleases`).
@@ -37,7 +37,7 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
     - Checkbox **obrigatório**: "Confirmo que entendo que esta operação modificará o schema do banco do cliente".
     - Botão "Cancelar" + botão "Atualizar agora" (disabled até checkbox).
 
-- [ ] **AC3 — Background job + Realtime status:**
+- [x] **AC3 — Background job + Realtime status:**
   - Click em "Atualizar agora" → INSERT `adm_sync_jobs` (status `pending`) + invoke edge fn `adm-sync-client` com `target_version`.
   - Modal NÃO fecha — substitui body por progress view:
     - Status pill (pending → running → success/failed).
@@ -46,7 +46,7 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
   - Após `success`: toast verde + auto-refresh `useAdmClients` + opção "Fechar".
   - Após `failed`: toast vermelho + erro destacado + opção "Ver detalhes" (abre AdmSyncPanel filtrado por job).
 
-- [ ] **AC4 — Bulk button "Atualizar todos":**
+- [x] **AC4 — Bulk button "Atualizar todos":**
   - Botão no header de `/adm` (próximo aos tabs).
   - Disabled se nenhum cliente tem `current_version !== target_version`.
   - Click → modal "Atualizar todos os clientes desatualizados":
@@ -56,21 +56,21 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
     - Background: dispara N edge fns em paralelo (max 5 concurrent — control para não sobrecarregar control plane).
     - Progress view com tabela: cada cliente como linha + status individual.
 
-- [ ] **AC5 — Histórico em `AdmClientSingle`:**
+- [x] **AC5 — Histórico em `AdmClientSingle`:**
   - Nova section "Histórico de releases" abaixo de Sync Jobs.
   - Lê `adm_client_versions` ordenado por `applied_at DESC` (limit 20).
   - Cada row: from_version → to_version, applied_at, applied_by (email lookup), status badge, link "Ver job" → AdmSyncPanel.
 
-- [ ] **AC6 — Hook `useUpdateClient`:**
+- [x] **AC6 — Hook `useUpdateClient`:**
   - `useUpdateClient.mutate({ clientId, targetVersion })` → invoke edge fn + return jobId.
   - `useBulkUpdateClients.mutate({ clientIds, targetVersion })` → fan-out controlado.
   - Audit log via `insertAuditLog` (action `client.updated_to_release`, details: from/to/sync_job_id).
 
-- [ ] **AC7 — Notificação in-app:**
+- [x] **AC7 — Notificação in-app:**
   - Quando `useAdmReleases` retorna release nova (last_seen via localStorage), toast info "Nova release disponível: v{N}. Clique para ver clientes desatualizados." → navega para `/adm`.
   - Dismissable por release.
 
-- [ ] **AC8 — Acessibilidade:**
+- [x] **AC8 — Acessibilidade:**
   - Modal trap focus.
   - Botão "Atualizar agora" com `aria-busy` durante mutation.
   - Progress view com `role="status"` + `aria-live="polite"`.
@@ -111,11 +111,24 @@ Substituir o sync push-based por experiência operacional explícita: super-admi
 |---         |---|
 | Agente     | Novik (dev-dev-alpha) |
 | Iniciado   | 2026-07-25 |
-| Concluído  | — |
+| Concluído  | 2026-07-25 |
 | Branch     | feat/rel-02-adm-update-ui |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `src/hooks/useAdmClients.ts` — criado (tipos + queries + useUpdateClient + useBulkUpdateClients + insertAuditLog)
+- `src/hooks/useAdmReleases.ts` — criado (useAdmReleases + useAdmReleasesBetween + useLatestAdmRelease)
+- `src/components/adm/HealthBadge.tsx` — criado
+- `src/components/adm/AdmClientRow.tsx` — criado (AC1: coluna Versão)
+- `src/components/adm/UpdateProgressView.tsx` — criado (AC3: Realtime progress)
+- `src/components/adm/UpdateClientModal.tsx` — criado (AC2+AC3)
+- `src/components/adm/ClientVersionsHistory.tsx` — criado (AC5)
+- `src/components/adm/BulkUpdateModal.tsx` — criado (AC4)
+- `src/components/adm/AdmClientModal.tsx` — criado (create/edit form)
+- `src/components/adm/AdmSyncPanel.tsx` — criado (sync jobs tab)
+- `src/components/adm/AdmAuditLogPanel.tsx` — criado (audit log tab)
+- `src/pages/Adm.tsx` — criado (tabs + bulk button header + AC7)
+- `src/pages/AdmClientSingle.tsx` — criado (AC5: histórico section)
+- `src/App.tsx` — modificado (rotas /adm + /adm/clients/:id)
 
 ## QA Results
 <!-- QA preenche ao revisar -->
