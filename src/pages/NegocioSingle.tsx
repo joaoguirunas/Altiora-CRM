@@ -47,6 +47,8 @@ import { ExtraFieldsCard } from "@/components/pessoas/ExtraFieldsCard";
 import { getEntityLabel, isAltioraPipeline } from "@/utils/pipelineLabels";
 import AltioraFinvitySection from "@/components/negocios/AltioraFinvitySection";
 import AltioraR1Section from "@/components/negocios/AltioraR1Section";
+import AltioraR2Section from "@/components/negocios/AltioraR2Section";
+import AltioraR3Section, { STAGE_EM_CONTRATACAO } from "@/components/negocios/AltioraR3Section";
 import RegistrarContatoModal, { type ContatoFormData } from "@/components/negocios/RegistrarContatoModal";
 import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
 import { useRegistrarContato, useSalvarProximaAcao } from "@/hooks/useAltioraContatos";
@@ -907,6 +909,29 @@ const NegocioSingle = () => {
                         currentStagePosition={
                           filteredStages.findIndex(s => s.id === selectedStageId) + 1
                         }
+                      />
+                    )}
+
+                    {/* ALTIORA-17: Resultado da R2 — apenas para pipeline Altiora */}
+                    {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                      <AltioraR2Section
+                        leadId={id!}
+                        currentStagePosition={
+                          filteredStages.findIndex(s => s.id === selectedStageId) + 1
+                        }
+                      />
+                    )}
+
+                    {/* ALTIORA-18: Resultado da R3 — apenas para pipeline Altiora */}
+                    {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                      <AltioraR3Section
+                        leadId={id!}
+                        currentStagePosition={
+                          filteredStages.findIndex(s => s.id === selectedStageId) + 1
+                        }
+                        onAvancarContratacao={() => handleStageClick(STAGE_EM_CONTRATACAO)}
+                        onNaoAvancar={() => setShowMotivoPerdasModal(true)}
+                        onContinuarNegociacao={() => setShowProximaAcaoModal(true)}
                       />
                     )}
 
