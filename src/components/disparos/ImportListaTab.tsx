@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, Check, Users, User, CalendarDays, Share2, FileDown, Tag } from 'lucide-react';
@@ -113,6 +114,7 @@ export default function ImportListaTab({
   const [stageId, setStageId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [leadControlValue, setLeadControlValue] = useState('');
 
   const { pipelines, stages } = usePipelines();
   const { data: teams = [] } = useTeams();
@@ -182,6 +184,7 @@ export default function ImportListaTab({
     setStageId(null);
     setSelectedTeamId(null);
     setSelectedUserId(null);
+    setLeadControlValue('');
     setState('select_matrix');
   }, []);
 
@@ -193,7 +196,7 @@ export default function ImportListaTab({
       create_leads: createLeads,
       pipeline_id: createLeads ? pipelineId : null,
       stage_id: createLeads ? stageId : null,
-      lead_control: '1',
+      lead_control: createLeads && leadControlValue.trim() ? leadControlValue.trim() : null,
       assign_user_id: createLeads ? effectiveAssignUserId : null,
       assign_team_id: createLeads ? effectiveAssignTeamId : null,
       origem_lista: tipoLista?.name ?? null,
@@ -202,7 +205,7 @@ export default function ImportListaTab({
     if (onImportComplete) onImportComplete(staged);
     setState('confirmed');
   }, [rows, mapping, channel, createLeads, pipelineId, stageId, tipoLista,
-      effectiveAssignUserId, effectiveAssignTeamId, onImportComplete]);
+      leadControlValue, effectiveAssignUserId, effectiveAssignTeamId, onImportComplete]);
 
   const canConfirm =
     !!mapping.name &&
@@ -433,6 +436,19 @@ export default function ImportListaTab({
                   </div>
                 </div>
               )}
+
+              {/* Origem / Controle estático — aplicado a todos os contatos do import */}
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">
+                  Origem / Controle (opcional)
+                </Label>
+                <Input
+                  value={leadControlValue}
+                  onChange={(e) => setLeadControlValue(e.target.value)}
+                  placeholder="ex.: Evento X, Campanha Y"
+                  className="h-[32px] text-[12px]"
+                />
+              </div>
             </div>
           )}
         </div>
