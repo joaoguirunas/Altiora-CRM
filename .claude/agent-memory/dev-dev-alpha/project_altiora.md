@@ -29,9 +29,17 @@ metadata:
 
 ## Pipeline Altiora
 - Identificado por nome (case-insensitive match em 'altiora')
+- Pipeline UUID: `a1000000-0000-0000-0000-000000000001` (fixo, inserido pela migration)
 - Entidade principal: "Referral" em vez de "Negócio"
-- 13 etapas (ver use-cases-v1.md)
+- 13 etapas com UUIDs fixos `...0001-...0001` até `...0001-...0013` (ver altiora-schema.md)
 - Perfis: Admin/RevOps (Ivanderlei), Gestor Comercial (André), Closer (Marco, Ellen, Kayan)
 
+## user_type values — CUIDADO: dois sets coexistem
+- **Legado (pré-Altiora):** 'admin' | 'manager' | 'user' | 'comercial'
+- **Altiora (migration 20260725110000):** 'admin' | 'gestor_comercial' | 'closer' | NULL
+- `isComercial` e `isCloser` → checar 'comercial' || 'closer'
+- `isManager` → checar 'manager' || 'gestor_comercial' || 'admin'
+- `UserType` em `src/types/usuarios.ts` já inclui todos os 6 valores
+
 **Why:** Projeto CRM especializado para gestão de referrals da Altiora, construído sobre CRM genérico existente.
-**How to apply:** Sempre verificar se estamos no contexto Altiora antes de implementar terminologia ou funcionalidades específicas.
+**How to apply:** Sempre verificar se estamos no contexto Altiora antes de implementar terminologia ou funcionalidades específicas. Sempre incluir AMBOS os valores de user_type nos filtros.
