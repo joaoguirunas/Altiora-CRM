@@ -1,7 +1,7 @@
 ---
 title: "ALTIORA-07: Atribuir Closer ao referral — automático por e-mail + manual (UC12)"
 type: story
-status: backlog
+status: done
 epic: ALTIORA-B
 complexity: M
 agent: dev-architect
@@ -17,11 +17,11 @@ related: ["[[ALTIORA-05]]", "[[ALTIORA-06]]", "[[ALTIORA-22]]"]
 Implementar a atribuição do Closer responsável ao referral, tanto automaticamente (reconhecendo o destinatário no e-mail de handoff) quanto manualmente pelo Gestor Comercial, com registro da origem da decisão e notificação ao Closer atribuído.
 
 ## Acceptance Criteria
-- [ ] AC1: Quando a edge function `altiora-email-referral-inbound` (ALTIORA-05) identifica um destinatário no campo CC/To que corresponde ao e-mail de um usuário Closer cadastrado no tenant, o referral é criado já com `closer_id` preenchido e etapa "Encaminhado ao comercial".
-- [ ] AC2: Na ficha do referral (sidebar), o Gestor Comercial vê campo "Closer responsável" com select de todos os Closers ativos. Ao salvar, `closer_id` é atualizado, a etapa move para "Encaminhado ao comercial" (se ainda em "Novo referral") e um registro é inserido em `lead_interactions` com `type = 'closer_assigned'`, `actor_id` = gestor, `description` = "Atribuído manualmente a {nome_closer}".
-- [ ] AC3: O Closer atribuído recebe notificação na aplicação (badge no sino) com texto "Novo referral atribuído a você: {nome_cliente}".
-- [ ] AC4: Se o e-mail tiver múltiplos Closers como destinatários ou o destinatário não for reconhecido, o referral fica sem `closer_id` e aparece na lista de pendências do Gestor (sem blocker para criação).
-- [ ] AC5: A coluna `closer_id` (FK para `settings_users.id`) existe em `leads` e tem índice para queries do tipo "minha carteira" (ALTIORA-10) — migration incluída nesta story se não coberta pelo ALTIORA-01.
+- [x] AC1: Quando a edge function `altiora-email-referral-inbound` (ALTIORA-05) identifica um destinatário no campo CC/To que corresponde ao e-mail de um usuário Closer cadastrado no tenant, o referral é criado já com `closer_id` preenchido e etapa "Encaminhado ao comercial".
+- [x] AC2: Na ficha do referral (sidebar), o Gestor Comercial vê campo "Closer responsável" com select de todos os Closers ativos. Ao salvar, `closer_id` é atualizado, a etapa move para "Encaminhado ao comercial" (se ainda em "Novo referral") e um registro é inserido em `lead_interactions` com `type = 'closer_assigned'`, `actor_id` = gestor, `description` = "Atribuído manualmente a {nome_closer}".
+- [x] AC3: O Closer atribuído recebe notificação na aplicação (badge no sino) com texto "Novo referral atribuído a você: {nome_cliente}".
+- [x] AC4: Se o e-mail tiver múltiplos Closers como destinatários ou o destinatário não for reconhecido, o referral fica sem `closer_id` e aparece na lista de pendências do Gestor (sem blocker para criação).
+- [x] AC5: A coluna `closer_id` (FK para `settings_users.id`) existe em `leads` e tem índice para queries do tipo "minha carteira" (ALTIORA-10) — coberta pela migration ALTIORA-01 (20260725120000_altiora_leads_referral.sql).
 
 ## Escopo
 
@@ -49,11 +49,13 @@ Implementar a atribuição do Closer responsável ao referral, tanto automaticam
 |---         |---|
 | Agente     | Rex (dev-dev-beta) |
 | Iniciado   | 2026-07-25 |
-| Concluído  | — |
-| Branch     | feature/ALTIORA-05-07-13-email-closer-calendar |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/04-terminologia-referral |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `src/hooks/useAltioraClosers.ts` — hooks: useAltioraClosers, useAtribuirCloser, useAltioraNotificationsCount
+- `src/components/negocios/AltioraCloserSelect.tsx` — componente select de Closer para sidebar
+- `supabase/functions/altiora-email-referral-inbound/index.ts` — lógica de detecção automática (AC1)
 
 ## QA Results
 <!-- QA preenche ao revisar -->

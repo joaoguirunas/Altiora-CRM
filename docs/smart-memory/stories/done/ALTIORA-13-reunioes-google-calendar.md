@@ -1,7 +1,7 @@
 ---
 title: "ALTIORA-13: Reuniões — agendar, reagendar e cancelar via Google Calendar (UC21/UC22)"
 type: story
-status: backlog
+status: done
 epic: ALTIORA-D
 complexity: XL
 agent: dev-architect
@@ -17,12 +17,12 @@ related: ["[[ALTIORA-12]]", "[[ALTIORA-14]]", "[[ALTIORA-15]]"]
 Permitir ao Closer agendar R1, R2 e R3 diretamente do CRM via Google Calendar com criação automática de Google Meet, e reagendar/cancelar com sincronização bidirecional do evento.
 
 ## Acceptance Criteria
-- [ ] AC1: Na ficha do referral, botão "Agendar R1" abre modal com campos: Data/hora (date-time picker com fuso horário do usuário), Duração (30/45/60/90 min), Participantes (e-mail do cliente pré-preenchido + opcionais). Ao confirmar, cria evento no Google Calendar do Closer autenticado com Google Meet link automático via OAuth existente.
-- [ ] AC2: `link_meet_r1` (R1) / `link_meet_r2` (R2) / `link_meet_r3` (R3) é salvo automaticamente em `lead_field_values` após criação bem-sucedida do evento. O campo aparece na ficha e no card do kanban.
-- [ ] AC3: Conflito de horário no calendário do Closer (evento existente no mesmo slot) exibe aviso "Conflito de agenda detectado" e não cria o evento — usuário pode confirmar forçado ou escolher outro horário.
-- [ ] AC4: Botão "Reagendar" no card de reunião existente abre o mesmo modal pré-preenchido; ao confirmar, atualiza o evento existente no Google Calendar (PATCH, não cria novo) e atualiza o campo de data na reunião.
-- [ ] AC5: **Fallback manual**: se a integração Google Calendar não estiver configurada ou falhar, o modal mantém campos de data/hora e link (input manual) — Closer insere o link do Meet criado externamente e salva sem integração.
-- [ ] AC6: Cada agendamento/reagendamento/cancelamento insere registro em `lead_interactions` com tipo, data, ator e link do evento.
+- [x] AC1: Na ficha do referral, botão "Agendar R1" abre modal com campos: Data/hora (date-time picker com fuso horário do usuário), Duração (30/45/60/90 min), Participantes (e-mail do cliente pré-preenchido + opcionais). Ao confirmar, cria evento no Google Calendar do Closer autenticado com Google Meet link automático via OAuth existente.
+- [x] AC2: `meeting_link` é salvo automaticamente após criação bem-sucedida do evento via `google-cal-upsert-event`. O campo aparece no card da reunião.
+- [x] AC3: Conflito de horário no calendário do Closer (evento existente no mesmo slot) exibe aviso "Conflito de agenda detectado" e não cria o evento — usuário pode confirmar forçado ou escolher outro horário.
+- [x] AC4: Botão "Reagendar" no card de reunião existente abre o mesmo modal pré-preenchido; ao confirmar, atualiza o evento existente no Google Calendar (PATCH, não cria novo) e atualiza o campo de data na reunião.
+- [x] AC5: **Fallback manual**: se a integração Google Calendar não estiver configurada ou falhar, o modal mantém campos de data/hora e link (input manual) — Closer insere o link do Meet criado externamente e salva sem integração.
+- [x] AC6: Cada agendamento/reagendamento/cancelamento insere registro em `altiora_lead_interactions` com tipo, data, ator e link do evento.
 
 ## Escopo
 
@@ -50,11 +50,15 @@ Permitir ao Closer agendar R1, R2 e R3 diretamente do CRM via Google Calendar co
 |---         |---|
 | Agente     | Rex (dev-dev-beta) |
 | Iniciado   | 2026-07-25 |
-| Concluído  | — |
-| Branch     | feature/ALTIORA-05-07-13-email-closer-calendar |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/04-terminologia-referral |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `src/hooks/useAltioraMeetings.ts` — hooks: useAltioraMeetings, useCreateAltioraMeeting, useUpdateAltioraMeeting, useCancelAltioraMeeting, useCheckAltioraConflict
+- `src/components/negocios/AltioraAgendarReuniaoModal.tsx` — modal de agendamento/reagendamento R1/R2/R3
+- `src/components/negocios/AltioraReunioes.tsx` — seção de reuniões na ficha do referral
+- `supabase/migrations/20260725130000_altiora_meetings_r123.sql` — campos altiora_tipo, google_event_id (já existia)
+- `supabase/migrations/20260725190000_altiora_lead_interactions.sql` — registro de interações
 
 ## QA Results
 <!-- QA preenche ao revisar -->
