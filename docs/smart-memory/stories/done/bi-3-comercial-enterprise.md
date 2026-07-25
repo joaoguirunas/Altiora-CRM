@@ -116,3 +116,26 @@ CONCERN-2: <caption className="sr-only"> adicionado nas 3 tabelas (comparativo, 
 CONCERN-3: ChevronRight/ChevronDown swap → ChevronDown único com rotate(-90deg)/rotate(0) via transition-transform duration-200.
 tsc EXIT 0 ✅ | eslint 0 errors ✅
 ```
+
+```
+VEREDICTO FINAL: PASS — 2026-07-25 (pós resolução de CONCERNS)
+Story: bi-3 | Data: 2026-07-25
+
+Fixes verificados no código:
+CONCERN-1 ✅  BIProComercialTab.tsx L917-919:
+               <tr ... role="button" aria-expanded={expanded}
+               aria-controls={`closer-detail-${c.userId}`}>. ✅
+               Row expandida: <tr id={`closer-detail-${c.userId}`}> (L959). ✅
+CONCERN-2 ✅  caption sr-only confirmado nas 3 tabelas:
+               L433 "Comparativo de métricas comerciais por período semanal". ✅
+               L723 "Detalhe de leads por filtro de status selecionado". ✅
+               L851 "Performance por closer: agendamentos, show rate...". ✅
+CONCERN-3 ✅  ChevronDown L928-931 com transition-transform duration-200:
+               expanded ? "rotate-0 text-primary" : "-rotate-90 text-muted-foreground/60". ✅
+               ChevronRight/ChevronDown swap eliminado — ícone único animado. ✅
+
+tsc EXIT 0 ✅ | eslint 0 errors ✅
+
+Issues: nenhum remanescente
+Próximo passo: @dev-devops push
+```

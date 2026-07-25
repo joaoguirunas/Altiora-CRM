@@ -1,0 +1,11 @@
+-- Rollback for: 20260702130000_kiwify_rls_manager_fix.sql
+-- Tested-against: PostgreSQL 15 (Supabase)
+-- @no-rollback reason: Reverting would restore the original 'gestor' predicate
+--   (user_type='gestor') which is a known bug — the live domain is
+--   CHECK(user_type IN ('admin','manager','user','comercial')) and 'gestor'
+--   never matches. Rolling back reintroduces the broken RLS that was the
+--   original motivation for this migration.
+--   If rollback is truly needed: manually recreate kiwify_write_managers
+--   policies with user_type='gestor' on the 5 kiwify_* tables.
+
+-- no-op: see header comment

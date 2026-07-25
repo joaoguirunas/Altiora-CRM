@@ -1,0 +1,14 @@
+-- Rollback for: 20260702140000_messages_source_type_kiwify.sql
+-- Tested-against: PostgreSQL 15 (Supabase)
+-- @no-rollback reason: Once kiwify-dispatch-worker has inserted rows with
+--   source_type='kiwify', removing 'kiwify' from the CHECK constraint would
+--   violate existing data and cause all future Kiwify message inserts to fail.
+--   Safe to revert ONLY if zero rows have source_type='kiwify'. Verify first:
+--     SELECT count(*) FROM public.messages WHERE source_type = 'kiwify';
+--   If count = 0, manually restore:
+--     ALTER TABLE public.messages DROP CONSTRAINT messages_source_type_check;
+--     ALTER TABLE public.messages ADD CONSTRAINT messages_source_type_check
+--       CHECK (source_type IN ('inbound','manual','ai_agent','campaign',
+--                              'form','followup','appointment_reminder'));
+
+-- no-op: see header comment

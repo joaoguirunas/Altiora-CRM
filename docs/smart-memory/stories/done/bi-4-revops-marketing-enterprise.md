@@ -116,3 +116,24 @@ CONCERN-2: MarketingTab L104 text-[10px] → text-[11px] (unifica escala tipogr�
 CONCERN-3: Botões Edit/Save/Cancel → aria-label explícito em cada um (Cancelar edição de benchmarks / Salvar benchmarks / Editar metas de benchmark).
 tsc EXIT 0 ✅ | eslint 0 errors ✅
 ```
+
+```
+VEREDICTO FINAL: PASS — 2026-07-25 (pós resolução de CONCERNS)
+Story: bi-4 | Data: 2026-07-25
+
+Fixes verificados no código:
+CONCERN-1 ✅  BIProRevOpsTab.tsx L526-537:
+               aria-expanded={isExpanded} aria-controls={`cr-diagnosis-${key}`} (L526-527). ✅
+               <div id={`cr-diagnosis-${key}`} ...> no div expandido (L537). ✅
+CONCERN-2 ✅  BIProMarketingTab.tsx L104: text-[11px] (era text-[10px]). ✅
+               Nenhum text-[10px] remanescente no arquivo. ✅
+CONCERN-3 ✅  BIProRevOpsTab.tsx L432, L440, L449:
+               aria-label="Cancelar edição de benchmarks". ✅
+               aria-label={isSaving ? 'Salvando benchmarks…' : 'Salvar benchmarks'}. ✅
+               aria-label="Editar metas de benchmark". ✅
+
+tsc EXIT 0 ✅ | eslint 0 errors ✅
+
+Issues: nenhum remanescente
+Próximo passo: @dev-devops push
+```

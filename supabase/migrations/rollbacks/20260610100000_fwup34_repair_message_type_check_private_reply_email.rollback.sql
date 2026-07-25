@@ -1,0 +1,11 @@
+-- Rollback for: 20260610100000_fwup34_repair_message_type_check_private_reply_email.sql
+-- Tested-against: PostgreSQL 15 (Supabase)
+-- @no-rollback reason: This migration extended messages_message_type_check to add
+--   new values (private_reply, email, etc.). Reverting would break any rows
+--   that already use those message_type values. Verify first:
+--     SELECT DISTINCT message_type FROM public.messages
+--     WHERE message_type IN ('private_reply', 'email', 'story_reply', 'story_mention',
+--                            'reply_comentario');
+--   If all counts = 0: manually restore the pre-fwup34 constraint.
+
+-- no-op: see header comment
