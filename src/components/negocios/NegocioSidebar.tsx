@@ -9,9 +9,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   User, Phone, Mail, Building2, DollarSign, Edit2, Check, X,
   Calendar, Target, Brain, FileText, Settings, ChevronsUpDown,
-  Briefcase, Users, ChevronDown, Flame, Star, Tag, AlertTriangle
+  Briefcase, Users, ChevronDown, Flame, Star, Tag, AlertTriangle, History
 } from "lucide-react";
 import { AltioraCloserSelect } from "@/components/negocios/AltioraCloserSelect";
+import { AltioraTimeline } from "@/components/negocios/AltioraTimeline";
 import { useLeadFieldDefinitionsByEntity } from "@/hooks/useLeadFieldDefinitions";
 import { useLeadFieldValuesByEntity, getTypedLeadValue } from "@/hooks/useLeadFieldValues";
 import { toast } from "sonner";
@@ -185,8 +186,10 @@ const NegocioSidebar = ({
   const sidebarTabs = [
     { value: 'cliente', icon: User, label: 'Cliente' },
     { value: 'lead', icon: Briefcase, label: 'Lead' },
-    // ALTIORA-08: aba extra apenas no pipeline Altiora
+    // ALTIORA-08: aba Referral apenas no pipeline Altiora
     ...(isAltiora ? [{ value: 'referral', icon: Tag, label: 'Referral' }] : []),
+    // ALTIORA-21: aba Histórico apenas no pipeline Altiora
+    ...(isAltiora ? [{ value: 'historico', icon: History, label: 'Histórico' }] : []),
   ];
 
   return (
@@ -975,6 +978,18 @@ const NegocioSidebar = ({
                   </div>
                 )}
 
+              </TabsContent>
+            )}
+
+            {/* ────────── HISTÓRICO TAB (ALTIORA-21) ────────── */}
+            {isAltiora && (
+              <TabsContent value="historico" className="mt-0">
+                <div className="px-4 pt-4 pb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-4">
+                    Linha do tempo
+                  </p>
+                  <AltioraTimeline leadId={negocio.id} />
+                </div>
               </TabsContent>
             )}
 
