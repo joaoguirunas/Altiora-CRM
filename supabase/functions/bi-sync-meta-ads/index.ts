@@ -94,6 +94,21 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: 'No access token configured for this account' }, 400);
     }
 
+    // === PERMISSION CHECK (admin/manager) ===
+    // Must happen before any token operation — no renewal without verified permission.
+    const { data: userRecord } = await supabase
+      .from('settings_users')
+      .select('super_admin, user_type')
+      .eq('auth_user_id', user.id)
+      .eq('active', true)
+      .single();
+
+    const isAdmin = userRecord?.super_admin === true || userRecord?.user_type === 'admin';
+    const isManager = userRecord?.user_type === 'manager';
+    if (!userRecord || (!isAdmin && !isManager)) {
+      return json({ success: false, error: 'Requires admin or manager permission' }, 403);
+    }
+
     // === TOKEN EXPIRY CHECK + AUTO-EXTEND ===
     const now = new Date();
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -149,20 +164,6 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
-    }
-
-    // Verify user has manager permission
-    const { data: userRecord } = await supabase
-      .from('settings_users')
-      .select('super_admin, user_type')
-      .eq('auth_user_id', user.id)
-      .eq('active', true)
-      .single();
-
-    const isAdmin = userRecord?.super_admin === true || userRecord?.user_type === 'admin';
-    const isManager = userRecord?.user_type === 'manager';
-    if (!userRecord || (!isAdmin && !isManager)) {
-      return json({ success: false, error: 'Requires admin or manager permission' }, 403);
     }
 
     // === FETCH META ADS INSIGHTS ===
