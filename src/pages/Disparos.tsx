@@ -8,11 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
   Plus, Search, Play, Pause, Square, Copy, Trash2, Eye, Users,
-  MoreVertical, RotateCcw, Send as SendIcon, CheckCircle2, TrendingUp,
+  MoreVertical, RotateCcw, Send as SendIcon, CheckCircle2, TrendingUp, Loader2,
 } from 'lucide-react';
 import { useSends } from '@/hooks/useSends';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useAtualizarSend, useDeletarSend, useDuplicarSend } from '@/hooks/useSendMutations';
+import { useSendDispatch } from '@/hooks/useSendDispatch';
 import { SendStatus } from '@/types/sends';
 import type { Send } from '@/types/sends';
 import StandardPageLoader from '@/components/loading/StandardPageLoader';
@@ -73,6 +74,10 @@ export default function Disparos() {
   const { mutate: updateSend, isPending: isUpdating } = useAtualizarSend();
   const { mutate: deletarSend } = useDeletarSend();
   const { mutate: duplicarSend, isPending: isDuplicating } = useDuplicarSend();
+  const { mutate: startFirstBatch } = useSendDispatch();
+
+  // AC3: track which send is currently being dispatched (to show spinner)
+  const [activatingSendId, setActivatingSendId] = React.useState<string | null>(null);
 
   // ── KPI summary ──────────────────────────────────────────────────────────
   const kpis = React.useMemo(() => {

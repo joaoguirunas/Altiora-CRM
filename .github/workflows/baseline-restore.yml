@@ -1,0 +1,228 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# baseline-restore.yml — REL-05 AC6
+#
+# Workflow de restauração de emergência: dado um baseline vN, restaura
+# o banco a partir dele (dry-run por default; apply via input manual).
+#
+# Casos de uso:
+#   - Novo tenant onboarding rápido (aplica baseline + delta)
+#   - Recuperação após incidente (aplica baseline validado)
+#   - CI: verificar que baseline é auto-suficiente
+#
+# Requer secrets:
+#   SUPABASE_DB_URL       — direct DB URL (postgres://...)
+#
+# Inputs manuais (workflow_dispatch):
+#   baseline_version      — ex: "1" (default: latest)
+#   apply                 — "true" para realmente aplicar (default: false = dry-run)
+#   target_db_url         — override da URL de destino (opcional; default: SUPABASE_DB_URL)
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Baseline Squash — Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_version:
+        description: 'Versão do baseline (ex: 1). Deixe em branco para usar o mais recente.'
+        required: false
+        default: ''
+      apply:
+        description: 'Aplicar no banco? (true = aplica; false = apenas dry-run)'
+        required: false
+        default: 'false'
+      target_db_url:
+        description: 'DB URL de destino (opcional; usa SUPABASE_DB_URL se vazio)'
+        required: false
+        default: ''
+
+jobs:
+  restore-baseline:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── 2. Detectar baseline alvo ──────────────────────────────────────────
+      - name: Detect baseline file
+        id: detect
+        run: |
+          set -euo pipefail
+
+          VERSION_INPUT="${{ github.event.inputs.baseline_version }}"
+
+          if [ -n "$VERSION_INPUT" ]; then
+            CANDIDATE="supabase/migrations/_baseline_v${VERSION_INPUT}.sql"
+            if [ ! -f "$CANDIDATE" ]; then
+              echo "❌ Baseline não encontrado: $CANDIDATE"
+              ls supabase/migrations/_baseline_v*.sql 2>/dev/null || echo "Nenhum baseline disponível."
+              exit 1
+            fi
+            BASELINE_FILE="$CANDIDATE"
+          else
+            # Usa o mais recente
+            BASELINE_FILE=$(ls supabase/migrations/_baseline_v*.sql 2>/dev/null | sort -V | tail -1)
+            if [ -z "$BASELINE_FILE" ]; then
+              echo "❌ Nenhum _baseline_v*.sql encontrado em supabase/migrations/"
+              exit 1
+            fi
+          fi
+
+          BASENAME=$(basename "$BASELINE_FILE")
+          VERSION=$(echo "$BASENAME" | grep -oP '(?<=_baseline_v)\d+(?=\.sql)')
+          LINES=$(wc -l < "$BASELINE_FILE")
+
+          echo "baseline_file=$BASELINE_FILE" >> $GITHUB_OUTPUT
+          echo "basename=$BASENAME"           >> $GITHUB_OUTPUT
+          echo "version=$VERSION"             >> $GITHUB_OUTPUT
+          echo "lines=$LINES"                 >> $GITHUB_OUTPUT
+
+          echo "✅ Baseline detectado: $BASENAME (v${VERSION}, ${LINES} linhas)"
+
+      # ── 3. Instalar psql ───────────────────────────────────────────────────
+      - name: Install psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      # ── 4. Configurar DB URL ───────────────────────────────────────────────
+      - name: Resolve DB URL
+        id: dburl
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TARGET_OVERRIDE: ${{ github.event.inputs.target_db_url }}
+        run: |
+          if [ -n "$TARGET_OVERRIDE" ]; then
+            echo "Usando target_db_url de input (override)"
+            echo "db_url=$TARGET_OVERRIDE" >> $GITHUB_OUTPUT
+          else
+            echo "Usando SUPABASE_DB_URL do secret"
+            echo "db_url=$SUPABASE_DB_URL" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 5. Dry-run (sempre) ────────────────────────────────────────────────
+      - name: Dry-run (BEGIN ... ROLLBACK)
+        env:
+          DB_URL: ${{ steps.dburl.outputs.db_url }}
+        run: |
+          set -euo pipefail
+
+          BASELINE="${{ steps.detect.outputs.baseline_file }}"
+          echo "=== DRY-RUN: $BASELINE ==="
+
+          psql "$DB_URL" <<SQL
+          BEGIN;
+          \i $BASELINE
+          ROLLBACK;
+          SQL
+
+          echo "✅ Dry-run aprovado — banco não foi modificado"
+
+      # ── 6. Delta migrations (pós-baseline) ────────────────────────────────
+      - name: Detect delta migrations
+        id: delta
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.detect.outputs.version }}"
+          ARCHIVE_DIR="supabase/migrations/archived/v${VERSION}"
+
+          # Delta = migrations com timestamp, não arquivadas, não _baseline_*.sql
+          DELTA_FILES=$(ls supabase/migrations/*.sql 2>/dev/null \
+            | xargs -I{} basename {} \
+            | grep -E '^[0-9]{14}_' \
+            | grep -v '^_' \
+            | sort || true)
+
+          DELTA_COUNT=$(echo "$DELTA_FILES" | grep -c . || echo 0)
+
+          echo "delta_count=$DELTA_COUNT" >> $GITHUB_OUTPUT
+          echo "Delta migrations detectadas: $DELTA_COUNT"
+          if [ "$DELTA_COUNT" -gt 0 ]; then
+            echo "$DELTA_FILES"
+          fi
+
+      # ── 7. Apply (apenas se apply=true) ───────────────────────────────────
+      - name: Apply baseline to database
+        if: github.event.inputs.apply == 'true'
+        env:
+          DB_URL: ${{ steps.dburl.outputs.db_url }}
+        run: |
+          set -euo pipefail
+
+          BASELINE="${{ steps.detect.outputs.baseline_file }}"
+          VERSION="${{ steps.detect.outputs.version }}"
+          echo "🔴 APPLY MODE — aplicando baseline v${VERSION} no banco"
+          echo "   Arquivo: $BASELINE"
+          echo "   Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          psql "$DB_URL" -f "$BASELINE"
+
+          echo "✅ Baseline v${VERSION} aplicado com sucesso"
+
+      # ── 8. Apply delta migrations ─────────────────────────────────────────
+      - name: Apply delta migrations
+        if: |
+          github.event.inputs.apply == 'true' &&
+          steps.delta.outputs.delta_count != '0'
+        env:
+          DB_URL: ${{ steps.dburl.outputs.db_url }}
+        run: |
+          set -euo pipefail
+
+          echo "Aplicando ${{ steps.delta.outputs.delta_count }} delta migrations..."
+
+          for f in $(ls supabase/migrations/*.sql | grep -E '/[0-9]{14}_' | grep -v '/_baseline_' | sort); do
+            echo "  Applying: $(basename $f)"
+            psql "$DB_URL" -f "$f"
+          done
+
+          echo "✅ Delta migrations aplicadas"
+
+      # ── 9. Smoke-test pós-apply ────────────────────────────────────────────
+      - name: Smoke-test
+        if: github.event.inputs.apply == 'true'
+        env:
+          DB_URL: ${{ steps.dburl.outputs.db_url }}
+        run: |
+          set -euo pipefail
+
+          echo "=== Smoke-test ==="
+
+          # Verifica que tabelas core existem após apply
+          TABLES=$(psql "$DB_URL" -t -c "
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name IN ('people', 'sends', 'messages', 'tenants', 'users');
+          " | tr -d ' ')
+
+          echo "Tabelas core encontradas: $TABLES (esperado: 5)"
+          if [ "$TABLES" -lt "3" ]; then
+            echo "❌ Smoke-test FALHOU — menos de 3 tabelas core encontradas"
+            exit 1
+          fi
+
+          echo "✅ Smoke-test aprovado"
+
+      # ── 10. Sumário ────────────────────────────────────────────────────────
+      - name: Summary
+        run: |
+          VERSION="${{ steps.detect.outputs.version }}"
+          APPLY="${{ github.event.inputs.apply }}"
+          DELTA_COUNT="${{ steps.delta.outputs.delta_count }}"
+          LINES="${{ steps.detect.outputs.lines }}"
+
+          echo "## Baseline Restore — v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Versão | v${VERSION} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Arquivo | ${{ steps.detect.outputs.basename }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linhas | ${LINES} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Delta migrations | ${DELTA_COUNT} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Modo | $([ "$APPLY" = "true" ] && echo "APPLY ✅" || echo "DRY-RUN (sem modificações)") |" >> $GITHUB_STEP_SUMMARY

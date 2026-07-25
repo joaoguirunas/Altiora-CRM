@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { useWhatsappTemplates } from '@/hooks/useWhatsappTemplates';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useAiAgents } from '@/hooks/useAiAgents';
-import { Calendar, Clock, Eye } from 'lucide-react';
+import { AlertCircle, Calendar, Clock, Eye } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { WhatsappTemplatePreview } from '@/components/config/WhatsappTemplatePreview';
 import { WhatsappTemplateModal } from '@/components/config/WhatsappTemplateModal';
@@ -49,7 +49,12 @@ export default function ConfiguracaoDisparoTab({ onConfigChange, channel }: Conf
   const { data: templates } = useWhatsappTemplates();
   const { data: voiceAgents, isLoading: loadingAgents } = useAiAgents();
   const { pipelines, stages: allStages } = usePipelines();
-  const activeTemplates = templates?.filter(t => t.system_enabled === true);
+  // AC1: only APPROVED templates with meta_template_name (matches WhatsappTemplateModal/PickerModal)
+  const activeTemplates = templates?.filter(
+    t => t.system_enabled === true
+      && t.meta_template_name != null
+      && t.status?.toLowerCase() === 'approved'
+  );
 
   const stages = allStages?.filter(s => s.leads_pipelines_id === config.pipeline_id) || [];
 
@@ -122,6 +127,19 @@ export default function ConfiguracaoDisparoTab({ onConfigChange, channel }: Conf
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* AC1: hint when no APPROVED templates with meta_template_name found */}
+              {templates && templates.length > 0 && activeTemplates?.length === 0 && (
+                <div className="flex items-start gap-2 p-2 rounded-[2px] bg-yellow-500/10 border border-yellow-500/20 mt-2">
+                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-yellow-600" />
+                  <p className="text-xs text-yellow-700">
+                    Nenhum template publicado na Meta disponível. Configure em{' '}
+                    <a href="/settings/general/templates" className="underline underline-offset-2">
+                      Configurações → Templates →
+                    </a>
+                  </p>
+                </div>
+              )}
 
               {selectedTemplate && (
                 <Button

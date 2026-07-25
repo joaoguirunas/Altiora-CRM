@@ -28,7 +28,7 @@ Problema: sem clareza de quando usar qual hook, componentes acabam usando `useAu
 | Obter `user.id` para queries | `useAuth()` | `user.id` é o auth user ID — consistente com o profile |
 | Acessar `session.access_token` para chamadas a edge fns | `useAuth()` | Session só existe no `SimpleAuthProvider` |
 | Verificar role (gestor/consultor/super_adm) na UI | `useUserPermissions()` | Booleanos memoizados; não re-render desnecessário |
-| Feature gating (pode criar usuário? pode deletar?) | `useUserPermissions()` | Lógica de permissão centralizada e testável |
+| Feature gating (pode criar usuário? pode deletar?) | `useUserPermissions()` | Lógica de permissão centralizada e testável. **Nota (ARCH-RBAC-02, 2026-07-25):** Os 8 gates granulares que liam `tenant_role_permissions` (`canExportCRM`, `canDeleteCRM`, `canViewScore`, `canViewCoach`, `canEditCoach`, `canCreateSends`, `canViewBI`, `canViewSettings`) foram removidos. O gating é feito exclusivamente via `user_type` (admin/manager/user). |
 | Filtros de query por responsável/time | `useUserPermissions().getResponsavelFilter()` | Retorna sentinel `__INVALID_USER__` quando profile inválido |
 | Componentes que precisam só do profile (nome, avatar) | `useCurrentUser()` | React Query com cache — não re-executa auth flow inteiro |
 | Componentes fora do `SimpleAuthProvider` | `useCurrentUser()` | `useAuth()` throw se fora do provider |

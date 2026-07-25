@@ -13,7 +13,7 @@ tags: [ops]
 
 | Teammate | Status | Missão atual |
 |---|---|---|
-| dev-architect | 🟡 iniciando | Revisar backlog, criar wave-plan.md |
+| dev-architect | ✅ concluído | Wave plan entregue em ops/wave-plan.md |
 | dev-dev-alpha | ✅ pronto | Aguardando wave 1 do architect (ALTIORA UI, REL, BI) |
 | dev-dev-beta | ✅ pronto | Aguardando wave 1 do architect (AUTH-V2, FIX backend) |
 | dev-dev-gamma | ✅ pronto | Aguardando wave 1 do architect (ALTIORA cross-layer, SENDS) |

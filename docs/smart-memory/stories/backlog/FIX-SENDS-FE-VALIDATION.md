@@ -106,10 +106,10 @@ Compare com `DisparoControls.handleStart` (linha 23) que **chama `useSendDispatc
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
+| Agente     | Novik (dev-dev-alpha) |
+| Iniciado   | 2026-07-25 |
 | Concluído  | — |
-| Branch     | — |
+| Branch     | feat/fix-sends-fe-validation |
 
 ## File List
 <!-- Dev preenche ao concluir -->

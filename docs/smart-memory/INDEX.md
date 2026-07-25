@@ -124,6 +124,7 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 - [[ops/supabase-credentials]] — banco ativo (`dtsmbqrzyxhjjjvpjfjd`), access token CLI, histórico de troca (2026-07-25)
 - [[ops/delegation-log]] — histórico de delegações do lead
 - [[ops/teams-log]] — times formados e seus objetivos
+- [[ops/wave-plan]] — **Wave Plan 2026-07-25 (Zaelor)**: 65 stories auditadas → 47 ativas em 4 waves; 16 done em backlog/ p/ limpeza; Wave 1 = 10 fixes críticos sem dep. bloqueante
 
 ## Agentes IA — Prompts
 - [[agents/social-selling-v6/identity]] — Social Selling Instagram v6 (2026-06-16): identity com 3 rotas (Consultoria/Mentoria/Curso) + escalação para humano
