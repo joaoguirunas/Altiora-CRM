@@ -14,14 +14,18 @@ import { startOfToday, endOfToday, startOfWeek, endOfWeek, startOfMonth, endOfMo
 import { useNegociosPipeline } from "@/hooks/useNegociosOptimized";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useAuth } from "@/hooks/useAuth";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { isAltioraPipeline } from "@/utils/pipelineLabels";
+import NovoReferralModal from "@/components/negocios/NovoReferralModal";
 
 const Negocios = () => {
   const { pipelines: allPipelines = [], stages = [], isLoading } = usePipelines();
   const { data: times = [] } = useTeams();
   const { data: usuarios = [] } = useUsuarios();
   const { isManager, isComercial, userTimes, getResponsavelFilter } = useUserPermissions();
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -325,6 +329,7 @@ const Negocios = () => {
           stages={pipelineStages}
           onStageChange={handleStageChange}
           pipelineId={pipelineFilter || undefined}
+          pipelineName={selectedPipeline?.name ?? ''}
           stageFilter={stageFilter}
           statusFilter={statusFilter}
           teamFilter={teamFilter}
@@ -350,13 +355,22 @@ const Negocios = () => {
         <Clientes />
       )}
 
+      {/* ALTIORA-06 AC4: Modal diferente para pipeline Altiora + Gestor/Admin */}
       {viewMode !== 'clientes' && (
-        <NovoNegocioModal
-          open={isModalOpen}
-          onOpenChange={setIsModalOpen}
-          stageId={pipelineStages[0]?.id}
-          entityLabel={entityLabel}
-        />
+        isAltioraPipeline(selectedPipeline?.name ?? '') && isManager ? (
+          <NovoReferralModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            currentUserId={user?.id}
+          />
+        ) : (
+          <NovoNegocioModal
+            open={isModalOpen}
+            onOpenChange={setIsModalOpen}
+            stageId={pipelineStages[0]?.id}
+            entityLabel={entityLabel}
+          />
+        )
       )}
     </div>
   );
