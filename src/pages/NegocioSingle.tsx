@@ -49,6 +49,9 @@ import AltioraFinvitySection from "@/components/negocios/AltioraFinvitySection";
 import AltioraR1Section from "@/components/negocios/AltioraR1Section";
 import AltioraR2Section from "@/components/negocios/AltioraR2Section";
 import AltioraR3Section, { STAGE_EM_CONTRATACAO } from "@/components/negocios/AltioraR3Section";
+import AltioraContratacaoSection from "@/components/negocios/AltioraContratacaoSection";
+import AltioraContratacaoSection from "@/components/negocios/AltioraContratacaoSection";
+import AltioraTransicaoModal from "@/components/negocios/AltioraTransicaoModal";
 import RegistrarContatoModal, { type ContatoFormData } from "@/components/negocios/RegistrarContatoModal";
 import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
 import { useRegistrarContato, useSalvarProximaAcao } from "@/hooks/useAltioraContatos";
@@ -105,6 +108,13 @@ const NegocioSingle = () => {
   // ALTIORA-11: modais de contato e próxima ação
   const [showContatoModal, setShowContatoModal] = useState(false);
   const [showProximaAcaoModal, setShowProximaAcaoModal] = useState(false);
+  // ALTIORA-12: modal de transição de etapa com validação de campos obrigatórios
+  const [transicaoModal, setTransicaoModal] = useState<{
+    fromStageId: string;
+    toStageId: string;
+    fromStageName: string;
+    toStageName: string;
+  } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -176,15 +186,31 @@ const NegocioSingle = () => {
     return textoCompleto;
   };
 
-  const handleStageClick = async (newStageId: string) => {
+  const handleStageClick = (newStageId: string) => {
     if (newStageId === selectedStageId) return;
-    try {
-      await updateNegocio.mutateAsync({ id: id!, leads_stages_id: newStageId });
-      setSelectedStageId(newStageId);
-      toast.success("Etapa atualizada!");
-    } catch (error) {
-      toast.error("Erro ao atualizar etapa.");
+
+    // ALTIORA-12: pipeline Altiora usa modal de transição com validação
+    if (isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '')) {
+      const fromStage = filteredStages.find(s => s.id === selectedStageId);
+      const toStage   = filteredStages.find(s => s.id === newStageId);
+      setTransicaoModal({
+        fromStageId:   selectedStageId,
+        toStageId:     newStageId,
+        fromStageName: fromStage?.nome ?? '—',
+        toStageName:   toStage?.nome   ?? '—',
+      });
+      return;
     }
+
+    // Outros pipelines: atualização direta
+    updateNegocio.mutateAsync({ id: id!, leads_stages_id: newStageId })
+      .then(() => {
+        setSelectedStageId(newStageId);
+        toast.success("Etapa atualizada!");
+      })
+      .catch(() => {
+        toast.error("Erro ao atualizar etapa.");
+      });
   };
 
   const handleStatusChange = async (newStatus: string) => {
@@ -938,6 +964,16 @@ const NegocioSingle = () => {
                         onAvancarContratacao={() => handleStageClick(STAGE_EM_CONTRATACAO)}
                         onNaoAvancar={() => setShowMotivoPerdasModal(true)}
                         onContinuarNegociacao={() => setShowProximaAcaoModal(true)}
+                      />
+                    )}
+
+                    {/* ALTIORA-20: Acompanhamento de Contratação — apenas para pipeline Altiora */}
+                    {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                      <AltioraContratacaoSection
+                        leadId={id!}
+                        currentStagePosition={
+                          filteredStages.findIndex(s => s.id === selectedStageId) + 1
+                        }
                       />
                     )}
 
