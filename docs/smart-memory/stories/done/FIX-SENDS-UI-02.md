@@ -1,12 +1,12 @@
 ---
 title: "Story FIX-SENDS-UI-02: Corrigir timezone em scheduled_at ao criar disparo agendado"
 type: story
-status: backlog
+status: done
 epic: SENDS
 complexity: S
-agent: dev-dev-delta
+agent: dev-dev-alpha
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-07-25
 tags: [story, sends-pro, ui, timezone, bug, P2]
 related: ["[[../../project/audit-sends-pro]]", "[[SENDS-FIX-01]]"]
 ---
@@ -19,9 +19,9 @@ Garantir que `scheduled_at` seja enviado com timezone explícito (UTC ISO string
 
 ## Acceptance Criteria
 
-- [ ] AC1: Ao criar disparo agendado para "09:00" com usuário em GMT-3, `scheduled_at` no banco armazena `12:00:00+00` (UTC correto).
-- [ ] AC2: O valor exibido na UI de detalhe do disparo mostra o horário no timezone local do usuário.
-- [ ] AC3: Não há regressão no fluxo de criação de disparo imediato (não agendado).
+- [x] AC1: Ao criar disparo agendado para "09:00" com usuário em GMT-3, `scheduled_at` no banco armazena `12:00:00+00` (UTC correto).
+- [x] AC2: O valor exibido na UI de detalhe do disparo mostra o horário no timezone local do usuário.
+- [x] AC3: Não há regressão no fluxo de criação de disparo imediato (não agendado).
 
 ## Escopo
 
@@ -51,13 +51,14 @@ sendData.scheduled_at = new Date(`${scheduledDate}T${scheduledTime}:00`).toISOSt
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | — |
+| Agente     | Novik (dev-dev-alpha) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/fix-sends-ui-rbac-cleanup |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `src/components/disparos/CriarDisparoModal.tsx` — modificado (scheduled_at → .toISOString())
+- `src/pages/CriarDisparo.tsx` — já estava correto (verificado, sem alteração necessária)
 
 ## QA Results
 <!-- QA preenche ao revisar -->

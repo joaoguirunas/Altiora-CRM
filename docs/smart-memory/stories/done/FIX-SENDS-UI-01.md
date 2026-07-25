@@ -1,12 +1,12 @@
 ---
 title: "Story FIX-SENDS-UI-01: Não sobrescrever started_at ao retomar disparo pausado"
 type: story
-status: backlog
+status: done
 epic: SENDS
 complexity: S
-agent: dev-dev-delta
+agent: dev-dev-alpha
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-07-25
 tags: [story, sends-pro, ui, bug, P2]
 related: ["[[../../project/audit-sends-pro]]", "[[SENDS-FIX-01]]"]
 ---
@@ -19,9 +19,9 @@ Corrigir o `DisparoControls` para que retomar um disparo pausado não sobrescrev
 
 ## Acceptance Criteria
 
-- [ ] AC1: Ao clicar "Retomar" em campanha pausada, `started_at` no banco permanece o valor original (não é atualizado).
-- [ ] AC2: Ao clicar "Iniciar" em campanha nova (status='draft' ou 'scheduled'), `started_at` é setado corretamente com o horário atual.
-- [ ] AC3: O componente `PerformanceCard` exibe duração de campanha correta mesmo após pausa/retomada.
+- [x] AC1: Ao clicar "Retomar" em campanha pausada, `started_at` no banco permanece o valor original (não é atualizado).
+- [x] AC2: Ao clicar "Iniciar" em campanha nova (status='draft' ou 'scheduled'), `started_at` é setado corretamente com o horário atual.
+- [x] AC3: O componente `PerformanceCard` exibe duração de campanha correta mesmo após pausa/retomada.
 
 ## Escopo
 
@@ -57,13 +57,13 @@ const handleStart = () => {
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | — |
+| Agente     | Novik (dev-dev-alpha) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/fix-sends-ui-rbac-cleanup |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `src/components/disparos/DisparoControls.tsx` — modificado
 
 ## QA Results
 <!-- QA preenche ao revisar -->

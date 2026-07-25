@@ -19,19 +19,22 @@ Executar a decisão de [[../../decisions/ADR-AUTH-09-rbac-granular-decision]]: r
 
 ## Acceptance Criteria
 
-- [ ] **AC1: Frontend — deletar arquivos**
-  - Remover `src/components/config/PermissoesConfig.tsx` (286 LOC).
-  - Remover `src/hooks/usePermissions.ts` (162 LOC).
-  - Remover entry `permissoes` em `src/pages/settings/registry.ts:252-257`.
+- [x] **AC1: Frontend — deletar arquivos** _(Novik, 2026-07-25)_
+  - Remover `src/components/config/PermissoesConfig.tsx` (286 LOC). ✅
+  - Remover `src/hooks/usePermissions.ts` (162 LOC). ✅
+  - Remover entry `permissoes` em `src/pages/settings/registry.ts`. ✅
+  - Remover import `ShieldCheck` (só usado pelo entry removido). ✅
+  - Remover alias `/settings/general/permissoes` da entry `usuarios-equipes`. ✅
+  - Remover tab Permissões de `UsuariosEquipesConfig.tsx`. ✅
 
-- [ ] **AC2: Frontend — refatorar `src/hooks/useUserPermissions.ts`**
-  - Remover `import type { FeatureKey } from '@/hooks/usePermissions';` (linha 7).
-  - Remover hook interno `useCurrentUserFeaturePermissions` (linhas 13-28).
-  - Remover destructure `const { data: featurePerms } = useCurrentUserFeaturePermissions(...)` (linhas 105-108).
-  - Remover função `canFeature` (linhas 136-141).
-  - Remover do return os 8 gates granulares: `canExportCRM`, `canDeleteCRM`, `canViewScore`, `canViewCoach`, `canEditCoach`, `canCreateSends`, `canViewBI`, `canViewSettings` (linhas 162-169).
-  - Remover `roleId` do `basePermissions` retornado (linhas 65, 81, 98).
-  - Verificar que os 17 callers compilam sem mudanças (zero deles consome os exports removidos — verificado em 2026-05-07).
+- [x] **AC2: Frontend — refatorar `src/hooks/useUserPermissions.ts`** _(Novik, 2026-07-25)_
+  - Remover `import type { FeatureKey } from '@/hooks/usePermissions';`. ✅
+  - Remover hook interno `useCurrentUserFeaturePermissions`. ✅
+  - Remover `const { data: featurePerms } = useCurrentUserFeaturePermissions(...)`. ✅
+  - Remover função `canFeature`. ✅
+  - Remover 6 gates granulares presentes: `canExportCRM`, `canDeleteCRM`, `canViewScore`, `canCreateSends`, `canViewBI`, `canViewSettings`. ✅
+  - Remover `roleId` de todos os objetos retornados. ✅
+  - TypeScript: `npx tsc --noEmit` — 0 erros. Zero callers afetados (verificado). ✅
 
 - [ ] **AC3: Migration de drop**
   - Criar `supabase/migrations/{novo_timestamp}_drop_rbac_granular.sql`:
@@ -108,12 +111,18 @@ A migration `20260423009000_tenant_role_permissions.sql` linhas 41-52 e 77-93 de
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | dev-data-engineer |
-| Iniciado   | — |
-| Concluído  | — |
+| Agente (AC1+AC2) | Novik (dev-dev-alpha) |
+| Iniciado   | 2026-07-25 |
+| Branch AC1+AC2 | feature/fix-sends-ui-rbac-cleanup |
+| Agente (AC3+AC4) | data-engineer (pendente) |
+| Concluído  | — (aguarda AC3+AC4+AC5+AC6) |
 
 ## File List
-<!-- preencher ao concluir -->
+- `src/components/config/PermissoesConfig.tsx` — deletado (AC1)
+- `src/hooks/usePermissions.ts` — deletado (AC1)
+- `src/pages/settings/registry.ts` — removida entry permissoes + import ShieldCheck + alias (AC1)
+- `src/components/config/UsuariosEquipesConfig.tsx` — removido tab Permissões (AC1)
+- `src/hooks/useUserPermissions.ts` — removido RBAC granular completo (AC2)
 
 ## QA Results
 <!-- QA preenche ao revisar -->
