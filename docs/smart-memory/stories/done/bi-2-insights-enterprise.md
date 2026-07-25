@@ -1,13 +1,13 @@
 ---
 title: "Story bi-2: Redesign enterprise — BIProInsightsTab + BIProSummaryBar"
 type: story
-status: in-progress
+status: done
 epic: bi-pro-refinamento
 complexity: L
 agent: dev-dev-alpha
 created: 2026-05-02
-updated: 2026-05-02
-tags: [story, bi-pro, ux, redesign, enterprise]
+updated: 2026-07-25
+tags: [story, bi-pro, ux, redesign, enterprise, done]
 related: ["[[../BACKLOG]]", "[[bi-1-voice-sanitizer]]", "[[bi-3-comercial-enterprise]]", "[[bi-4-revops-marketing-enterprise]]", "[[../../agents/ux/bi-enterprise-spec]]"]
 ---
 

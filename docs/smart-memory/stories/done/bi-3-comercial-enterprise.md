@@ -1,13 +1,13 @@
 ---
 title: "Story bi-3: Redesign enterprise — BIProComercialTab"
 type: story
-status: ready-for-qa
+status: done
 epic: bi-pro-refinamento
 complexity: L
 agent: dev-dev-gamma
 created: 2026-05-02
-updated: 2026-05-02
-tags: [story, bi-pro, ux, redesign, enterprise]
+updated: 2026-07-25
+tags: [story, bi-pro, ux, redesign, enterprise, done]
 related: ["[[../BACKLOG]]", "[[bi-1-voice-sanitizer]]", "[[bi-2-insights-enterprise]]", "[[bi-4-revops-marketing-enterprise]]"]
 ---
 
@@ -107,4 +107,12 @@ ACs: AC1✅ AC2✅ AC3🔄(spec) AC4✅ AC5⏭️(spec) AC6✅ AC7✅(funcional,
 [CONCERN-2 LOW] A11y: <caption className="sr-only"> ausente nas 3 tabelas.
 [CONCERN-3 LOW] AC7: chevron troca de ícone vs rotate()-animado da spec.
 Push LIBERADO.
+```
+
+```
+CONCERNS RESOLVIDOS — 2026-07-25 (dev-dev-gamma/Serak)
+CONCERN-1: <tr> CloserTable → role="button" aria-expanded={expanded} aria-controls="closer-detail-{userId}". Row expandida: id="closer-detail-{userId}".
+CONCERN-2: <caption className="sr-only"> adicionado nas 3 tabelas (comparativo, leads, performance por closer).
+CONCERN-3: ChevronRight/ChevronDown swap → ChevronDown único com rotate(-90deg)/rotate(0) via transition-transform duration-200.
+tsc EXIT 0 ✅ | eslint 0 errors ✅
 ```

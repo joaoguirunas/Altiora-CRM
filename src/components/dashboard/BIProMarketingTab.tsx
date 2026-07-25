@@ -101,7 +101,7 @@ function TrendChart({ data }: { data: TimeSeriesPoint[] }) {
           { color: CHART_COLORS.spend, label: 'Investimento' },
           { color: CHART_COLORS.clicks, label: 'Cliques', dashed: true },
         ].map(s => (
-          <div key={s.label} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span
               className="w-3 h-0.5 rounded-full inline-block"
               style={{

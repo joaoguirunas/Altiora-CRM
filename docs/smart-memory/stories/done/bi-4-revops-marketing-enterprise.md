@@ -1,13 +1,13 @@
 ---
 title: "Story bi-4: Redesign enterprise — BIProRevOpsTab + BIProMarketingTab"
 type: story
-status: ready-for-qa
+status: done
 epic: bi-pro-refinamento
 complexity: L
 agent: dev-dev-gamma
 created: 2026-05-02
-updated: 2026-05-02
-tags: [story, bi-pro, ux, redesign, enterprise]
+updated: 2026-07-25
+tags: [story, bi-pro, ux, redesign, enterprise, done]
 related: ["[[../BACKLOG]]", "[[bi-1-voice-sanitizer]]", "[[bi-2-insights-enterprise]]", "[[bi-3-comercial-enterprise]]"]
 ---
 
@@ -107,4 +107,12 @@ ACs: AC1✅(LOW:chart legend 10px) AC2🔄(2D Linear funnel) AC3⏭️ AC4⏭️
 [CONCERN-3 LOW] A11y: botões Edit/Save/Cancel benchmark (linhas 430,436,445)
   sem aria-label explícito.
 Push LIBERADO.
+```
+
+```
+CONCERNS RESOLVIDOS — 2026-07-25 (dev-dev-gamma/Serak)
+CONCERN-1: <button> diagnóstico RevOps → aria-expanded={isExpanded} aria-controls="cr-diagnosis-{key}". Div diagnosis → id="cr-diagnosis-{key}".
+CONCERN-2: MarketingTab L104 text-[10px] → text-[11px] (unifica escala tipográfica).
+CONCERN-3: Botões Edit/Save/Cancel → aria-label explícito em cada um (Cancelar edição de benchmarks / Salvar benchmarks / Editar metas de benchmark).
+tsc EXIT 0 ✅ | eslint 0 errors ✅
 ```
