@@ -1,18 +1,12 @@
 /**
  * useClientDrift / useAllClientsDrift — REL-03 AC8
  *
- * Queries `adm_client_drift` (not in generated types → sbUntyped pattern).
- *
- * TODO(alpha): replace stub implementation with full version once
- *   adm-drift-check edge fn (AC2) is live and types are regenerated.
+ * Queries `adm_client_drift` (not in generated types → @ts-expect-error pattern).
+ * adm_client_drift migration: supabase/migrations_adm/20260725300000_adm_client_drift.sql
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sbUntyped = supabase as unknown as SupabaseClient<any>;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,14 +29,18 @@ export interface ClientDrift {
 // ─── useClientDrift ───────────────────────────────────────────────────────────
 
 /**
- * Returns all drift records for a specific client (any status).
- * Primary use: DriftModal content.
+ * Returns all drift records for a specific client (all statuses, newest first).
+ * Primary use: DriftModal (AC6 — Gamma) — shows open + repaired history.
+ *
+ * queryKey: ['adm-client-drift', clientId]
+ * staleTime: 30s
  */
 export function useClientDrift(clientId: string) {
   return useQuery({
     queryKey: ['adm-client-drift', clientId],
     queryFn: async (): Promise<ClientDrift[]> => {
-      const { data, error } = await sbUntyped
+      // @ts-expect-error — adm_client_drift not yet in generated types (REL-03 AC1 pending apply)
+      const { data, error } = await supabase
         .from('adm_client_drift')
         .select('*')
         .eq('client_id', clientId)
@@ -51,18 +49,18 @@ export function useClientDrift(clientId: string) {
 
       if (error) throw error;
 
-      return (data ?? []).map((row: Record<string, unknown>) => ({
-        id:               String(row.id),
-        client_id:        String(row.client_id),
-        detected_at:      String(row.detected_at),
-        expected_hash:    String(row.expected_hash),
-        actual_hash:      String(row.actual_hash),
-        expected_release: String(row.expected_release),
-        diff_summary:     row.diff_summary ? String(row.diff_summary) : null,
-        status:           row.status as DriftStatus,
-        repaired_at:      row.repaired_at ? String(row.repaired_at) : null,
-        repaired_by:      row.repaired_by ? String(row.repaired_by) : null,
-        created_at:       String(row.created_at),
+      return ((data as unknown as Array<Record<string, unknown>>) ?? []).map(row => ({
+        id:               String(row['id']),
+        client_id:        String(row['client_id']),
+        detected_at:      String(row['detected_at']),
+        expected_hash:    String(row['expected_hash']),
+        actual_hash:      String(row['actual_hash']),
+        expected_release: String(row['expected_release']),
+        diff_summary:     row['diff_summary'] != null ? String(row['diff_summary']) : null,
+        status:           row['status'] as DriftStatus,
+        repaired_at:      row['repaired_at'] != null ? String(row['repaired_at']) : null,
+        repaired_by:      row['repaired_by'] != null ? String(row['repaired_by']) : null,
+        created_at:       String(row['created_at']),
       }));
     },
     enabled: Boolean(clientId),
@@ -73,36 +71,42 @@ export function useClientDrift(clientId: string) {
 // ─── useAllClientsDrift ───────────────────────────────────────────────────────
 
 export interface AllDriftSummary {
-  /** Number of clients with at least one 'detected' drift record */
-  clientsWithDrift: number;
-  /** Total 'detected' drift records across all clients */
-  totalDetected: number;
+  /**
+   * List of client_ids that have at least one 'detected' (unresolved) drift record.
+   * Used by DriftBadge to check `clientsWithDrift.includes(clientId)` without
+   * issuing a per-row query.
+   */
+  clientsWithDrift: string[];
+  /** = clientsWithDrift.length */
+  count: number;
 }
 
 /**
- * Returns aggregated drift summary for the Adm.tsx stats card.
- * Counts distinct clients that have status='detected' drift.
+ * Returns the list of client_ids with unresolved drift (status='detected').
+ * One shared query for all DriftBadge instances — efficient for table rows.
+ *
+ * queryKey: ['adm-clients-drift-all']
+ * staleTime: 60s | refetchInterval: 5min
  */
 export function useAllClientsDrift() {
   return useQuery({
-    queryKey: ['adm-all-clients-drift'],
+    queryKey: ['adm-clients-drift-all'],
     queryFn: async (): Promise<AllDriftSummary> => {
-      const { data, error } = await sbUntyped
+      // @ts-expect-error — adm_client_drift not yet in generated types (REL-03 AC1 pending apply)
+      const { data, error } = await supabase
         .from('adm_client_drift')
         .select('client_id')
         .eq('status', 'detected');
 
       if (error) throw error;
 
-      const rows = (data ?? []) as Array<{ client_id: string }>;
-      const uniqueClients = new Set(rows.map(r => r.client_id));
+      const rows = ((data as unknown as Array<{ client_id: string }>) ?? []);
+      // DISTINCT in JS — Supabase JS v2 doesn't support SELECT DISTINCT natively
+      const clientsWithDrift = [...new Set(rows.map(r => r.client_id))];
 
-      return {
-        clientsWithDrift: uniqueClients.size,
-        totalDetected:    rows.length,
-      };
+      return { clientsWithDrift, count: clientsWithDrift.length };
     },
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000, // refresh every 5 min
+    refetchInterval: 5 * 60_000,
   });
 }

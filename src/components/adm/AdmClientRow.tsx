@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HealthBadge } from './HealthBadge';
+import { DriftBadge } from './DriftBadge';
 import { type AdmClient } from '@/hooks/useAdmClients';
 import { cn } from '@/lib/utils';
 import {
@@ -52,6 +53,8 @@ interface AdmClientRowProps {
   onViewDetail: (client: AdmClient) => void;
   /** REL-02 AC1: opens UpdateClientModal */
   onUpdateVersion: (client: AdmClient) => void;
+  /** REL-03 AC5: opens DriftModal (Gamma AC6) — optional until modal is wired */
+  onOpenDriftModal?: (client: AdmClient) => void;
   isUpdating?: boolean;
 }
 
@@ -65,6 +68,7 @@ export function AdmClientRow({
   onCreateUser,
   onViewDetail,
   onUpdateVersion,
+  onOpenDriftModal,
   isUpdating,
 }: AdmClientRowProps) {
   const statusInfo = STATUS_MAP[client.status] ?? STATUS_MAP.inactive;
@@ -120,6 +124,11 @@ export function AdmClientRow({
       >
         <p className="text-sm font-medium text-foreground truncate">{client.name}</p>
         <p className="text-[11px] text-muted-foreground font-mono truncate">{client.slug}</p>
+        {/* AC5 (REL-03): schema drift badge — DriftModal wired by Gamma (AC6) */}
+        <DriftBadge
+          clientId={client.id}
+          onClick={onOpenDriftModal ? () => onOpenDriftModal(client) : undefined}
+        />
       </div>
 
       {/* AC1: Versão */}
