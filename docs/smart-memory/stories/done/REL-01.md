@@ -118,7 +118,10 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 | Iniciado | 2026-07-25 |
 | Concluído (DB+edge fn) | 2026-07-25 |
 | Branch | feature/04-terminologia-referral |
-| ACs pendentes | AC2 (release-tag.yml — dev-devops), AC5 (hook useAdmReleases — dev-beta), AC6 (adm-sync-client refactor — dev-beta), AC7 (sync-clients.yml — dev-devops), AC8 (docs) |
+| ACs pendentes | AC2 (release-tag.yml — dev-devops), AC7 (sync-clients.yml — dev-devops), AC8 (docs) |
+| Agente | dev-dev-beta (Rex) — AC5 + AC6 |
+| Iniciado (AC5+AC6) | 2026-07-25 |
+| Concluído (AC5+AC6) | 2026-07-25 |
 
 ## Acceptance Criteria — Status
 
@@ -135,7 +138,7 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
   - Idempotente: ON CONFLICT (version) DO NOTHING → `{ ok: true, inserted: false }`
   - Audit log: insere em `adm_audit_log` (action: release.registered)
 - [x] **AC5** — `useAdmReleases` hook ✅ (`src/hooks/useAdmReleases.ts` — `useAdmReleases()` + `useAdmReleasesBetween()`)
-- [ ] **AC6** — `adm-sync-client` edge fn (NEW — não existe ainda) — dev-beta ⏳
+- [x] **AC6** — `adm-sync-client` edge fn (`supabase/functions/adm-sync-client/index.ts`) ✅ 2026-07-25
 - [x] **AC7** — `sync-clients.yml` refactor ✅ (dev-devops — workflow_dispatch only, breaking change documentado)
 - [x] **AC8** — Documentação ✅ (`CHANGELOG.md` — [4.72] entry com breaking change diagram)
 
@@ -149,6 +152,10 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 - `supabase/migrations_adm/20260424014000_adm_clients_version_columns.sql` — AC3c — current_version + target_version
 - `supabase/migrations_adm/20260424014000_adm_clients_version_columns.rollback.sql`
 - `supabase/functions/adm-releases-register/index.ts` — AC4
+
+### Criados/confirmados por Rex (AC5 + AC6)
+- `src/hooks/useAdmReleases.ts` — AC5: `useAdmReleases()` + `useAdmReleasesBetween()` + `useLatestAdmRelease()`
+- `supabase/functions/adm-sync-client/index.ts` — AC6: nova edge fn — resolve release, decripta credentials, filtra migrations tenant-side, fetch SQL do GitHub, aplica via Management API `/database/query`, audit em `adm_client_versions` + `adm_audit_log`
 
 ## QA Results
 
@@ -182,7 +189,7 @@ AC7 ✅  .github/workflows/sync-clients.yml: workflow_dispatch ONLY — zero pus
 
 ──── Status acumulado ────
 AC1 ✅ (pré-existente) | AC2 ✅ | AC3 ✅ | AC4 ✅ | AC7 ✅
-AC5 ⏳ dev-beta | AC6 ⏳ dev-beta | AC8 ⏳ dev-devops
+AC5 ✅ (useAdmReleases.ts) | AC6 ✅ (adm-sync-client/index.ts) | AC8 ⏳ dev-devops
 
 Próximo passo: @dev-beta AC5 (useAdmReleases) + AC6 (adm-sync-client refactor).
                @dev-devops AC8 (CHANGELOG/README). Resubmeter para gate final.
@@ -223,9 +230,9 @@ AC4 ✅  supabase/functions/adm-releases-register/index.ts:
 
 AC5/AC6/AC7/AC8: fora do escopo — aguardam dev-beta + dev-devops.
 
-Próximo passo: @dev-beta implementar AC5 (useAdmReleases hook) + AC6 (adm-sync-client refactor).
-               @dev-devops implementar AC7 (sync-clients.yml refactor) + AC8 (docs).
-               Resubmeter para gate final quando completos.
+AC5 ✅ (useAdmReleases.ts — 3 exports: useAdmReleases, useAdmReleasesBetween, useLatestAdmRelease)
+AC6 ✅ (adm-sync-client/index.ts — new fn, GitHub fetch + Management API /database/query + adm_client_versions audit)
+Próximo passo: @dev-devops AC8 (CHANGELOG/README). Gate final pendente.
 ```
 
 ## Validação 5-pontos (zael)
