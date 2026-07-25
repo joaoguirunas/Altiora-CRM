@@ -458,6 +458,81 @@ Deno.serve(async (req: Request) => {
             }
           }
 
+          // FIX-SENDS-IMPORT-03: Create lead for existing person when create_leads=true.
+          // Previously this path did `continue` without any lead creation, causing 100%
+          // of re-imported contacts to be silently dropped from the pipeline.
+          if (create_leads && pipeline_id && stage_id) {
+            // AC2: only create if no lead already exists in this pipeline for this person
+            const { count: existingLeadCount } = await supabase
+              .from('leads')
+              .select('*', { count: 'exact', head: true })
+              .eq('people_id', existingPersonId)
+              .eq('leads_pipelines_id', pipeline_id);
+
+            if ((existingLeadCount ?? 0) === 0) {
+              const rowLeadControl = field_mapping.lead_control
+                ? row[field_mapping.lead_control]?.trim() || null
+                : null;
+              const effectiveControl = rowLeadControl || lead_control || '1';
+
+              // AC5: native lead column values from lead_cols mapping
+              const leadColValues: Record<string, string> = {};
+              if (lead_cols) {
+                for (const [colKey, csvHeader] of Object.entries(lead_cols)) {
+                  const v = row[csvHeader]?.trim();
+                  if (v) leadColValues[colKey] = v;
+                }
+              }
+
+              const { data: newLead, error: insertLeadError } = await supabase
+                .from('leads')
+                .insert({
+                  people_id:          existingPersonId,
+                  leads_pipelines_id: pipeline_id,
+                  leads_stages_id:    stage_id,
+                  status:             'in_progress',
+                  control:            effectiveControl,
+                  ...(assign_user_id  ? { user_id:        assign_user_id } : {}),
+                  ...(assign_team_id  ? { teams_id:       assign_team_id } : {}),
+                  ...(score_matrix_id ? { score_matrix_id }               : {}),
+                  ...(origem_lista    ? { origem_lista }                  : {}),
+                  ...leadColValues,
+                })
+                .select('id')
+                .single();
+
+              if (!insertLeadError && newLead) {
+                const leadId = newLead.id as string;
+
+                // AC5: apply lead_extra field values (same pattern as new-person path)
+                if (lead_extra) {
+                  for (const [field_key, header_csv] of Object.entries(lead_extra)) {
+                    const value = row[header_csv]?.trim();
+                    const defId = negocioFieldDefs[field_key];
+                    if (!value || !defId) continue;
+                    await supabase.from('lead_field_values').upsert(
+                      {
+                        entity_id:           leadId,
+                        entity_type:         'negocio',
+                        lead_id:             leadId,
+                        field_definition_id: defId,
+                        value_text:          value,
+                      },
+                      { onConflict: 'entity_type,entity_id,field_definition_id' },
+                    );
+                  }
+                }
+
+                // Apply per-row resolved score_matrix_id to the lead
+                if (scoreMatrixId) {
+                  await supabase.from('leads').update({ score_matrix_id: scoreMatrixId }).eq('id', leadId);
+                }
+              }
+            }
+          }
+          // AC6: existingPeople count was already incremented above — lead creation does not
+          // affect new_people / existing_people counters.
+
           continue;
         }
 
