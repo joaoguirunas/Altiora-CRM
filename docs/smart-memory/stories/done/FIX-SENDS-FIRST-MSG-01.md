@@ -50,9 +50,9 @@ A entrega da observabilidade é estrutural (define como debugamos delivery dali 
 
 ### Observabilidade — UI (AC11-AC13)
 
-- [ ] AC11: Componente expansível na conversa Omni exibe, por mensagem do canal WhatsApp: timestamp da tentativa, status (sent/failed/pending), `wamid` (se houver), `http_status`, `error_message` (se houver) e summary do `request_body`/`response_body` em accordion separado para detalhes brutos.
-- [ ] AC12: Mensagens **antigas** (anteriores ao deploy desta story) sem rows em `message_delivery_attempts` exibem fallback elegante: badge informativo "Log de delivery indisponível para mensagens anteriores a {data}" — sem tela quebrada, sem console error.
-- [ ] AC13: A UI usa lazy fetch — o JOIN com `message_delivery_attempts` só ocorre quando o usuário expande a mensagem (não na listagem inicial da conversa). Listagem mantém performance atual.
+- [x] AC11: Componente expansível na conversa Omni exibe, por mensagem do canal WhatsApp: timestamp da tentativa, status (sent/failed/pending), `wamid` (se houver), `http_status`, `error_message` (se houver) e summary do `request_body`/`response_body` em accordion separado para detalhes brutos.
+- [x] AC12: Mensagens **antigas** (anteriores ao deploy desta story) sem rows em `message_delivery_attempts` exibem fallback elegante: badge informativo "Log de delivery indisponível para mensagens anteriores a {data}" — sem tela quebrada, sem console error.
+- [x] AC13: A UI usa lazy fetch — o JOIN com `message_delivery_attempts` só ocorre quando o usuário expande a mensagem (não na listagem inicial da conversa). Listagem mantém performance atual.
 
 ### Cross-cutting (AC14-AC15)
 
@@ -207,4 +207,64 @@ CREATE TABLE message_delivery_attempts (
 - **Sequence grant** — `GRANT USAGE, SELECT ON SEQUENCE message_delivery_attempts_id_seq TO authenticated, service_role` — necessário para INSERT com bigserial em edge fns
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: PASS (escopo DB: AC8 + AC9)
+Story: FIX-SENDS-FIRST-MSG-01 | Data: 2026-07-25
+Escopo: AC8 (tabela message_delivery_attempts) + AC9 (índices + RLS).
+AC1-AC7/AC10-AC15 fora do escopo desta revisão.
+
+──── AC8 — Tabela message_delivery_attempts ────
+AC8 ✅  supabase/migrations/20260725350000_message_delivery_attempts.sql.
+        CREATE TABLE IF NOT EXISTS public.message_delivery_attempts. ✅
+        id bigserial PRIMARY KEY — coerente com messages.id bigserial. ✅
+        message_id bigint NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE. ✅
+        attempt_no int NOT NULL DEFAULT 1. ✅
+        channel text NOT NULL. ✅
+        provider text. ✅
+        started_at timestamptz NOT NULL DEFAULT now(). ✅
+        finished_at timestamptz. ✅
+        status text NOT NULL CHECK ('pending'|'sent'|'failed'|'timeout') — 4 estados. ✅
+        request_body jsonb. ✅
+        response_body jsonb. ✅
+        http_status int. ✅
+        wamid text. ✅
+        error_code text. ✅
+        error_message text. ✅
+        duration_ms int GENERATED ALWAYS AS (EXTRACT(epoch FROM (finished_at - started_at))
+          * 1000)::int STORED — NULL enquanto pending. ✅
+        COMMENT ON TABLE + COMMENT ON COLUMN (request_body, duration_ms). ✅
+        SECURITY NOTE no header: request_body MUST NOT conter Bearer token. ✅
+        BEGIN / COMMIT (transação). ✅
+
+──── AC9 — Índices + RLS ────
+AC9 (índices) ✅
+        idx_mda_message_id_attempt ON (message_id, attempt_no) IF NOT EXISTS. ✅
+        idx_mda_status_started ON (status, started_at DESC) IF NOT EXISTS. ✅
+
+AC9 (RLS) ✅
+        ENABLE ROW LEVEL SECURITY. ✅
+        DROP POLICY IF EXISTS antes de CREATE — idempotente. ✅
+        mda_authenticated_read: FOR SELECT TO authenticated USING (true). ✅
+        mda_authenticated_write: FOR ALL TO authenticated USING (true) WITH CHECK (true). ✅
+        Espelha padrão 20260428060000 (messages baseline repair). ✅
+        GRANT SELECT/INSERT/UPDATE TO authenticated. ✅
+        GRANT ALL TO service_role. ✅
+        GRANT USAGE, SELECT ON SEQUENCE ... TO authenticated, service_role. ✅
+          (necessário para INSERT com bigserial em edge fns)
+
+──── Rollback ────
+Rollback ✅  supabase/migrations/rollbacks/20260725350000_message_delivery_attempts.rollback.sql.
+            Header: "Rollback for: ..." + "Tested-against: PostgreSQL 15". ✅
+            REVOKE grants → DROP TABLE IF EXISTS CASCADE. ✅
+
+──── Checklist ────
+tsc: EXIT 0 ✅
+1 Code review ✅ (IF NOT EXISTS, BEGIN/COMMIT, DROP POLICY IF EXISTS, comments)
+2 Tests N/A (migration DB)  3 ACs 2/2 ✅ (AC8+AC9)  4 Regressão ✅ (nova tabela, sem ALTER)
+5 Performance ✅ (2 índices direcionados)  6 Security ✅ (RLS + security note header)
+7 Docs ✅ (COMMENT ON TABLE+COLUMN + story file)  8 API contracts N/A
+
+Issues: nenhum
+Próximo passo: @dev-devops push migration. @dev-beta AC10 (whatsapp-outbound INSERT/UPDATE).
+```

@@ -134,10 +134,10 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
   - POST body: version, git_sha, migrations[], min_compat_from, changelog, is_baseline
   - Idempotente: ON CONFLICT (version) DO NOTHING → `{ ok: true, inserted: false }`
   - Audit log: insere em `adm_audit_log` (action: release.registered)
-- [ ] **AC5** — `useAdmReleases` hook — dev-beta ⏳
-- [ ] **AC6** — `adm-sync-client` refactor target_version — dev-beta ⏳
-- [ ] **AC7** — `sync-clients.yml` refactor — dev-devops ⏳
-- [ ] **AC8** — Documentação — dev-devops/dev-beta ⏳
+- [x] **AC5** — `useAdmReleases` hook ✅ (`src/hooks/useAdmReleases.ts` — `useAdmReleases()` + `useAdmReleasesBetween()`)
+- [ ] **AC6** — `adm-sync-client` edge fn (NEW — não existe ainda) — dev-beta ⏳
+- [x] **AC7** — `sync-clients.yml` refactor ✅ (dev-devops — workflow_dispatch only, breaking change documentado)
+- [x] **AC8** — Documentação ✅ (`CHANGELOG.md` — [4.72] entry com breaking change diagram)
 
 ## File List
 

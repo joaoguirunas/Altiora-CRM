@@ -150,3 +150,58 @@ AC7 ✅  Rollback: 20260725290000_obs_dispatch_health.rollback.sql existe. ✅
 
 Push LIBERADO. CONCERN-1 prioridade MEDIUM — confirmar user_type em prod antes do deploy.
 ```
+
+```
+VEREDICTO (v2): PASS — 2026-07-25 (AC4+AC5 — componente UI + integração)
+Story: OBS-DISPATCH-HEALTH-01 | Data: 2026-07-25
+Escopo: AC4 (DispatchHealthCard + hook useDispatchHealth) + AC5 (Disparos.tsx + DisparoDetalhes.tsx).
+tsc: EXIT 0 (0 erros de tipo)
+AC6 smoke E2E ainda pendente (requer apply em prod).
+
+──── AC4 — DispatchHealthCard ────
+AC4 ✅  src/components/disparos/DispatchHealthCard.tsx existe. ✅
+        3 LEDs: cronLed + chanLed + queueLed (derivados de useDispatchHealth). ✅
+        Collapsible: useState(expanded) + ChevronDown/ChevronUp + aria-expanded (L159). ✅
+        Consome v_dispatch_health: useDispatchHealthView → supabase.from('v_dispatch_health') (hook L54). ✅
+        Consome get_send_health(uuid): useSendHealth → supabase.rpc('get_send_health', {send_id}) (hook L80). ✅
+        LEDs derivam status corretamente:
+          deriveCronLed: pg_cron_alive | cron_active + runs_5min → ok/warn (failures)/error/unknown. ✅
+          deriveChannelLed: has_token + active + meta_template_name + template_status → ok/warn/error. ✅
+          deriveQueueLed: stuck + expired_24h + errors30 + totalErrors + pending → ok/warn/error. ✅
+        Overall status: STATUS_RANK reduce (error>warn>ok>unknown). ✅
+        Global mode: chanLed oculto ({!isGlobal && <Led {...chanLed} />}). ✅
+        Graceful degradation: !viewRows.length && !sendHealth → card mínimo "Saúde indisponível". ✅
+        Permission error: hook trata 42501 + PGRST301 → [] / null (sem throw). ✅
+        RefreshCw button com stopPropagation (não abre collapse ao clicar). ✅
+        refetchInterval: 30_000 em ambos os hooks. ✅
+        healthEnabled: só polling quando send em running/paused (L108). ✅
+        useSendHealth enabled: !!sendId && enabled — sem chamada RPC no modo global. ✅
+        @ts-expect-error justificado (migration não regenerada) — não é supressão cega. ✅
+
+──── AC5 — Integração ────
+AC5 ✅  Disparos.tsx L224: {kpis.running > 0 && <DispatchHealthCard />}
+        Global mode sem sendId. Aparece somente quando há disparo em execução. ✅
+AC5 ✅  DisparoDetalhes.tsx L122: <DispatchHealthCard sendId={send.id} sendStatus={send.status} />
+        Per-send mode com sendId. sendStatus condiciona o polling (running/paused only). ✅
+
+──── Lazy load ────
+Lazy ✅  View: mounted na renderização mas com staleTime:30s + refetchInterval:30s (sem over-fetching). ✅
+         RPC: enabled:!!sendId&&enabled — sem chamada no modo global ou send inativo. ✅
+         Canal LED oculto no modo global (sem carga desnecessária de dados por disparo). ✅
+
+──── Checklist ────
+tsc: EXIT 0 ✅
+1 Code review ✅  2 Tests N/A  3 ACs 2/2 ✅ (AC4+AC5)  4 Regressão ✅ (aditivo — guard kpis.running>0)
+5 Performance ✅ (staleTime:30s, enabled condicional, canal LED lazy)
+6 Security ✅ (permission error → graceful, sem credenciais no componente)
+7 Docs ✅ (@ts-expect-error documentado, story file atualizado)
+8 API contracts ✅ (consome view AC1+RPC AC3 já verificados em v1)
+
+Issues: nenhum novo (CONCERN-1/2/3 do DB já documentados em v1)
+AC6 smoke E2E: PENDING — requer apply migration 20260725290000 em prod + campanha running real.
+
+Veredicto final da story (todos os ACs entregues exceto AC6):
+  AC1 ✅ AC2 ✅ AC3 ✅ AC4 ✅ AC5 ✅ AC7 ✅ | AC6 ⏳ (smoke pós-deploy)
+  CONCERN-1 MEDIUM (user_type 'manager') e CONCERN-3 MEDIUM (REVOKE helper) aguardam fix de Bythak.
+  Push LIBERADO com as observações já documentadas.
+```
