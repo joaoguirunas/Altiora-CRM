@@ -85,7 +85,15 @@ export const UsuariosConfig = () => {
   };
 
   const resolveUserType = (usuario: UserRow): UserType => {
-    if (usuario.user_type === 'admin' || usuario.user_type === 'manager' || usuario.user_type === 'user' || usuario.user_type === 'comercial') {
+    if (
+      usuario.user_type === 'admin' ||
+      usuario.user_type === 'manager' ||
+      usuario.user_type === 'user' ||
+      usuario.user_type === 'comercial' ||
+      // Tipos Altiora (migration 20260725110000)
+      usuario.user_type === 'closer' ||
+      usuario.user_type === 'gestor_comercial'
+    ) {
       return usuario.user_type;
     }
     if (usuario.is_super_admin || usuario.super_adm) return 'admin';
@@ -112,16 +120,19 @@ export const UsuariosConfig = () => {
   };
 
   const handleSaveUsuario = async (usuario: Usuario) => {
+    // Tipos Altiora: 'closer' ≡ 'comercial', 'gestor_comercial' ≡ 'manager'
+    const isCloserType = usuario.user_type === 'comercial' || usuario.user_type === 'closer';
+    const isManagerType = usuario.user_type === 'manager' || usuario.user_type === 'gestor_comercial' || usuario.user_type === 'admin';
     await updateUser.mutateAsync({
       id: usuario.id,
       nome: usuario.nome,
       email: usuario.email,
       whatsapp: usuario.whatsapp,
       user_type: usuario.user_type,
-      gestor: usuario.user_type === 'manager' || usuario.user_type === 'admin',
+      gestor: isManagerType,
       super_adm: usuario.user_type === 'admin' || usuario.super_adm,
       ativo: usuario.ativo,
-      agente: (usuario.user_type === 'user' || usuario.user_type === 'comercial') ? (usuario.agente ?? null) : null,
+      agente: isCloserType ? (usuario.agente ?? null) : null,
     });
   };
 
@@ -223,18 +234,20 @@ export const UsuariosConfig = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-normal text-foreground truncate">{nome}</span>
                       {/* Role badge */}
+                      {/* ALTIORA-23 AC4: badges mapeados para perfis Altiora */}
                       {userType === 'admin' ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-200/30 px-1.5 py-0.5 rounded-full leading-none">
                           <ShieldCheck className="w-2.5 h-2.5" strokeWidth={1.5} />
                           Admin
                         </span>
-                      ) : userType === 'manager' ? (
+                      ) : (userType === 'manager' || userType === 'gestor_comercial') ? (
+                        /* 'manager' legado ou 'gestor_comercial' Altiora */
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-500/8 border border-blue-200/30 px-1.5 py-0.5 rounded-full leading-none">
                           <Shield className="w-2.5 h-2.5" strokeWidth={1.5} />
-                          Manager
+                          {userType === 'gestor_comercial' ? 'Gestor Comercial' : 'Manager'}
                         </span>
-                      ) : userType === 'comercial' ? (
-                        /* ALTIORA-23 AC4: 'comercial' = Closer Altiora */
+                      ) : (userType === 'comercial' || userType === 'closer') ? (
+                        /* ALTIORA-23 AC4: 'comercial' legado ou 'closer' Altiora = Closer */
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/8 border border-amber-200/30 px-1.5 py-0.5 rounded-full leading-none">
                           <UserCircle className="w-2.5 h-2.5" strokeWidth={1.5} />
                           Closer

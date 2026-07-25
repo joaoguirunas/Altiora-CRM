@@ -141,9 +141,10 @@ const NegociosToolbar = ({
 
   const { isManager, canChangeFilters, currentUserName, currentUserId, userTimes } = useUserPermissions();
   // ALTIORA-10 AC5: lista de Closers para o seletor "Ver carteira de:" (Gestor/Admin)
+  // Suporta ambos: 'comercial' (legado) e 'closer' (Altiora — migration 20260725110000)
   const { data: allUsers = [] } = useUsers();
   const altioraClosers = useMemo(
-    () => allUsers.filter(u => u.user_type === 'comercial'),
+    () => allUsers.filter(u => u.user_type === 'comercial' || u.user_type === 'closer'),
     [allUsers]
   );
   const { data: teamMembers = [] } = useTeamMembers('single-tenant', teamFilter);
