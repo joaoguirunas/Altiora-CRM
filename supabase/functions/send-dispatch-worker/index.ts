@@ -540,7 +540,9 @@ async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   ctx: RetryContext,
   maxRetries: number = 3,
-  delays: number[] = [5000, 15000, 45000],
+  // FIX-SENDS-DISPATCH-02: reduzido de [5000,15000,45000] (max 65s/contato) para
+  // [1000,3000,9000] (max 13s/contato). Com batch_size=5: 5×13s=65s < 150s timeout.
+  delays: number[] = [1000, 3000, 9000],
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error');
 

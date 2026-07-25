@@ -19,10 +19,10 @@ Reduzir os delays de retry inline no `send-dispatch-worker` para que um batch co
 
 ## Acceptance Criteria
 
-- [ ] AC1: O tempo máximo de espera acumulada por contato falhante (3 retries) não ultrapassa 15s.
-- [ ] AC2: Com `batch_size=5` e todos os 5 contatos falhando 3x cada, o worker completa (com todos marcados como `failed`) dentro do timeout da edge function.
-- [ ] AC3: A lógica de `isRetryableError` (4xx não retentável, 429 com Retry-After) permanece intacta.
-- [ ] AC4: Contatos marcados como `failed` pelo retry exausto permanecem com `retry_count` correto no banco.
+- [x] AC1: O tempo máximo de espera acumulada por contato falhante (3 retries) não ultrapassa 15s.
+- [x] AC2: Com `batch_size=5` e todos os 5 contatos falhando 3x cada, o worker completa (com todos marcados como `failed`) dentro do timeout da edge function.
+- [x] AC3: A lógica de `isRetryableError` (4xx não retentável, 429 com Retry-After) permanece intacta.
+- [x] AC4: Contatos marcados como `failed` pelo retry exausto permanecem com `retry_count` correto no banco.
 
 ## Escopo
 
@@ -56,13 +56,13 @@ Com `batch_size=1` (default), o problema não ocorre — 65s por contato único 
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | — |
+| Agente     | Rex (dev-dev-beta) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/fix-sends-ui-rbac-cleanup |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `supabase/functions/send-dispatch-worker/index.ts` — delays `[5000,15000,45000]` → `[1000,3000,9000]` (max 13s/contato vs 65s anterior)
 
 ## QA Results
 <!-- QA preenche ao revisar -->
