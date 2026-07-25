@@ -46,7 +46,7 @@ A entrega da observabilidade é estrutural (define como debugamos delivery dali 
 
 - [x] AC8: Migration cria tabela `message_delivery_attempts` conforme `[[../../decisions/ADR-SENDS-01-message-delivery-attempts]]` (FK em `messages.id`, colunas `attempt_no`, `started_at`, `finished_at`, `status`, `request_body jsonb`, `response_body jsonb`, `http_status`, `wamid`, `error_code`, `error_message`, `duration_ms` GENERATED). ✅ 2026-07-25
 - [x] AC9: Migration cria índices `(message_id, attempt_no)` e `(status, started_at DESC)`. RLS espelha a de `messages` (authenticated_read + authenticated_write USING(true), mirrors 20260428060000 pattern). ✅ 2026-07-25
-- [ ] AC10: `whatsapp-outbound` é alterado para: (a) INSERT em `message_delivery_attempts` antes da chamada à Meta com `status='pending'` + `request_body` sanitizado (sem token); (b) UPDATE da mesma row após resposta da Meta com `status='sent'|'failed'`, `response_body`, `http_status`, `wamid` e `error_*`. Tentativas adicionais (retry) criam novas rows com `attempt_no` incrementado.
+- [x] AC10: `whatsapp-outbound` é alterado para: (a) INSERT em `message_delivery_attempts` antes da chamada à Meta com `status='pending'` + `request_body` sanitizado (sem token); (b) UPDATE da mesma row após resposta da Meta com `status='sent'|'failed'`, `response_body`, `http_status`, `wamid` e `error_*`. Tentativas adicionais (retry) criam novas rows com `attempt_no` incrementado. ✅ 2026-07-25
 
 ### Observabilidade — UI (AC11-AC13)
 
@@ -179,11 +179,11 @@ CREATE TABLE message_delivery_attempts (
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | dev-data-engineer (Bythak) — AC8 + AC9 |
+| Agente     | dev-data-engineer (Bythak) — AC8 + AC9; dev-dev-beta (Rex) — AC10 |
 | Iniciado   | 2026-07-25 |
-| Concluído (parte DB) | 2026-07-25 |
+| Concluído (AC8+AC9+AC10) | 2026-07-25 |
 | Branch     | feature/04-terminologia-referral |
-| ACs pendentes | AC1-AC7 (bug fix — dev-beta aguarda RCA da Lyra), AC10 (whatsapp-outbound INSERT/UPDATE — dev-beta), AC11-AC13 (UI — dev-alpha/gamma), AC14-AC15 (smoke tests) |
+| ACs pendentes | AC1-AC7 (bug fix — dev-beta aguarda RCA da Lyra), AC11-AC13 (UI — dev-alpha/gamma), AC14-AC15 (smoke tests) |
 
 | Agente     | Novik (dev-dev-alpha) — AC11 + AC12 + AC13 |
 | Iniciado   | 2026-07-25 |
@@ -201,8 +201,8 @@ CREATE TABLE message_delivery_attempts (
 - `src/components/conversas/MessageDeliveryLog.tsx` — criado: componente expansível com AC12 cutoff + AttemptRow + PayloadAccordion
 - `src/pages/Conversas.tsx` — modificado: import + integração MessageDeliveryLog no bubble de mensagem outgoing WhatsApp
 
-### Pendente (outros agentes)
-- `supabase/functions/whatsapp-outbound/index.ts` — AC10 (dev-beta): INSERT antes da chamada Meta + UPDATE após + sanitização request_body
+### Concluído por Rex (AC10)
+- `supabase/functions/whatsapp-outbound/index.ts` — AC10: `openDeliveryAttempt()` + `closeDeliveryAttempt()` + MetaResult extended with `httpStatus`/`responseBody`; backward-compat with `recordDeliveryAttempt()` (messages.metadata.delivery_log)
 - `supabase/functions/omni-delivery-engine/index.ts` — AC1-AC3 (dev-beta + RCA Lyra): correção do filtro que exclui source_type='campaign'
 
 ## Notas técnicas (DB)
