@@ -5193,40 +5193,36 @@ export type Database = {
         Relationships: []
       }
       score_matrix: {
+        // Updated 2026-07-25 (FIX-SCORE-01): reflects schema after 20260311120000_score_dynamic_categories
+        // and 20260312120000_db_cleanup_audit (dropped legacy framing_id/investment_id/objective_id arrays)
         Row: {
+          category_selections: Json
           created_at: string | null
           detail_score: string | null
-          framing_id: string[] | null
           id: string
-          investment_id: string[] | null
           name: string | null
-          objective_id: string[] | null
           pre_description_score: string | null
           profile_score: string | null
           score_number: number
           updated_at: string | null
         }
         Insert: {
+          category_selections?: Json
           created_at?: string | null
           detail_score?: string | null
-          framing_id?: string[] | null
           id?: string
-          investment_id?: string[] | null
           name?: string | null
-          objective_id?: string[] | null
           pre_description_score?: string | null
           profile_score?: string | null
           score_number: number
           updated_at?: string | null
         }
         Update: {
+          category_selections?: Json
           created_at?: string | null
           detail_score?: string | null
-          framing_id?: string[] | null
           id?: string
-          investment_id?: string[] | null
           name?: string | null
-          objective_id?: string[] | null
           pre_description_score?: string | null
           profile_score?: string | null
           score_number?: number
@@ -5261,6 +5257,29 @@ export type Database = {
         }
         Relationships: []
       }
+      // ── Manually added 2026-07-25 (FIX-SCORE-01) ─────────────────────────────
+      score_settings: {
+        Row: {
+          created_at: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      // ── End manually added ────────────────────────────────────────────────────
       secret_access_log: {
         Row: {
           accessed_at: string
