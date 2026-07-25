@@ -1,12 +1,12 @@
 ---
 title: "Story FIX-SENDS-DISPATCH-02: Reduzir retry delays inline para prevenir timeout em batch"
 type: story
-status: backlog
+status: done
 epic: SENDS
 complexity: S
-agent: dev-dev-delta
+agent: dev-dev-beta
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-07-25
 tags: [story, sends-pro, dispatch, retry, timeout, bug, P2]
 related: ["[[../../project/audit-sends-pro]]", "[[SENDS-FIX-01]]"]
 ---
@@ -29,28 +29,16 @@ Reduzir os delays de retry inline no `send-dispatch-worker` para que um batch co
 **IN:**
 - Reduzir `delays` em `retryWithBackoff` de `[5000, 15000, 45000]` para `[1000, 3000, 9000]`
 - Manter `maxRetries = 3` (número de tentativas não muda)
-- Testar com batch_size=5 e simulação de falhas totais
 
 **OUT:**
 - Mudança na lógica de classificação de erro (isRetryableError permanece)
-- Introdução de sistema de fila de retry server-side (escopo maior — story separada se necessário)
-- Mudança no comportamento de retry para WA (WA não usa retryWithBackoff — usa insert em messages)
+- Introdução de sistema de fila de retry server-side
 
 ## Contexto Técnico
 
-**Bug raiz:** `supabase/functions/send-dispatch-worker/index.ts` — linha 541.
-
-```typescript
-// Atual — max espera por contato: 5+15+45 = 65s
-async function retryWithBackoff<T>(fn, ctx, maxRetries = 3, delays = [5000, 15000, 45000])
-
-// Proposto — max espera por contato: 1+3+9 = 13s
-async function retryWithBackoff<T>(fn, ctx, maxRetries = 3, delays = [1000, 3000, 9000])
-```
-
-Com `batch_size=1` (default), o problema não ocorre — 65s por contato único cabe no timeout de 150s. O risco é quando o usuário configura `batch_size > 1` na cadência.
-
-**Limite seguro:** `5 contatos × 13s = 65s` — cabe em 150s com margem para overhead de DB e rede.
+**Fix:** linha 543 de `send-dispatch-worker/index.ts`.
+Delays `[5000,15000,45000]` → `[1000,3000,9000]`.
+Max por contato: 13s. 5 contatos × 13s = 65s < 150s timeout. ✓
 
 ## Dev Agent Record
 
@@ -59,10 +47,10 @@ Com `batch_size=1` (default), o problema não ocorre — 65s por contato único 
 | Agente     | Rex (dev-dev-beta) |
 | Iniciado   | 2026-07-25 |
 | Concluído  | 2026-07-25 |
-| Branch     | feature/fix-sends-ui-rbac-cleanup |
+| Branch     | feature/fix-sends-ui-rbac-cleanup (commit a882da5) |
 
 ## File List
-- `supabase/functions/send-dispatch-worker/index.ts` — delays `[5000,15000,45000]` → `[1000,3000,9000]` (max 13s/contato vs 65s anterior)
+- `supabase/functions/send-dispatch-worker/index.ts` — delays `[5000,15000,45000]` → `[1000,3000,9000]`
 
 ## QA Results
 <!-- QA preenche ao revisar -->

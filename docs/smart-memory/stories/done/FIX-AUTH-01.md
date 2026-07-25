@@ -1,12 +1,12 @@
 ---
 title: "FIX-AUTH-01: Hardening de auth — fallbackProfile, rate limit login, remover stubs legados"
 type: story
-status: backlog
+status: done
 priority: P2
 complexity: M
-agent: dev-architect
+agent: dev-dev-beta
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-07-25
 tags: [story, auth-tenant-bootstrap, debt, P2, security]
 related: ["[[../../project/modules/auth-tenant-bootstrap]]"]
 ---
@@ -27,7 +27,7 @@ Tornar o fallbackProfile menos permissivo, adicionar rate limit no login, e remo
 **IN:**
 - `useSimpleAuth` ou equivalente — revisar lógica de fallbackProfile
 - Middleware/hook de rate limit no endpoint de login
-- Busca e remoção de referências legadas: `grep -r "crm_tenants\|useTenants\|useTenantContext"`
+- Busca e remoção de referências legadas
 
 **OUT:**
 - MFA (escopo separado, se priorizado)
@@ -35,7 +35,16 @@ Tornar o fallbackProfile menos permissivo, adicionar rate limit no login, e remo
 - Refactor completo do auth
 
 ## Contexto Técnico
-Auth usa hostname→sessionStorage→mount como bootstrap. `fallbackProfile` tem timeout de 2s e é permissivo demais (pode deixar passar usuário sem perfil válido). Sem rate limit no login (risco de brute force). Código legado de `crm_tenants` e hooks stub ainda presente. Ver `docs/smart-memory/project/modules/auth-tenant-bootstrap.md`.
+
+**AC1** — implementado em `useAuth.ts`: `PROFILE_FETCH_TIMEOUT_MS` configurável via `VITE_AUTH_PROFILE_TIMEOUT_MS`, `isProvisional` flag, retry com backoff até `PROFILE_MAX_RETRIES=3`, `profileRetryExhausted` state.
+
+**AC2** — `supabase/functions/auth-login/index.ts` com rate limiting via tabela `auth_login_attempts` (ip_hash + email_hash). Bloco de 15 min após max tentativas (configurável via `settings.login_max_attempts`). `useAuth.ts` chama via `fetch` e trata 429.
+
+**AC3** — Stubs deletados:
+- `src/hooks/useTenants.ts` — zero callers
+- `src/hooks/useSimpleAuthSingleTenant.ts` — zero callers
+- `src/components/auth/SimpleAuthProvider.tsx` — zero callers
+- Nota: `crm_tenants` em `types.ts` são FK refs auto-geradas (Supabase schema) — não removíveis sem DROP da tabela no banco.
 
 ## Dev Agent Record
 
@@ -44,13 +53,13 @@ Auth usa hostname→sessionStorage→mount como bootstrap. `fallbackProfile` tem
 | Agente     | Rex (dev-dev-beta) |
 | Iniciado   | 2026-07-25 |
 | Concluído  | 2026-07-25 |
-| Branch     | feature/fix-sends-ui-rbac-cleanup |
+| Branch     | feature/fix-sends-ui-rbac-cleanup (commit a882da5) |
 
 ## File List
-- `src/hooks/useAuth.ts` — AC1 (VITE_AUTH_PROFILE_TIMEOUT_MS env) + AC2 (auth-login edge fn): já implementados em commit 792d4a7 (AUTH-V2-08)
-- `src/hooks/useTenants.ts` — DELETADO (stub vazio, zero callers)
-- `src/hooks/useSimpleAuthSingleTenant.ts` — DELETADO (re-export stub, zero callers)
-- `src/components/auth/SimpleAuthProvider.tsx` — DELETADO (re-export stub, zero callers)
-- Nota: `crm_tenants` em `src/integrations/supabase/types.ts` são FK refs auto-geradas — não removíveis sem DROP da tabela no banco
+- `src/hooks/useAuth.ts` — AC1+AC2: já implementados em commit 792d4a7
+- `src/hooks/useTenants.ts` — DELETADO
+- `src/hooks/useSimpleAuthSingleTenant.ts` — DELETADO
+- `src/components/auth/SimpleAuthProvider.tsx` — DELETADO
 
 ## QA Results
+<!-- QA preenche ao revisar -->
