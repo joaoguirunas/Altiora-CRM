@@ -125,6 +125,88 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 ## QA Results
 <!-- QA preenche ao revisar -->
 
+---
+
+```
+VEREDICTO: CONCERNS (escopo AC6 — adm-sync-client edge fn)
+Story: REL-01 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: N/A (Deno edge fn)
+Aprovado com 1 observação LOW. Push LIBERADO.
+
+──── Auth gate ────
+Auth ✅  L84-88: Bearer token comparado com SUPABASE_SERVICE_ROLE_KEY. ✅
+         !auth.startsWith('Bearer ') || auth.slice(7) !== SUPABASE_KEY → 401. ✅
+         POST-only enforced (L90: 405 para outros métodos). ✅
+         Sem JWT Supabase — serviço interno service_role apenas. ✅
+
+──── target_version opcional → latest quando ausente ────
+target_version ✅  L135-156: if(target_version) → SELECT adm_releases WHERE version=target_version. ✅
+                  else → SELECT adm_releases ORDER BY created_at DESC LIMIT 1 (latest). ✅
+                  Ambos: return 404 se não encontrado. ✅
+
+──── Idempotência: migrations já aplicadas são puladas ────
+Idempotência ✅  L214-232: getAppliedMigrations() consulta supabase_migrations.schema_migrations
+                  via Management API (SELECT version) → Set<string>. ✅
+                  appliedVersions.has(version) → skipped++ + continue. ✅
+                  Loop: skipped isolado de applied e errors. ✅
+                  Se getAppliedMigrations falha → empty Set (non-fatal, log warn) →
+                    re-tenta todas migrations — depende de SQL idempotência (IF NOT EXISTS).
+                    Mitigado por REL-04 lint MIG004 (IF NOT EXISTS obrigatório). ✅
+
+──── UPDATE current_version após sucesso ────
+UPDATE version ✅  L273-276: condição correta: applied>0 OU (failed=0 AND skipped=total).
+                   Em ambos os casos, cliente está na versão release. ✅
+                   Se todos failed e nenhum applied → NÃO atualiza current_version. ✅
+                   updateClientVersion(db, client_id, release.version). ✅
+
+──── INSERT adm_client_versions ────
+audit_versions ✅  L432-445: recordClientVersion INSERT com:
+                   from_version (clientRecord.current_version), to_version, applied_at,
+                   status ('success'|'partial'|'failed'), error_summary. ✅
+                   SEMPRE inserido — mesmo em failed (audit trail completo). ✅
+                   applied_by=null (service_role, sem user auth). ✅
+
+──── Response compatible com sync-clients.js ────
+response ✅  L285-292: { ok, applied, failed, skipped, version, errors? }. ✅
+             sync-clients.js L125-133 lê: body.applied, body.failed, body.errors. ✅
+             L133: failed>0 && applied=0 → throw Error "All N migration(s) failed". ✅
+             L134: failed>0 → warn "partial success". ✅
+             Formato exato esperado pelo chamador. ✅
+
+──── adm_audit_log ────
+audit_log ✅  insertAuditLog: action='client.sync', target_id=client_id,
+              details: {version, applied, failed, skipped, triggered_by, reason}. ✅
+              triggered_by passado pelo caller (sync-clients.js: "manual:$actor", GH Action: "github_actions"). ✅
+
+──── Extras verificados ────
+client filter ✅   .eq('status','active') — somente clients ativos recebem sync. ✅
+migration filter ✅  supabase/migrations/ incluídas; migrations_adm/ excluídas (L194-198). ✅
+no-tenant path ✅   clientMigrations.length=0 → versão atualizada, return ok:true (ADM-only release). ✅
+github fetch ✅    rawgithubusercontent com git_sha da release (pinned, não branch HEAD). ✅
+projectRef ✅      extraído do supabase_url URL.hostname.split('.')[0] — robusto. ✅
+credentials ✅     adm_client_decrypted_secrets RPC; 422 se management_token ausente. ✅
+
+[CONCERN-1 LOW] applyMigrationSql L402-406: INSERT em schema_migrations usa string
+  interpolation para migName e safeVersion no trackSql. safeVersion é garantidamente
+  14 dígitos numéricos (regex L226) — sem risco. migName (filename sem .sql, aspas escaped)
+  vem de adm_releases.migrations (fonte controlada pelo ADM — não user-supplied). Baixo
+  risco prático, mas string formatting para SQL sempre preferível via parâmetros.
+  Management API /database/query não suporta parâmetros bind → constraint de plataforma.
+  Não bloqueia.
+
+──── Checklist ────
+1 Code review ✅ (auth gate, target_version optional, idempotency, audit trail)
+2 Tests N/A (Deno edge fn)  3 ACs ✅ (todos os pontos do AC6 verificados)
+4 Regressão ✅ (nova fn, não altera existentes)
+5 Performance ✅ (migrations serializadas — sem risco de parallel DDL conflicts)
+6 Security ✅ (service_role only; credentials via RPC; management_token via env)
+7 Docs ✅ (JSDoc extenso + inline comments)
+8 API contracts ✅ (response compat com sync-clients.js confirmado)
+
+Issues: CONCERN-1 LOW (SQL string interpolation — constraint de plataforma, risco baixo)
+Próximo passo: @dev-devops push. AC8 (CHANGELOG/README) pendente para closure total de REL-01.
+```
+
 ## Validação 5-pontos (zael)
 
 | # | Critério | Status |

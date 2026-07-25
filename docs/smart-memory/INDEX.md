@@ -140,6 +140,7 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 - [[agents/data-engineer/altiora-schema]] — **schema Altiora V1** (2026-07-25): pipeline 13 etapas, 3 novas tabelas (r1_data/finvity/contratacao), campos referral em leads + campos R1/R2/R3 em meetings, 7 migrations aplicadas
 - [[agents/data-engineer/migration-status]] — último timestamp aplicado, próximo disponível, estado das migrations ativas
 - [[agents/data-engineer/migrations-log]] — log cronológico de migrations aplicadas pelo Bythak (com causa raiz, estratégia, rollback)
+- [[agents/data-engineer/rca-sends-first-msg]] — RCA DB-side FIX-SENDS-FIRST-MSG-01 (2026-07-25): H1/H3/H4/H5 descartadas; H2 (key mismatch) confirmada pelo Rex; timing/claim_pending_messages verificados
 - [[agents/data-engineer/qualificacao-consultoria-apply-log]] — 2026-06-16: criou agente "Qualificação Consultoria" (30dad93b…) + desativou "Diagnóstico" (d0c29089…); DML via db query --linked
 - [[agents/data-engineer/audit-followups-schema]] — auditoria followup/stage/pipeline: tabelas mortas, colunas N8N obsoletas, edge functions, 4 achados críticos
 - [[agents/data-engineer/schema-dual-analysis]] — análise completa crm_* vs moderno: mapeamento de pares, FKs, edge functions, riscos de DROP
@@ -189,6 +190,17 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 ## Clientes
 - [[clientes/README]] — índice de clientes
 - [[clientes/joao-guirunas]] — João Guirunas: configuração single-tenant ativa
+
+## FUP Programado (FUP-AUTO-01 — 2026-07-25, Bythak)
+- [[stories/done/FUP-AUTO-01]] — **DB DONE (dev-beta/gamma pendente)**: tabela fup_programados + RPC agendar_fup() + cron */5min; UI/tool/worker para dev-beta/gamma
+
+## Release Pipeline (REL-01/03/04/05 — 2026-07-25, Bythak)
+- [[stories/done/REL-01]] — **DB+edge fn DONE (dev-devops/beta pendente)**: adm_releases + adm_client_versions migrations + adm-releases-register edge fn; AC2/AC5-AC8 dev-devops/beta
+- [[stories/done/REL-03]] — **DONE (AC7 dev-beta pendente)**: adm_client_drift + cron + compute_schema_hash() (Bythak AC1/AC3/AC4); adm-drift-check edge fn + adm_releases.schema_hash (Bythak AC2); DriftBadge/Modal/hooks/stats (Novik+Serak AC5/AC6/AC8/AC9)
+- [[stories/done/REL-04]] — **script+manifest+backfill DONE (dev-devops pendente AC2/AC3)**: lint-migrations.js MIG001-MIG009 + backfill report 1801 erros/21 warnings
+- [[stories/done/REL-05]] — **DONE (dev-beta pendente AC3/AC4/AC5-fn)**: squash-baseline.js + baseline-approve.yml + baseline-restore.yml + is_baseline flag + baseline-squashing.md; AC3/AC4/AC5-fn dev-beta
+- [[ops/migrations-lint-baseline-2026-07-25]] — REL-04 AC6: baseline de débito técnico lint (902 files, 1801 erros históricos)
+
 
 ## Status
 - [[shared-context]] — status board em tempo real

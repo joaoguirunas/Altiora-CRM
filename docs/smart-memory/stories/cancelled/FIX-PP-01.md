@@ -1,13 +1,13 @@
 ---
 title: "FIX-PP-01: Corrigir edge fns prospect-scorer e prospect-commit (schema v1 quebrado)"
 type: story
-status: backlog
+status: cancelled
 priority: P0
 complexity: M
 agent: dev-data-engineer
 created: 2026-04-22
-updated: 2026-04-22
-tags: [story, prospect-pro, bug, P0]
+updated: 2026-07-25
+tags: [story, prospect-pro, bug, P0, cancelled]
 related: ["[[../../project/modules/prospect-pro]]"]
 ---
 
@@ -49,3 +49,9 @@ Schema v1 usava `prospect_people.establishment_id`; schema v2 renomeou para `ten
 ## File List
 
 ## QA Results
+
+## Cancelamento
+
+**Data:** 2026-07-25
+**Motivo:** Prospect Pro foi removido integralmente em 2026-05-05 via migration `20260505080000_remove_prospect_pro.sql`. As edge functions `prospect-scorer` e `prospect-commit` foram deletadas junto com o módulo (DROP TABLE em 8 tabelas + cron jobs + FK clients_people.prospect_campaign_id). Não há schema, callers nem razão de existir.
+**Decisão:** team lead (autonomamente — cancellation por remoção do módulo alvo)

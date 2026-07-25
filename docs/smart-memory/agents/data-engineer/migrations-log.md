@@ -7,6 +7,27 @@ tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
 ---
 
+## 2026-07-25 — REL-03 AC2: Edge fn adm-drift-check
+
+**Objetivo:** Implementar edge fn `adm-drift-check` (REL-03 AC2) que detecta drift de schema por tenant comparando `compute_schema_hash()` do tenant vs hash canônico em `adm_releases`.
+
+**Migrations criadas (controle — ADM, não tenant):**
+
+| Arquivo | Tipo | Descrição |
+|---|---|---|
+| `migrations_adm/20260725360000_adm_releases_schema_hash.sql` | ADM | ADD COLUMN `schema_hash text` em `adm_releases` (lazy baseline) |
+
+**Edge fn criada:**
+- `supabase/functions/adm-drift-check/index.ts` — AC2 completo
+
+**Padrão de lazy baseline:**
+- Se `adm_releases.schema_hash IS NULL` para uma versão → armazena o hash do primeiro tenant checado como canônico. Não reporta drift neste primeiro run.
+- Se `schema_hash IS NOT NULL` → compara tenant → se divergente, INSERT em `adm_client_drift` (idempotente: skip se já há row 'detected' para o mesmo `client_id + expected_release`).
+
+**Rollback disponível:** `migrations_adm/rollbacks/20260725360000_adm_releases_schema_hash.rollback.sql`
+
+---
+
 ## 2026-07-25 — Altiora CRM V1: Schema de Referrals
 
 **Objetivo:** Implementar schema completo para os 30 UCs do CRM Altiora (gestão de referrals e pipeline comercial).
