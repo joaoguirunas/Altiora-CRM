@@ -1,12 +1,12 @@
 ---
 title: "Story FIX-SENDS-FILTER-01: Corrigir filtro person_status ignorado em filter-leads-for-send"
 type: story
-status: backlog
+status: done
 epic: SENDS
 complexity: S
-agent: dev-dev-delta
+agent: dev-dev-beta
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-07-25
 tags: [story, sends-pro, filter, bug, P1]
 related: ["[[../../project/audit-sends-pro]]", "[[SENDS-FIX-01]]"]
 ---
@@ -19,11 +19,11 @@ Corrigir colisão de predicados SQL em `filter-leads-for-send` que faz o filtro 
 
 ## Acceptance Criteria
 
-- [ ] AC1: Quando `person_status = ['inactive']` é passado como filtro, a query retorna apenas pessoas com `status = 'inactive'` (não zero resultados).
-- [ ] AC2: Quando `person_status = ['active', 'inactive']` é passado, retorna pessoas com qualquer dos dois status.
-- [ ] AC3: Quando `person_status` não é passado (omitido), o comportamento padrão mantém-se: apenas `status = 'active'` é incluído.
-- [ ] AC4: Teste adversarial: passar `person_status = ['archived']` retorna apenas arquivados, não zero.
-- [ ] AC5: Nenhum outro filtro existente regride (Q-fields, score, UTM, stage, etc.) — `npm run test` passa.
+- [x] AC1: Quando `person_status = ['inactive']` é passado como filtro, a query retorna apenas pessoas com `status = 'inactive'` (não zero resultados).
+- [x] AC2: Quando `person_status = ['active', 'inactive']` é passado, retorna pessoas com qualquer dos dois status.
+- [x] AC3: Quando `person_status` não é passado (omitido), o comportamento padrão mantém-se: apenas `status = 'active'` é incluído.
+- [x] AC4: Teste adversarial: passar `person_status = ['archived']` retorna apenas arquivados, não zero.
+- [x] AC5: Nenhum outro filtro existente regride (Q-fields, score, UTM, stage, etc.) — `npm run test` passa.
 
 ## Escopo
 
@@ -62,13 +62,13 @@ if (filters.person_status && filters.person_status.length > 0) {
 
 | Campo      | Valor |
 |---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | — |
+| Agente     | Rex (dev-dev-beta) |
+| Iniciado   | 2026-07-25 |
+| Concluído  | 2026-07-25 |
+| Branch     | feature/fix-sends-ui-rbac-cleanup (commit 527d1b5) |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `supabase/functions/filter-leads-for-send/index.ts` — removido `.eq('status','active')` hardcoded; adicionado `else { query = query.eq('status','active') }` na seção person_status
 
 ## QA Results
 <!-- QA preenche ao revisar -->
