@@ -19,6 +19,7 @@ import FiltroContatosVisual from '@/components/disparos/FiltroContatosVisual';
 import LiveCounterSidebar from '@/components/disparos/LiveCounterSidebar';
 import { WhatsappTemplatePreview } from '@/components/config/WhatsappTemplatePreview';
 import { WhatsappTemplateModal } from '@/components/config/WhatsappTemplateModal';
+import { WhatsappTemplateVariablesModal } from '@/components/config/WhatsappTemplateVariablesModal';
 import { useCriarSend } from '@/hooks/useSendMutations';
 import { useWhatsappChannels } from '@/hooks/useWhatsappChannels';
 import { useWhatsappTemplates } from '@/hooks/useWhatsappTemplates';
@@ -91,6 +92,7 @@ export default function CriarDisparo() {
   const [destPipelineId, setDestPipelineId] = React.useState<string | null>(null);
   const [destStageId, setDestStageId] = React.useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = React.useState(false);
+  const [showVariablesModal, setShowVariablesModal] = React.useState(false);
 
   // ── Data hooks ────────────────────────────────────────────────────────────
   const { data: waChannels } = useWhatsappChannels();
@@ -572,20 +574,24 @@ export default function CriarDisparo() {
                       </p>
                     </div>
                   )}
-                  {/* AC2: warn when selected template has unmapped positional variables */}
+                  {/* AC2: warn when selected template has unmapped positional variables + inline config CTA */}
                   {selectedTemplate && unmappedVars.length > 0 && (
                     <div className="flex items-start gap-2 p-2 rounded-[4px] bg-amber-500/10 border border-amber-500/20">
                       <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
-                      <p className="text-xs text-amber-700">
-                        Template tem {unmappedVars.length} variável(is) não mapeada(s):{' '}
-                        <span className="font-mono">{unmappedVars.map(v => `{{${v}}}`).join(', ')}</span>.{' '}
-                        <a
-                          href="/settings/general/templates"
-                          className="underline underline-offset-2"
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-amber-700">
+                          Template tem {unmappedVars.length} variável(is) não mapeada(s):{' '}
+                          <span className="font-mono">{unmappedVars.map(v => `{{${v}}}`).join(', ')}</span>.{' '}
+                          O disparo será bloqueado até que todas estejam mapeadas.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowVariablesModal(true)}
+                          className="mt-1.5 text-xs text-amber-700 underline underline-offset-2 font-medium"
                         >
-                          Configure em Configurações → Templates →
-                        </a>
-                      </p>
+                          Configurar variáveis agora →
+                        </button>
+                      </div>
                     </div>
                   )}
                   {/* AC2: confirmation when all vars are mapped */}
@@ -727,7 +733,7 @@ export default function CriarDisparo() {
         </div>
       </div>
 
-      {/* Template modal */}
+      {/* Template preview modal */}
       {selectedTemplate && (
         <WhatsappTemplateModal
           template={selectedTemplate}
@@ -735,6 +741,13 @@ export default function CriarDisparo() {
           onOpenChange={setShowTemplateModal}
         />
       )}
+
+      {/* AC2: variables mapping modal — lets user configure {{N}} → CRM field inline */}
+      <WhatsappTemplateVariablesModal
+        template={selectedTemplate}
+        open={showVariablesModal}
+        onOpenChange={setShowVariablesModal}
+      />
     </div>
   );
 }
