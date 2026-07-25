@@ -44,10 +44,10 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
   - GRANT EXECUTE TO service_role (apenas — não exposto a authenticated)
 
 - [x] **AC5 — Badge "Drift detectado" em `AdmClientRow`** ✅ (Novik 2026-07-25)
-- [ ] **AC6 — Modal "Drift" com Repair button** ⏳ (Gamma — em paralelo)
+- [x] **AC6 — Modal "Drift" com Repair button** ✅ (Serak/dev-dev-gamma 2026-07-25 — commits 4ba3d1b + 999b283)
 - [ ] **AC7 — Edge fn `adm-drift-repair`** ⏳ (dev-beta)
-- [x] **AC8 — Hooks frontend** ✅ (Novik 2026-07-25: useClientDrift, useAllClientsDrift, useRepairDrift)
-- [ ] **AC9 — Stats card "Com drift" em `Adm.tsx`** ⏳ (dev-beta)
+- [x] **AC8 — Hooks frontend** ✅ (Novik 2026-07-25: useClientDrift, useAllClientsDrift, useRepairDrift — alinhado por Serak 2026-07-25; alpha valida/complementa)
+- [x] **AC9 — Stats card "Com drift" em `Adm.tsx`** ✅ (Serak/dev-dev-gamma 2026-07-25 — commit 999b283)
 
 ## Dev Agent Record
 
@@ -62,6 +62,12 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 | Iniciado | 2026-07-25 |
 | Concluído | 2026-07-25 |
 | Branch | feat/rel-03-drift-badge-hooks |
+
+| Agente | Serak (dev-dev-gamma) — AC6 + AC9 + AC8 stubs revisados |
+| Iniciado | 2026-07-25 |
+| Concluído | 2026-07-25 |
+| Branch | feat/rel-03-drift-badge-hooks |
+| Commits | 4ba3d1b (DriftModal + hooks stubs + AdmStatsBar) · 999b283 (query key + count field sync) |
 
 ## File List
 
@@ -78,6 +84,12 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 - `src/hooks/useRepairDrift.ts` — criado: useRepairDrift() mutation (invoca adm-drift-repair)
 - `src/components/adm/DriftBadge.tsx` — criado: badge vermelho, usa useAllClientsDrift()
 - `src/components/adm/AdmClientRow.tsx` — modificado: DriftBadge integrado + prop onOpenDriftModal
+
+### Criados por Serak (AC6 + AC9)
+- `src/components/adm/DriftModal.tsx` — AC6: Dialog shadcn, lista detected/histórico, hashes truncados, Repair + Ignorar buttons
+- `src/pages/Adm.tsx` — AC9: AdmStatsBar com 3 stat cards (Clientes / Desatualizados / Com drift)
+- `src/hooks/useClientDrift.ts` — AC8: revisado/alinhado com Novik (interface `clientsWithDrift: string[], count`)
+- `src/hooks/useRepairDrift.ts` — AC8: revisado para invocar `adm-drift-repair` edge fn (AC7)
 
 ### Pendente (outros agentes)
 - `supabase/functions/adm-drift-check/` — AC2 (dev-beta)
