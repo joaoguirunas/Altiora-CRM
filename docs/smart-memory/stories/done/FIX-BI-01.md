@@ -44,7 +44,9 @@ Deep-dive bi-pro flagou: "OAuth tokens sem refresh; TikTok sync edge fn não loc
 | Agente     | Serak (dev-dev-gamma) |
 | Iniciado   | 2026-07-25 |
 | Concluído  | 2026-07-25 |
-| Branch     | feature/fix-sends-ui-rbac-cleanup |
+| Branch     | feat/fix-sends-first-msg-01-ui + feat/rel-02-adm-update-ui |
+| Commit     | 76311cf (feat: FIX-BI-01 — OAuth token refresh Meta Ads + expiry alerting on Dashboard) |
+| QA         | CONCERNS — push LIBERADO (CONCERN-1 LOW: reorder de permissão em bi-sync-meta-ads) |
 
 ## File List
 
