@@ -28,6 +28,11 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatPhoneDisplay, formatPhoneForDatabase, validatePhone } from "@/utils/phoneUtils";
 import { getEntityLabel } from "@/utils/pipelineLabels";
+import { useAuth } from "@/hooks/useAuth";
+import { useAltioraClosers } from "@/hooks/useAltioraClosers";
+import ReatribuirCloserModal from "@/components/negocios/ReatribuirCloserModal";
+import { AltioraReatribuirModal } from "@/components/negocios/AltioraReatribuirModal";
+import { AltioraCorrigirDadosModal } from "@/components/negocios/AltioraCorrigirDadosModal";
 
 interface NegocioSidebarProps {
   negocio: any;
@@ -44,6 +49,8 @@ interface NegocioSidebarProps {
   isAltiora?: boolean;
   /** Quando true, exibe campos financeiros e ações de gestão (ALTIORA-08 AC2). */
   isManager?: boolean;
+  /** Quando true, exibe ações de correção de dados críticos (ALTIORA-22 AC4). */
+  isAdmin?: boolean;
 }
 
 const NegocioSidebar = ({
@@ -59,13 +66,23 @@ const NegocioSidebar = ({
   isPendingPessoa,
   isAltiora = false,
   isManager = false,
+  isAdmin = false,
 }: NegocioSidebarProps) => {
+  const { user } = useAuth();
+  const actorId = user?.profile?.id ?? '';
+
   const [activeTab, setActiveTab] = useState("cliente");
   const [isEditingValue, setIsEditingValue] = useState(false);
   const [showQualif, setShowQualif] = useState(false);
+  // ALTIORA-22: modais de reatribuição e correção
+  const [showReatribuirModal, setShowReatribuirModal] = useState(false);
+  const [showCorrigirModal, setShowCorrigirModal] = useState(false);
 
   const { data: fieldDefs = [] } = useLeadFieldDefinitionsByEntity('pessoa');
   const { data: fieldValues = [] } = useLeadFieldValuesByEntity('pessoa', negocio?.pessoa?.id);
+  // ALTIORA-22: lista de closers para lookup de nome
+  const { data: altioraClosers = [] } = useAltioraClosers();
+  const currentCloserName = altioraClosers.find(c => c.id === negocio?.altiora_closer_id)?.name ?? 'Não atribuído';
   const [editValue, setEditValue] = useState(negocio?.value?.toString() || "0");
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -845,7 +862,18 @@ const NegocioSidebar = ({
 
                 {/* Origem do referral — read-only após criação (AC1) */}
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
+                    {/* ALTIORA-22 AC4: botão de correção para Admin */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setShowCorrigirModal(true)}
+                        className="text-[11px] text-muted-foreground/40 hover:text-amber-400/80 transition-colors"
+                      >
+                        Corrigir dados
+                      </button>
+                    )}
+                  </div>
                   <div className="border border-border rounded-[2px] overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
                       <span className="text-[12px] text-muted-foreground/60">Canal</span>
@@ -876,6 +904,17 @@ const NegocioSidebar = ({
                         currentCloserId={negocio.altiora_closer_id}
                         canEdit={isManager && !isReadOnly}
                       />
+                      {/* ALTIORA-22: botão "Alterar responsável" para Gestor/Admin */}
+                      {isManager && !isReadOnly && negocio.altiora_closer_id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowReatribuirModal(true)}
+                          className="h-5 px-1.5 text-[10px] gap-1 rounded-[2px] text-muted-foreground/60 hover:text-foreground mt-1"
+                        >
+                          Alterar responsável
+                        </Button>
+                      )}
                     </div>
                     {negocio.altiora_data_atribuicao && (
                       <div className="flex items-center justify-between px-4 py-2.5">
@@ -996,6 +1035,33 @@ const NegocioSidebar = ({
           </div>
         </ScrollArea>
       </Tabs>
+
+      {/* ALTIORA-22: Modal de reatribuição de Closer (AC1-AC3) */}
+      {isAltiora && isManager && (
+        <AltioraReatribuirModal
+          open={showReatribuirModal}
+          onOpenChange={setShowReatribuirModal}
+          leadId={negocio.id}
+          currentCloserId={negocio.altiora_closer_id ?? null}
+          currentCloserName={currentCloserName}
+          actorId={actorId}
+        />
+      )}
+
+      {/* ALTIORA-22: Modal de correção de dados críticos (AC4 — Admin only) */}
+      {isAltiora && isAdmin && (
+        <AltioraCorrigirDadosModal
+          open={showCorrigirModal}
+          onOpenChange={setShowCorrigirModal}
+          leadId={negocio.id}
+          currentValues={{
+            altiora_origem:       negocio.altiora_origem,
+            altiora_data_handoff: negocio.altiora_data_handoff,
+            value:                negocio.value,
+          }}
+          actorId={actorId}
+        />
+      )}
     </div>
   );
 };
