@@ -85,6 +85,11 @@ const Negocios = () => {
    * - Quando string vazia: sem filtro (todos os referrals)
    */
   const [closerIdFilter, setCloserIdFilter] = useState<string>('');
+  /**
+   * Filtro por origem do referral Altiora (ALTIORA-09 AC1).
+   * Valores: 'avenue_email' | 'manual' | 'outros' | '' (todos)
+   */
+  const [origemFilter, setOrigemFilter] = useState<string>('');
 
   const handleStatusFilterChange = (value: string | null) => {
     setStatusFilter(value);
@@ -272,6 +277,10 @@ const Negocios = () => {
     setSearchFilter('');
     setScoreMatrixFilter('');
     setProductFilter('');
+    // AC1 (ALTIORA-09): limpar filtro de origem
+    setOrigemFilter('');
+    // AC5 (ALTIORA-10): limpar filtro de Closer para Gestor (Closer é re-aplicado pelo useEffect)
+    if (isManager) setCloserIdFilter('');
   };
 
   if (isLoading) {
@@ -323,6 +332,8 @@ const Negocios = () => {
         isAltiora={isAltioraPipelineSelected}
         closerIdFilter={closerIdFilter}
         onCloserIdFilterChange={setCloserIdFilter}
+        origemFilter={origemFilter}
+        onOrigemFilterChange={setOrigemFilter}
         onPipelineFilterChange={setPipelineFilter}
         onStageFilterChange={setStageFilter}
         onStatusFilterChange={handleStatusFilterChange}
@@ -368,6 +379,7 @@ const Negocios = () => {
           motivoFilter={motivoFilter}
           productFilter={productFilter}
           closerIdFilter={closerIdFilter || undefined}
+          origemFilter={origemFilter || undefined}
         />
       ) : viewMode === 'list' ? (
         <NegociosList

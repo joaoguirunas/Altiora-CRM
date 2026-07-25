@@ -25,11 +25,16 @@ export interface NegocioOptimized {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
-  // Campos Altiora (ALTIORA-03) — nullable; só preenchidos no pipeline Altiora
+  // Campos Altiora (ALTIORA-03/09) — nullable; só preenchidos no pipeline Altiora
   /** Closer responsável pelo referral (FK settings_users) */
   altiora_closer_id?: string | null;
   /** Timestamp da última interação registrada no lead */
   last_interaction_at?: string | null;
+  /**
+   * Origem do referral Altiora: 'avenue_email' | 'manual' | 'outros'
+   * (ALTIORA-09 AC1, migration 20260725120000)
+   */
+  altiora_origem?: string | null;
   // TODO ALTIORA-03: adicionar stage_entered_at quando migration for aplicada
   // TODO ALTIORA-03: adicionar next_action_type, next_action_description, next_action_due_at quando migration for aplicada
   pessoa?: {
@@ -65,6 +70,11 @@ interface NegocioFilters {
    * Apenas utilizado no pipeline Altiora.
    */
   closerIdFilter?: string;
+  /**
+   * Filtro por origem do referral Altiora — filtra por `altiora_origem` (ALTIORA-09 AC1).
+   * Valores válidos: 'avenue_email' | 'manual' | 'outros'
+   */
+  origemFilter?: string;
 }
 
 export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters) => {
@@ -138,10 +148,19 @@ export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters
       if (filters?.utm_term) query = query.eq('utm_term', filters.utm_term);
       if (filters?.utm_content) query = query.eq('utm_content', filters.utm_content);
       if (filters?.searchFilter) {
-        query = query.or(`title.ilike.%${filters.searchFilter}%,clients_people.name.ilike.%${filters.searchFilter}%,clients_companies.trade_name.ilike.%${filters.searchFilter}%`);
+        // AC2 (ALTIORA-09): busca por nome, e-mail e telefone (whatsapp) além de título e empresa
+        query = query.or(
+          `title.ilike.%${filters.searchFilter}%,` +
+          `clients_people.name.ilike.%${filters.searchFilter}%,` +
+          `clients_people.email.ilike.%${filters.searchFilter}%,` +
+          `clients_people.whatsapp.ilike.%${filters.searchFilter}%,` +
+          `clients_companies.trade_name.ilike.%${filters.searchFilter}%`
+        );
       }
       // AC1 (ALTIORA-10): filtro por Closer responsável via altiora_closer_id
       if (filters?.closerIdFilter) query = query.eq('altiora_closer_id', filters.closerIdFilter);
+      // AC1 (ALTIORA-09): filtro por origem do referral via altiora_origem
+      if (filters?.origemFilter) query = query.eq('altiora_origem', filters.origemFilter);
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;

@@ -55,6 +55,13 @@ interface NegociosToolbarProps {
   closerIdFilter?: string;
   /** Callback para atualizar o filtro de Closer (ALTIORA-10 AC5 — apenas Gestor/Admin). */
   onCloserIdFilterChange?: (value: string) => void;
+  /**
+   * Filtro por origem do referral Altiora (ALTIORA-09 AC1).
+   * Valores: 'avenue_email' | 'manual' | 'outros' | '' (todos)
+   */
+  origemFilter?: string;
+  /** Callback para atualizar o filtro de origem Altiora (ALTIORA-09 AC1). */
+  onOrigemFilterChange?: (value: string) => void;
   onPipelineFilterChange: (value: string | null) => void;
   onStageFilterChange: (value: string | null) => void;
   onStatusFilterChange: (value: string | null) => void;
@@ -125,6 +132,8 @@ const NegociosToolbar = ({
   isAltiora = false,
   closerIdFilter = "",
   onCloserIdFilterChange,
+  origemFilter = "",
+  onOrigemFilterChange,
 }: NegociosToolbarProps) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [utmOpen, setUtmOpen] = useState(false);
@@ -219,6 +228,8 @@ const NegociosToolbar = ({
     mediumFilter !== '',
     termFilter !== '',
     contentFilter !== '',
+    // AC1 (ALTIORA-09): origem filter
+    origemFilter !== '',
   ].filter(Boolean).length;
 
   const clearSecondaryFilters = () => {
@@ -234,6 +245,10 @@ const NegociosToolbar = ({
     if (onMediumFilterChange) onMediumFilterChange('');
     if (onTermFilterChange) onTermFilterChange('');
     if (onContentFilterChange) onContentFilterChange('');
+    // AC1 (ALTIORA-09): limpar origem filter
+    if (onOrigemFilterChange) onOrigemFilterChange('');
+    // AC5 (ALTIORA-10): limpar closerIdFilter para Gestor (Closer é re-aplicado pelo useEffect)
+    if (onCloserIdFilterChange) onCloserIdFilterChange('');
   };
 
   return (
@@ -427,6 +442,27 @@ const NegociosToolbar = ({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Origem Altiora (ALTIORA-09 AC1) — apenas quando pipeline Altiora */}
+            {isAltiora && onOrigemFilterChange && (
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</Label>
+                <Select
+                  value={origemFilter || "__all__"}
+                  onValueChange={(value) => onOrigemFilterChange(value === "__all__" ? "" : value)}
+                >
+                  <SelectTrigger className="h-[30px] text-xs">
+                    <SelectValue placeholder="Todas as origens" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas as origens</SelectItem>
+                    <SelectItem value="avenue_email">Avenue (E-mail)</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Status */}
             <div className="space-y-1.5">
