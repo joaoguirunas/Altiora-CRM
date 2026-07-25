@@ -18,7 +18,6 @@ import {
   Zap,
   MoreHorizontal,
   KeyRound,
-  ShieldCheck,
   CalendarDays,
   Webhook,
   Palette,
@@ -249,7 +248,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       '/settings/general/usuarios-equipes',
       '/settings/general/usuarios',    // alias → hub
       '/settings/general/times',       // alias → hub (times/:teamId stays as manual Route)
-      '/settings/general/permissoes',  // alias → hub
     ],
     Component: lazy(() => import('@/components/config/UsuariosEquipesConfig')),
   },
@@ -298,15 +296,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: Palette,
     paths: ['/settings/general/design-system'],
     Component: lazy(() => import('@/components/config/DesignSystemRedirect')),
-    wide: true,
-  },
-  {
-    id: 'permissoes',
-    group: 'geral',
-    titleKey: 'Permissões',
-    icon: ShieldCheck,
-    paths: ['/settings/general/permissoes'],
-    Component: lazy(() => import('@/components/config/PermissoesConfig')),
     wide: true,
   },
   {
@@ -371,7 +360,6 @@ const SIDEBAR_HIDDEN_IDS = new Set([
   'usuarios',
   'times',
   'design-system',
-  'permissoes',
 ]);
 export const SIDEBAR_SECTIONS = SETTINGS_SECTIONS.filter(
   (s) => !SIDEBAR_HIDDEN_IDS.has(s.id)

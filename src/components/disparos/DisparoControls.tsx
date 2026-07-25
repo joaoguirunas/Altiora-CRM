@@ -21,8 +21,17 @@ export default function DisparoControls({ send }: DisparoControlsProps) {
   const { mutate: startFirstBatch, isPending: isDispatching } = useSendDispatch();
 
   const handleStart = () => {
+    // Distinguish between starting a new campaign and resuming a paused one.
+    // Resuming must NOT overwrite started_at — it records the original launch time
+    // and is used to compute campaign duration metrics.
+    const isResume = send.status === 'paused';
     updateSend(
-      { id: send.id, data: { status: 'running', started_at: new Date().toISOString() } },
+      {
+        id: send.id,
+        data: isResume
+          ? { status: 'running' }
+          : { status: 'running', started_at: new Date().toISOString() },
+      },
       {
         onSuccess: () => {
           // Kick first batch immediately; pg_cron handles subsequent batches
@@ -32,15 +41,21 @@ export default function DisparoControls({ send }: DisparoControlsProps) {
               onSuccess: (data) => {
                 if ((data.processed ?? 0) === 0) {
                   // No contacts were dispatched — revert so the user can investigate
-                  updateSend({ id: send.id, data: { status: 'draft', started_at: null } });
+                  updateSend({
+                    id: send.id,
+                    data: isResume ? { status: 'paused' } : { status: 'draft', started_at: null },
+                  });
                   toast.error('Nenhum contato pendente encontrado. Verifique se a lista foi importada corretamente.');
                 } else {
-                  toast.success('Disparo iniciado!');
+                  toast.success(isResume ? 'Disparo retomado!' : 'Disparo iniciado!');
                 }
               },
               onError: (err: Error) => {
-                // Revert status back to draft so the user can fix the issue and retry
-                updateSend({ id: send.id, data: { status: 'draft', started_at: null } });
+                // Revert status so the user can fix the issue and retry
+                updateSend({
+                  id: send.id,
+                  data: isResume ? { status: 'paused' } : { status: 'draft', started_at: null },
+                });
                 toast.error('Erro ao iniciar disparo: ' + err.message);
               },
             },
