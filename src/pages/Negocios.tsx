@@ -104,6 +104,17 @@ const Negocios = () => {
     }
   }, [isManager, getResponsavelFilter]);
 
+  // ALTIORA-10 AC1: auto-aplica filtro de Closer quando pipeline Altiora + perfil Closer
+  // O profile.id corresponde ao settings_users.id referenciado por altiora_closer_id
+  useEffect(() => {
+    if (isAltioraPipelineSelected && isComercial && user?.profile?.id) {
+      setCloserIdFilter(user.profile.id);
+    } else if (!isAltioraPipelineSelected || !isComercial) {
+      // Limpa o filtro ao sair do pipeline Altiora ou para perfis não-Closer
+      setCloserIdFilter('');
+    }
+  }, [isAltioraPipelineSelected, isComercial, user?.profile?.id]);
+
   // Auto-apply team filter for non-manager users — não pra 'comercial', que é
   // restrito por PIPELINE (equipe → settings_teams_pipelines), não por
   // teams_id do lead (a maioria dos leads não tem isso setado).
@@ -309,6 +320,9 @@ const Negocios = () => {
         motivoFilter={motivoFilter}
         productFilter={productFilter}
         entityLabel={entityLabel}
+        isAltiora={isAltioraPipelineSelected}
+        closerIdFilter={closerIdFilter}
+        onCloserIdFilterChange={setCloserIdFilter}
         onPipelineFilterChange={setPipelineFilter}
         onStageFilterChange={setStageFilter}
         onStatusFilterChange={handleStatusFilterChange}
@@ -353,6 +367,7 @@ const Negocios = () => {
           searchFilter={debouncedSearch}
           motivoFilter={motivoFilter}
           productFilter={productFilter}
+          closerIdFilter={closerIdFilter || undefined}
         />
       ) : viewMode === 'list' ? (
         <NegociosList

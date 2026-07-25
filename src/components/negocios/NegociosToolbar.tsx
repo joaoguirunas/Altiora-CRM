@@ -21,6 +21,7 @@ import { useKiwifyProductsInPipeline } from "@/hooks/useKiwifyProductsInPipeline
 import { productColor } from "@/components/negocios/CursoBadges";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { cn } from "@/lib/utils";
+import { useUsers } from "@/hooks/useUsersNew";
 
 interface NegociosToolbarProps {
   viewMode: "kanban" | "list" | "clientes";
@@ -44,6 +45,16 @@ interface NegociosToolbarProps {
   productFilter?: string;
   /** Label da entidade do pipeline selecionado (ex: "Negócio" ou "Referral"). */
   entityLabel?: string;
+  /**
+   * Quando true, exibe controles específicos do pipeline Altiora (ALTIORA-10 AC5).
+   * - Para Gestor/Admin: seletor "Ver carteira de:" para filtrar por Closer.
+   * - Para Closer: indicador da carteira ativa (sem seletor).
+   */
+  isAltiora?: boolean;
+  /** ID do Closer selecionado para filtro "Minha Carteira" (ALTIORA-10 AC5). */
+  closerIdFilter?: string;
+  /** Callback para atualizar o filtro de Closer (ALTIORA-10 AC5 — apenas Gestor/Admin). */
+  onCloserIdFilterChange?: (value: string) => void;
   onPipelineFilterChange: (value: string | null) => void;
   onStageFilterChange: (value: string | null) => void;
   onStatusFilterChange: (value: string | null) => void;
@@ -111,12 +122,21 @@ const NegociosToolbar = ({
   usuarios = [],
   currentTenant,
   entityLabel = "Negócio",
+  isAltiora = false,
+  closerIdFilter = "",
+  onCloserIdFilterChange,
 }: NegociosToolbarProps) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [utmOpen, setUtmOpen] = useState(false);
 
-  
+
   const { isManager, canChangeFilters, currentUserName, currentUserId, userTimes } = useUserPermissions();
+  // ALTIORA-10 AC5: lista de Closers para o seletor "Ver carteira de:" (Gestor/Admin)
+  const { data: allUsers = [] } = useUsers();
+  const altioraClosers = useMemo(
+    () => allUsers.filter(u => u.user_type === 'comercial'),
+    [allUsers]
+  );
   const { data: teamMembers = [] } = useTeamMembers('single-tenant', teamFilter);
   const { data: scoreMatrices = [] } = useScoreMatrix();
   const { data: utmValues } = useUtmValues(pipelineFilter || undefined);
@@ -266,6 +286,35 @@ const NegociosToolbar = ({
             <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
             Novo {entityLabel}
           </Button>
+        )}
+
+        {/* ALTIORA-10 AC5: Seletor "Ver carteira de:" — apenas Altiora + Gestor/Admin */}
+        {viewMode !== 'clientes' && isAltiora && isManager && onCloserIdFilterChange && (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap">
+              Ver carteira de:
+            </span>
+            <Select
+              value={closerIdFilter || "__all__"}
+              onValueChange={(value) => onCloserIdFilterChange(value === "__all__" ? "" : value)}
+            >
+              <SelectTrigger
+                className="w-36 h-[30px] text-xs border-border"
+                aria-label="Filtrar por Closer"
+              >
+                <UserCheck className="w-3.5 h-3.5 mr-1 text-muted-foreground/50 flex-shrink-0" strokeWidth={1.5} />
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos</SelectItem>
+                {altioraClosers.map((closer) => (
+                  <SelectItem key={closer.id} value={closer.id}>
+                    {closer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         {/* Search */}
