@@ -150,32 +150,63 @@ Enforce padrões obrigatórios em migrations via lint script + CI gate; cada mig
 ## QA Results
 
 ```
-VEREDICTO: FAIL
-Story: REL-04 | Data: 2026-07-25
-Story status no arquivo: backlog — Dev Agent Record vazio (sem agente, sem datas, sem File List).
-Issues bloqueantes:
+VEREDICTO (v1): FAIL — 2026-07-25 (anterior, superado pela resubmissão)
+VEREDICTO (v2): PASS — 2026-07-25 (AC1-AC6 completos)
 
-[CRITICAL] AC2 — lint-migrations.yml GitHub Action: NÃO EXISTE.
-  .github/workflows/ não contém lint-migrations.yml.
-  Sem o workflow, o lint script não é integrado ao CI — o gate obrigatório não existe.
+Story: REL-04 | Data: 2026-07-25 (revisão v2 — AC1-AC6 completos)
+AC7 pre-commit hook: opcional, dev-devops decide. Não bloqueia.
 
-[CRITICAL] AC3 — migrations-dry-run.yml GitHub Action: NÃO EXISTE.
-  Dry-run em snapshot/container não implementado.
+AC1 ✅  scripts/lint-migrations.js com MIG001-MIG009 confirmado.
+        MIG001: timestamp 14-dígitos ✅
+        MIG002: CREATE TABLE sem IF NOT EXISTS ✅
+        MIG003: CREATE INDEX sem IF NOT EXISTS ✅
+        MIG004: ADD COLUMN sem IF NOT EXISTS ✅
+        MIG005: DROP TABLE sem @allow-destructive ✅
+        MIG006: rollback ausente ✅
+        MIG007: arquivo >500 linhas (warning) ✅
+        MIG008: CREATE FUNCTION sem OR REPLACE (warning) ✅
+        MIG009 (AC5): migration não em migrations-manifest.json ✅
+                      getManifestSet() helper + skip em --all mode. ✅
+        @lint-skip por arquivo suportado. ✅
 
-[HIGH] AC6 — Backfill report: NÃO EXISTE.
-  docs/smart-memory/ops/migrations-lint-baseline-*.md ausente.
-  Baseline de débito histórico não gerado.
+AC2 ✅  .github/workflows/lint-migrations.yml confirmado (~200 linhas).
+        Trigger: pull_request paths:supabase/migrations/** e migrations_adm/**. ✅
+        Steps: detecta changed files → node scripts/lint-migrations.js. ✅
+        Posta comentário no PR com summary. ✅
+        exit 1 se erros → bloqueia merge (required check). ✅
 
-O que EXISTE (parcialmente implementado):
-  AC1 ✅  scripts/lint-migrations.js existe com todas as 8 regras (MIG001-MIG008).
-  AC4 ✅  _TEMPLATE.sql e _TEMPLATE.rollback.sql existem em supabase/migrations/.
-  AC5 ✅  docs/smart-memory/conventions/migrations-discipline.md existe.
-  AC7 N/A pre-commit hook (opcional) — não verificado.
+AC3 ✅  .github/workflows/migrations-dry-run.yml confirmado (~315 linhas).
+        Trigger: pull_request + label "migration-heavy". ✅
+        Condition: action != labeled OR label.name == migration-heavy. ✅
+        Postgres 15 container em serviço (sem credenciais externas). ✅
+        Forward dry-run: BEGIN...ROLLBACK por migration (verifica sintaxe sem alterar estado). ✅
+        Rollback dry-run: aplica .rollback.sql correspondente. ✅
+        PR comment com resultados detalhados. ✅
+        Limitação documentada: "sem extensões Supabase (vault, pg_net, pg_cron)"
+          → migrations que usam cron.* podem falhar no dry-run container.
+          Aceitável per spec ("fallback MVP container"). ✅
 
-Story física está em done/ mas conteúdo é de backlog (Dev Agent Record sem agente/datas/files).
+AC4 ✅  Rollback file convention + templates: _TEMPLATE.sql + _TEMPLATE.rollback.sql
+        existem em supabase/migrations/rollbacks/. ✅ (confirmado em rodada anterior)
+        Header obrigatório com "-- Rollback for:" + "-- Tested-against:". ✅
 
-Próximo passo: @dev-devops implementar AC2 (lint-migrations.yml), AC3 (dry-run workflow),
-  AC6 (rodar lint --all e gerar baseline report). Resubmeter após implementação completa.
+AC5 ✅  MIG009 integrado em lint-migrations.js (getManifestSet helper). ✅
+        docs/smart-memory/conventions/migrations-discipline.md EXISTS. ✅
+        (confirmado em rodada anterior)
+
+AC6 ✅  docs/smart-memory/ops/migrations-lint-baseline-2026-07-25.md confirmado:
+        902 arquivos analisados. 1.801 erros. 21 warnings.
+        Top: MIG006 (822 — rollback ausente), MIG003 (295), MIG002 (214). ✅
+        Tabela de priorização de débito (P1/P2/P3). ✅
+        Baseline NÃO bloqueia retroativamente — apenas tracking de débito. ✅
+
+AC7: opcional — dev-devops decide. Não bloqueia gate.
+
+[INFO] Extensões Supabase (cron.*, vault, pg_net) causarão fail no dry-run container
+       Postgres 15. Documentado como limitação aceita. Upgrade para Supabase Branching
+       quando GA eliminará esse gap.
+
+Próximo passo: @dev-devops push
 ```
 
 ## Validação 5-pontos (zael)

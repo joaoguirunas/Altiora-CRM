@@ -249,6 +249,8 @@ Log cronológico de migrations aplicadas pelo Bythak. Migrations são imutáveis
 | `migrations_adm/20260725310000_adm_drift_cron.sql` | migrations_adm | REL-03 AC3 | pg_cron adm-drift-check-daily (4h UTC) via GUC app.supabase_url | disponível |
 | `migrations_adm/20260725330000_adm_releases_is_baseline.sql` | migrations_adm | REL-05 AC5 DB | ADD COLUMN is_baseline + adm-baseline-check-weekly cron (sábados 5h UTC) | disponível |
 
+| `20260725340000_fup_programados.sql` | migration | FUP-AUTO-01 DB-1..DB-5 | CREATE TABLE fup_programados + índices + RLS + RPC agendar_fup() + cron */5min | disponível |
+
 **Notas de apply:**
 - Migrations regulares: `supabase db query --linked --file supabase/migrations/{arquivo}.sql`
 - Migrations ADM: `supabase db query --linked --file supabase/migrations_adm/{arquivo}.sql` (control plane apenas — NÃO propagar a tenants)

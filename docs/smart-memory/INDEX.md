@@ -115,8 +115,9 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 - [[stories/done/KFY-4.1-kiwify-manual-webhook-token]] — ✅ DONE (QA PASS, 2026-07-02): (a) caminho manual de webhook — `save_credentials`+`register_manual_webhook_token`, UI accordion `?cid=` resolvível; (b) **FIX CRÍTICO `client_id ≠ account_id`** — coluna nova + campo UI + factory `row.client_id`. Migration `20260702170000` no LIVE. Débito à parte: `kiwify-reconcile` `deno check` (import supabase-js bare vs esm.sh, pré-existente KFY-1.6, type-only). Deploy functions+frontend conjunto.
 
 ## Convenções
-- [[conventions/migrations-discipline]] — regras lint MIG001-MIG008, rollbacks, templates, CI integration
-- [[conventions/baseline-squashing]] — protocolo completo de squash de migrations: quando/como/quem aprova, checklist, warnings, rollback (REL-05 AC7)
+- [[conventions/release-pipeline]] — **⚠️ BREAKING v4.72** fluxo completo release versionada: release.json, tenant sync opt-in, CI gates, force-sync manual, adm_releases/adm_client_versions schema (REL-01 AC8)
+- [[conventions/migrations-discipline]] — regras lint MIG001-MIG009, rollbacks, templates, CI integration (REL-04)
+- [[conventions/baseline-squashing]] — protocolo completo de squash de migrations: quando/como/quem aprova, checklist, warnings, rollback (REL-05)
 
 ## Auditoria
 - [[audit/resilience]] — auditoria adversarial: auth, tenant bootstrap, settings — 4 P0 / 6 P1 / 5 P2 (Kronix, 2026-04-26)
@@ -191,6 +192,9 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 ## Clientes
 - [[clientes/README]] — índice de clientes
 - [[clientes/joao-guirunas]] — João Guirunas: configuração single-tenant ativa
+
+## FUP Programado (FUP-AUTO-01 — 2026-07-25, Bythak)
+- [[stories/done/FUP-AUTO-01]] — **DB DONE (dev-beta/gamma pendente)**: tabela fup_programados + RPC agendar_fup() + cron */5min; UI/tool/worker para dev-beta/gamma
 
 ## Release Pipeline (REL-01/03/04/05 — 2026-07-25, Bythak)
 - [[stories/done/REL-01]] — **DB+edge fn DONE (dev-devops/beta pendente)**: adm_releases + adm_client_versions migrations + adm-releases-register edge fn; AC2/AC5-AC8 dev-devops/beta

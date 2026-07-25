@@ -153,33 +153,49 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 ## QA Results
 
 ```
-VEREDICTO: FAIL
-Story: REL-01 | Data: 2026-07-25
-Story status no arquivo: backlog — Dev Agent Record vazio (sem agente, sem datas, sem File List).
-Issues bloqueantes:
+VEREDICTO (v1): FAIL — 2026-07-25 (anterior, superado pela resubmissão)
+VEREDICTO (v2): PASS — 2026-07-25 (AC2+AC3+AC4 escopo desta rodada)
 
-[CRITICAL] AC2 — release-tag.yml GitHub Action: NÃO EXISTE.
-  .github/workflows/ não contém release-tag.yml.
-  Sem o workflow, releases versionadas não são geradas automaticamente.
+Story: REL-01 | Data: 2026-07-25 (revisão v2 — AC2+AC3+AC4)
+Escopo desta revisão: AC2 (release-tag.yml) + AC3 (migrations control plane) + AC4 (edge fn)
+AC1 pré-existente. AC5/AC6/AC7/AC8 aguardam dev-beta + dev-devops (fora deste gate).
 
-[CRITICAL] AC3 — Migrations control plane: NÃO VERIFICADAS.
-  Dev Agent Record vazio → nenhuma migration adm_releases/adm_client_versions criada
-  por esta story (release.json v4.69 pré-existe com data 2026-07-22, anterior à story
-  que data de 2026-04-24 — não é output desta story).
+AC2 ✅  .github/workflows/release-tag.yml confirmado (246 linhas).
+        Trigger: push branches:[main] paths: supabase/migrations/**. ✅
+        Concurrency: group:release-tag, cancel-in-progress:false. ✅
+        Steps confirmados:
+          1. Detecta migrations desde último tag release-v* (git tag --list 'release-v*'). ✅
+          2. Bump version.json (major/minor/build). ✅
+          3. Gera release.json (lista migrations + changelog do git log). ✅
+          4. Commit + tag release-v{version} + push com [skip ci]. ✅
+          5. POST para adm-releases-register com SUPABASE_SERVICE_ROLE secret. ✅
+        Idempotência: [skip ci] previne loop; ON CONFLICT no endpoint. ✅
 
-[CRITICAL] AC4 — adm-releases-register edge fn: NÃO VERIFICADA (sem dev record).
+AC3 ✅  Três migrations em supabase/migrations_adm/:
+        20260424012000_adm_releases.sql:
+          CREATE TABLE IF NOT EXISTS adm_releases (id uuid PK, version text UNIQUE,
+          git_sha, migrations jsonb, min_compat_from DEFAULT '1.0', changelog,
+          created_at, created_by FK auth.users). ✅
+          RLS: super_admin EXISTS check + service_role INSERT policy. ✅
+          Rollback: 20260424012000_adm_releases.rollback.sql ✅
+        20260424013000_adm_client_versions.sql: ✅ (+ rollback ✅)
+        20260424014000_adm_clients_version_columns.sql: ✅ (+ rollback ✅)
 
-[HIGH] AC5 — useAdmReleases hook: NÃO VERIFICADO (sem dev record).
-[HIGH] AC6 — adm-sync-client refactor: NÃO VERIFICADO (sem dev record).
-[HIGH] AC7 — sync-clients.yml refactor: NÃO VERIFICADO (sem dev record).
-[HIGH] AC8 — Documentação: NÃO VERIFICADA (sem dev record).
+AC4 ✅  supabase/functions/adm-releases-register/index.ts:
+        Auth: Bearer token vs SUPABASE_SERVICE_KEY — service_role only. ✅
+        POST method check (405 para outros métodos). ✅
+        ReleasePayload interface: version, git_sha, migrations[], min_compat_from?,
+          changelog?, is_baseline?. ✅
+        Semver validation em L79. ✅
+        INSERT em adm_releases ON CONFLICT (version) DO NOTHING → inserted:false. ✅
+        adm_audit_log INSERT quando inserted=true (action:'release.registered'). ✅
+        Response: { ok:true, inserted:bool, version }. ✅
 
-Story está em done/ mas é documento de especificação sem implementação.
-release.json existente (v4.69) precede a story e não é output dela.
+AC5/AC6/AC7/AC8: fora do escopo — aguardam dev-beta + dev-devops.
 
-Próximo passo: @dev-data-engineer + @dev-devops implementar story completa:
-  AC2 (GH Action), AC3 (migrations adm), AC4 (edge fn), AC5 (hook), AC6 (refactor),
-  AC7 (sync-clients refactor), AC8 (docs). Resubmeter com Dev Agent Record preenchido.
+Próximo passo: @dev-beta implementar AC5 (useAdmReleases hook) + AC6 (adm-sync-client refactor).
+               @dev-devops implementar AC7 (sync-clients.yml refactor) + AC8 (docs).
+               Resubmeter para gate final quando completos.
 ```
 
 ## Validação 5-pontos (zael)

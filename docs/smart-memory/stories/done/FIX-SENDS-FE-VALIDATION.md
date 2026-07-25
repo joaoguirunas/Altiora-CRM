@@ -117,4 +117,51 @@ Compare com `DisparoControls.handleStart` (linha 23) que **chama `useSendDispatc
 - `src/pages/Disparos.tsx` — AC3: handleAtivar/handleRetomar invocam worker, spinner por linha
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO: CONCERNS
+Story: FIX-SENDS-FE-VALIDATION | Data: 2026-07-25
+Escopo: AC1+AC2+AC3 (estático), AC4 (QA — Axikar), AC5 WAIVED (lead), AC6 tsc confirmado
+Aprovado com observações:
+
+AC1 ✅  CriarDisparo.tsx L121-125: filter 3 condições:
+        t.system_enabled === true && t.meta_template_name != null
+        && t.status?.toLowerCase() === 'approved'
+        Hint visual "Template ainda não publicado" quando activeTemplates.length === 0 (L562). ✅
+        ConfiguracaoDisparoTab.tsx L53-57: MESMO filtro 3 condições confirmado. ✅
+        Paridade com WhatsappTemplateModal:251 e WhatsappTemplatePickerModal:31. ✅
+
+AC2 ✅  extractTemplateVars() declarado L58 de CriarDisparo.tsx.
+        unmappedVars = templateVars.filter(pos => !variablesMap[pos]) (L138). ✅
+        validate(): if unmappedVars.length > 0 → toast.error + return false (L187-192). ✅
+        Badge amber "variável(is) não mapeada(s)" renderizado L578-587. ✅
+        Indicador verde quando todos mapeados (L598+). ✅
+
+AC3 ✅  handleAtivar (L98-127): updateSend({running}) → startFirstBatch (useSendDispatch).
+        processed === 0 → updateSend({draft}) + toast.error (L109-111). ✅
+        onError → updateSend({draft}) + toast.error com err.message (L119-120). ✅
+        handleRetomar (L141-170): mesmo padrão, sem sobrescrever started_at. ✅
+        Loader2 spinner por linha: ativar (L370-372), retomar (L412). ✅
+
+AC4 (Axikar — smoke E2E):
+  [OK-ESTÁTICO] AC4.1: Template sem meta_template_name removido do dropdown pelo filtro.
+    Se todos os templates filtrados → lista vazia → hint visual exibido. ✅
+    Usuário não consegue selecionar template inválido → campanha não prossegue. ✅
+
+  [OK-ESTÁTICO] AC4.2: Template com {{N}} vars e variablesMap incompleto → validate()
+    retorna false com toast.error antes de chamar handleCreate(). ✅
+    Botão "Criar Campanha" não prossegue quando validate() retorna false (L200-201). ✅
+
+  [PENDING] AC4.3: "Canal sem access_token → toast worker em <2s, status volta draft".
+    Código path correto (error handler em handleAtivar reverte + exibe toast).
+    Verificação runtime com worker real NÃO executada — ambiente sem browser/sessão.
+    AÇÃO: smoke manual pós-deploy: ativar campanha de canal sem token pela lista Disparos.tsx,
+    confirmar toast de erro + status draft em <2s.
+
+AC5 🔵 WAIVED  Template-level variables_map suficiente. sends_contacts.variables_map
+              requer migration + worker update (OUT of scope declarado). Lead confirmou.
+
+AC6 ✅  tsc 0 erros (confirmado pelo lead + lint 0 novos erros nos arquivos modificados).
+
+Push LIBERADO. AC4.3 smoke manual recomendado antes de expor a usuários finais.
+```
