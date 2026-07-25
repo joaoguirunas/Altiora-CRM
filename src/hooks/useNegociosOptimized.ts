@@ -60,6 +60,11 @@ interface NegocioFilters {
   utm_content?: string;
   motivoFilter?: string | null;
   productId?: string;
+  /**
+   * Filtro por Closer Altiora — filtra por `altiora_closer_id` (ALTIORA-10 AC1).
+   * Apenas utilizado no pipeline Altiora.
+   */
+  closerIdFilter?: string;
 }
 
 export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters) => {
@@ -135,6 +140,8 @@ export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters
       if (filters?.searchFilter) {
         query = query.or(`title.ilike.%${filters.searchFilter}%,clients_people.name.ilike.%${filters.searchFilter}%,clients_companies.trade_name.ilike.%${filters.searchFilter}%`);
       }
+      // AC1 (ALTIORA-10): filtro por Closer responsável via altiora_closer_id
+      if (filters?.closerIdFilter) query = query.eq('altiora_closer_id', filters.closerIdFilter);
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;

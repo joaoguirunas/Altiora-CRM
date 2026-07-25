@@ -29,6 +29,8 @@ interface KanbanBoardProps {
   searchFilter?: string;
   motivoFilter?: string | null;
   productFilter?: string;
+  /** Filtro por Closer Altiora — `altiora_closer_id` (ALTIORA-10 AC1). */
+  closerIdFilter?: string;
 }
 
 const KanbanBoard = ({
@@ -49,7 +51,8 @@ const KanbanBoard = ({
   contentFilter,
   searchFilter,
   motivoFilter,
-  productFilter
+  productFilter,
+  closerIdFilter,
 }: KanbanBoardProps) => {
   const updateNegocioStage = useUpdateNegocioStage();
   const queryClient = useQueryClient();
@@ -79,7 +82,9 @@ const KanbanBoard = ({
       utm_term: termFilter || undefined,
       utm_content: contentFilter || undefined,
       motivoFilter: motivoFilter || undefined,
-      productId: productFilter || undefined
+      productId: productFilter || undefined,
+      // AC1 (ALTIORA-10): filtro por Closer quando modo "Minha Carteira"
+      closerIdFilter: closerIdFilter || undefined,
     }
   );
 

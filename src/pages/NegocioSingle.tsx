@@ -39,6 +39,7 @@ import { useNavigation } from "@/contexts/NavigationContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import NegocioReunioes from "@/components/negocios/NegocioReunioes";
+import { AltioraReunioes } from "@/components/negocios/AltioraReunioes";
 import MotivoPerdasModal, { type MotivoPerdasPayload } from "@/components/negocios/MotivoPerdasModal";
 import ReobrirReferralModal, { type ReobrirPayload } from "@/components/negocios/ReobrirReferralModal";
 import CamposExtrasSection from "@/components/negocios/CamposExtrasSection";
@@ -396,6 +397,7 @@ const NegocioSingle = () => {
   type NegocioAltiora = typeof negocio & {
     altiora_etapa_perda?: string | null;
     altiora_possibilidade_retomada?: boolean | null;
+    altiora_closer_id?: string | null;
     lost_at?: string | null;
   };
   const negocioAltiora = negocio as NegocioAltiora;
@@ -880,13 +882,24 @@ const NegocioSingle = () => {
                   </div>
                 </TabsContent>
 
-                {/* Reuniões */}
+                {/* Reuniões — ALTIORA-13: componente especializado para pipeline Altiora */}
                 <TabsContent value="reunioes" className="mt-0 overflow-auto">
-                  <NegocioReunioes
-                    negocioId={id!}
-                    clientName={negocio.pessoa?.name || negocio.pessoa?.nome || ''}
-                    leadValue={negocio.value ?? undefined}
-                  />
+                  {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') ? (
+                    <AltioraReunioes
+                      leadId={id!}
+                      closerId={negocioAltiora.altiora_closer_id ?? ''}
+                      peopleId={negocio.people_id ?? null}
+                      clientEmail={negocio.pessoa?.email ?? null}
+                      clientName={negocio.pessoa?.name || negocio.pessoa?.nome || null}
+                      canSchedule={isGestorOrAdmin || user?.profile?.user_type === 'closer'}
+                    />
+                  ) : (
+                    <NegocioReunioes
+                      negocioId={id!}
+                      clientName={negocio.pessoa?.name || negocio.pessoa?.nome || ''}
+                      leadValue={negocio.value ?? undefined}
+                    />
+                  )}
                 </TabsContent>
 
                 {/* Fluxo IA — apenas super admins */}
