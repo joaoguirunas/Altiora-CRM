@@ -879,7 +879,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Resolve credentials: channel_id > explicit phone_number_id+env > default channel auto-lookup
+    // Resolve credentials: channel_id > explicit phone_number_id lookup > default channel auto-lookup
     let accessToken = envAccessToken;
     let phoneNumberId = bodyPhoneNumberId ?? '';
 
@@ -900,9 +900,28 @@ Deno.serve(async (req: Request) => {
       } else {
         console.warn(`whatsapp-outbound: channel_id ${channel_id} not found or inactive, falling back to default`);
       }
+    } else if (bodyPhoneNumberId) {
+      // FIX-SENDS-FIRST-MSG-01: explicit phone_number_id (passed by omni-delivery-engine from
+      // messages.wa_phone_number_id). Look up the matching channel for its access_token.
+      // Without this, the env-fallback token might not match the campaign's WA channel credentials.
+      const { data: pnChannel } = await supabase
+        .from('settings_whatsapp_channels')
+        .select('phone_number_id, access_token')
+        .eq('phone_number_id', bodyPhoneNumberId)
+        .eq('active', true)
+        .maybeSingle();
+      if (pnChannel) {
+        const pnToken = (pnChannel as { phone_number_id: string; access_token: string | null }).access_token;
+        accessToken = pnToken || envAccessToken;
+        phoneNumberId = bodyPhoneNumberId;
+        if (!pnToken) console.warn(`whatsapp-outbound: channel phone_number_id=${bodyPhoneNumberId} has no access_token, using env fallback`);
+        else console.log(`whatsapp-outbound: resolved channel from body phone_number_id=${phoneNumberId}`);
+      } else {
+        console.warn(`whatsapp-outbound: phone_number_id=${bodyPhoneNumberId} not found in active channels, falling back to default`);
+      }
     }
 
-    // No channel_id, no phone_number_id, or token not yet resolved → try to resolve automatically (3 fallbacks)
+    // No phone_number_id or token not yet resolved → try to resolve automatically (3 fallbacks)
     if (!phoneNumberId || !accessToken) {
       // 1. Default channel (is_default = true)
       const { data: defaultChannel } = await supabase
