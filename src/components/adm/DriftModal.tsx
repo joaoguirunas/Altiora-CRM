@@ -194,7 +194,7 @@ export function DriftModal({ clientId, clientName, open, onClose }: DriftModalPr
       if (error) throw error;
 
       qc.invalidateQueries({ queryKey: ['adm-client-drift', clientId] });
-      qc.invalidateQueries({ queryKey: ['adm-all-clients-drift'] });
+      qc.invalidateQueries({ queryKey: ['adm-clients-drift-all'] });
       toast.success('Drift marcado como ignorado.');
     } catch (err) {
       toast.error(`Falha ao ignorar drift: ${(err as Error).message}`);

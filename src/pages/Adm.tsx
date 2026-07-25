@@ -98,7 +98,7 @@ interface AdmStatsBarProps {
 
 function AdmStatsBar({ totalClients, outdatedCount }: AdmStatsBarProps) {
   const { data: driftSummary } = useAllClientsDrift();
-  const driftCount = driftSummary?.clientsWithDrift ?? 0;
+  const driftCount = driftSummary?.count ?? 0;
 
   return (
     <div className="flex items-center gap-2 px-6 py-3 border-b border-border bg-muted/20 flex-wrap">
