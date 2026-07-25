@@ -1,7 +1,7 @@
 ---
 title: "Story FIX-SENDS-FE-VALIDATION: 3 gaps cross-layer FE↔BE no SENDS PRO"
 type: story
-status: backlog
+status: done
 priority: P2
 complexity: M
 agent: dev-architect
