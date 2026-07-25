@@ -10,8 +10,9 @@
 import { useState } from 'react';
 import {
   Clock, X, AlertCircle, CheckCircle2, Loader2,
-  Bot, MessageSquare, ArrowRightLeft, CalendarClock,
+  Bot, MessageSquare, ArrowRightLeft, CalendarClock, Plus,
 } from 'lucide-react';
+import { FupCreateDialog } from './FupCreateDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -237,9 +238,10 @@ function CallbacksPane({ status }: { status: 'pending' | 'all' }) {
 // ── Main Tab ──────────────────────────────────────────────────────────────────
 
 const ScheduledCallbacksTab = () => {
-  const [subTab, setSubTab]     = useState<'fup' | 'retorno'>('fup');
+  const [subTab, setSubTab]         = useState<'fup' | 'retorno'>('fup');
   const [fupFilter, setFupFilter]   = useState<FupSubTab>('pending');
   const [cbFilter, setCbFilter]     = useState<'pending' | 'all'>('pending');
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data: pendingFups = [] }      = useFupProgramados('pending');
   const { data: pendingCallbacks = [] } = useScheduledCallbacks('pending');
@@ -247,12 +249,25 @@ const ScheduledCallbacksTab = () => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <p className="text-[13px] font-semibold text-foreground">FUPs Programados</p>
-        <p className="text-[12px] text-muted-foreground/60 mt-0.5">
-          Ações agendadas automaticamente pelo agente IA — executadas pelo worker a cada 5 min.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">FUPs Programados</p>
+          <p className="text-[12px] text-muted-foreground/60 mt-0.5">
+            Ações agendadas automaticamente pelo agente IA — executadas pelo worker a cada 5 min.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-[28px] rounded-[4px] text-xs gap-1.5 shrink-0"
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus className="w-3 h-3" />
+          Criar FUP
+        </Button>
       </div>
+
+      <FupCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
 
       {/* Main sub-tabs: FUP Programado vs Retorno ad-hoc */}
       <Tabs value={subTab} onValueChange={v => setSubTab(v as 'fup' | 'retorno')}>

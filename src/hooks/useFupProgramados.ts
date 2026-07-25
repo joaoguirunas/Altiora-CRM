@@ -87,6 +87,49 @@ export function useFupProgramados(status?: FupStatus | 'all') {
   });
 }
 
+// ── Create FUP via RPC agendar_fup() ─────────────────────────────────────────
+
+export interface CreateFupParams {
+  lead_id: string;
+  tipo: FupTipo;
+  scheduled_at: string; // ISO string
+  etapa_id?: string | null;
+  template_id?: string | null;
+  mensagem?: string | null;
+  agendamento_titulo?: string | null;
+  motivo?: string | null;
+  agent_id?: string | null;
+}
+
+export function useCreateFupProgramado() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: CreateFupParams): Promise<string> => {
+      // agendar_fup() not yet in generated types — use sbUntyped + rpc
+      const { data, error } = await sbUntyped.rpc('agendar_fup', {
+        p_lead_id:             params.lead_id,
+        p_tipo:                params.tipo,
+        p_scheduled_at:        params.scheduled_at,
+        p_etapa_id:            params.etapa_id ?? null,
+        p_template_id:         params.template_id ?? null,
+        p_mensagem:            params.mensagem ?? null,
+        p_agendamento_titulo:  params.agendamento_titulo ?? null,
+        p_motivo:              params.motivo ?? null,
+        p_agent_id:            params.agent_id ?? null,
+      });
+      if (error) throw error;
+      return String(data); // returns uuid
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QK] });
+      toast.success('FUP programado criado com sucesso.');
+    },
+    onError: (err: Error) => {
+      toast.error(`Erro ao criar FUP: ${err.message}`);
+    },
+  });
+}
+
 export function useCancelFupProgramado() {
   const qc = useQueryClient();
   return useMutation({
