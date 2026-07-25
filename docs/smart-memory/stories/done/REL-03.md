@@ -43,10 +43,10 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
   - Hash: `encode(sha256(v_data::bytea), 'hex')` — 64 chars, determinístico (ORDER BY em tudo)
   - GRANT EXECUTE TO service_role (apenas — não exposto a authenticated)
 
-- [ ] **AC5 — Badge "Drift detectado" em `AdmClientRow`** ⏳ (dev-beta)
-- [ ] **AC6 — Modal "Drift" com Repair button** ⏳ (dev-beta)
+- [x] **AC5 — Badge "Drift detectado" em `AdmClientRow`** ✅ (Novik 2026-07-25)
+- [ ] **AC6 — Modal "Drift" com Repair button** ⏳ (Gamma — em paralelo)
 - [ ] **AC7 — Edge fn `adm-drift-repair`** ⏳ (dev-beta)
-- [ ] **AC8 — Hooks frontend** ⏳ (dev-beta: useClientDrift, useAllClientsDrift, useRepairDrift)
+- [x] **AC8 — Hooks frontend** ✅ (Novik 2026-07-25: useClientDrift, useAllClientsDrift, useRepairDrift)
 - [ ] **AC9 — Stats card "Com drift" em `Adm.tsx`** ⏳ (dev-beta)
 
 ## Dev Agent Record
@@ -58,6 +58,11 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 | Concluído (parte DB) | 2026-07-25 |
 | Branch | feature/04-terminologia-referral |
 
+| Agente | Novik (dev-dev-alpha) — AC5 + AC8 |
+| Iniciado | 2026-07-25 |
+| Concluído | 2026-07-25 |
+| Branch | feat/rel-03-drift-badge-hooks |
+
 ## File List
 
 ### Criados por Bythak (AC1 + AC3 + AC4)
@@ -68,13 +73,17 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 - `supabase/migrations/20260725320000_compute_schema_hash.sql` — AC4
 - `supabase/migrations/rollbacks/20260725320000_compute_schema_hash.rollback.sql`
 
-### Pendente (dev-beta — AC2, AC5–AC9)
-- `supabase/functions/adm-drift-check/` — AC2
-- `supabase/functions/adm-drift-repair/` — AC7
-- `src/components/adm/DriftBadge.tsx` — AC5
-- `src/components/adm/DriftModal.tsx` — AC6
-- `src/hooks/useClientDrift.ts`, `useAllClientsDrift.ts`, `useRepairDrift.ts` — AC8
-- Update `Adm.tsx` StatsBar — AC9
+### Criados por Novik (AC5 + AC8)
+- `src/hooks/useClientDrift.ts` — criado: useClientDrift(clientId) + useAllClientsDrift()
+- `src/hooks/useRepairDrift.ts` — criado: useRepairDrift() mutation (invoca adm-drift-repair)
+- `src/components/adm/DriftBadge.tsx` — criado: badge vermelho, usa useAllClientsDrift()
+- `src/components/adm/AdmClientRow.tsx` — modificado: DriftBadge integrado + prop onOpenDriftModal
+
+### Pendente (outros agentes)
+- `supabase/functions/adm-drift-check/` — AC2 (dev-beta)
+- `supabase/functions/adm-drift-repair/` — AC7 (dev-beta)
+- `src/components/adm/DriftModal.tsx` — AC6 (Gamma — em paralelo)
+- Update `Adm.tsx` StatsBar — AC9 (dev-beta)
 
 ## QA Results
 
