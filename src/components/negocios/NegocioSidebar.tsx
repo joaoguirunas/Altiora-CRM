@@ -9,8 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   User, Phone, Mail, Building2, DollarSign, Edit2, Check, X,
   Calendar, Target, Brain, FileText, Settings, ChevronsUpDown,
-  Briefcase, Users, ChevronDown, Flame, Star
+  Briefcase, Users, ChevronDown, Flame, Star, Tag, AlertTriangle
 } from "lucide-react";
+import { AltioraCloserSelect } from "@/components/negocios/AltioraCloserSelect";
 import { useLeadFieldDefinitionsByEntity } from "@/hooks/useLeadFieldDefinitions";
 import { useLeadFieldValuesByEntity, getTypedLeadValue } from "@/hooks/useLeadFieldValues";
 import { toast } from "sonner";
@@ -38,6 +39,10 @@ interface NegocioSidebarProps {
   isLoadingCompanies?: boolean;
   isPendingNegocio?: boolean;
   isPendingPessoa?: boolean;
+  /** Quando true, exibe aba e seções específicas do pipeline Altiora (ALTIORA-08). */
+  isAltiora?: boolean;
+  /** Quando true, exibe campos financeiros e ações de gestão (ALTIORA-08 AC2). */
+  isManager?: boolean;
 }
 
 const NegocioSidebar = ({
@@ -50,7 +55,9 @@ const NegocioSidebar = ({
   onUpdatePessoa,
   isLoadingCompanies,
   isPendingNegocio,
-  isPendingPessoa
+  isPendingPessoa,
+  isAltiora = false,
+  isManager = false,
 }: NegocioSidebarProps) => {
   const [activeTab, setActiveTab] = useState("cliente");
   const [isEditingValue, setIsEditingValue] = useState(false);
@@ -78,6 +85,19 @@ const NegocioSidebar = ({
   // Label dinâmico baseado no pipeline do negócio (AC3 + AC5)
   const currentPipeline = pipelines.find(p => p.id === pipelineId);
   const entityLabel = getEntityLabel(currentPipeline?.name ?? '');
+
+  // ALTIORA-08 AC5: referral encerrado → modo leitura
+  const isReadOnly = isAltiora && (negocio?.status === 'won' || negocio?.status === 'lost');
+
+  /** ALTIORA-08: label da origem do referral */
+  const origemLabel = (v: string | null | undefined): string => {
+    switch (v) {
+      case 'avenue_email': return 'Avenue (E-mail)';
+      case 'manual': return 'Manual';
+      case 'outros': return 'Outros';
+      default: return '—';
+    }
+  };
 
   const formatCurrency = (value?: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value || 0);
@@ -165,6 +185,8 @@ const NegocioSidebar = ({
   const sidebarTabs = [
     { value: 'cliente', icon: User, label: 'Cliente' },
     { value: 'lead', icon: Briefcase, label: 'Lead' },
+    // ALTIORA-08: aba extra apenas no pipeline Altiora
+    ...(isAltiora ? [{ value: 'referral', icon: Tag, label: 'Referral' }] : []),
   ];
 
   return (
@@ -191,6 +213,19 @@ const NegocioSidebar = ({
             ))}
           </TabsList>
         </div>
+
+        {/* ALTIORA-08 AC5: banner de status encerrado (Ganho/Perdido) */}
+        {isReadOnly && (
+          <div className={cn(
+            "flex items-center gap-2 px-4 py-2 text-[12px] font-medium border-b",
+            negocio.status === 'won'
+              ? "bg-emerald-500/10 text-emerald-600 border-emerald-200/30"
+              : "bg-destructive/10 text-destructive border-destructive/20"
+          )}>
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.5} />
+            {negocio.status === 'won' ? 'Referral Ganho — visualização somente leitura' : 'Referral Perdido — visualização somente leitura'}
+          </div>
+        )}
 
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-5 w-full overflow-hidden" style={{ contain: 'inline-size' }}>
@@ -800,6 +835,149 @@ const NegocioSidebar = ({
               </div>
 
             </TabsContent>
+
+            {/* ────────── REFERRAL TAB (ALTIORA-08) ────────── */}
+            {isAltiora && (
+              <TabsContent value="referral" className="mt-0 space-y-5">
+
+                {/* Origem do referral — read-only após criação (AC1) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                      <span className="text-[12px] text-muted-foreground/60">Canal</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {origemLabel(negocio.altiora_origem)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-[12px] text-muted-foreground/60">Data handoff</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {negocio.altiora_data_handoff ? formatDate(negocio.altiora_data_handoff) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Responsável — AltioraCloserSelect (AC1 + AC2 ALTIORA-08) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Responsável</p>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-border">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] text-muted-foreground/60">Closer</span>
+                      </div>
+                      {/* canEdit: apenas Gestor/Admin; Closer vê em leitura (AC2) */}
+                      <AltioraCloserSelect
+                        leadId={negocio.id}
+                        currentCloserId={negocio.altiora_closer_id}
+                        canEdit={isManager && !isReadOnly}
+                      />
+                    </div>
+                    {negocio.altiora_data_atribuicao && (
+                      <div className="flex items-center justify-between px-4 py-2.5">
+                        <span className="text-[12px] text-muted-foreground/60">Atribuído em</span>
+                        <span className="text-[12px] font-medium text-foreground/80">
+                          {formatDate(negocio.altiora_data_atribuicao)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Etapa atual (AC1) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Etapa Atual</p>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                      <span className="text-[12px] text-muted-foreground/60">Etapa</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {currentStage?.nome || currentStage?.name || '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-[12px] text-muted-foreground/60">Desde</span>
+                      {/* TODO ALTIORA-08: usar stage_entered_at quando migration aplicada */}
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {formatDate(negocio.updated_at)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Valor do prêmio — apenas Manager/Admin (AC2 ALTIORA-08) */}
+                {isManager && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Financeiro</p>
+                    <div className="border border-border rounded-[2px] overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-[13px] text-muted-foreground/70">Prêmio estimado</span>
+                        {isReadOnly ? (
+                          <span className="text-[13px] font-medium text-foreground">{formatCurrency(negocio.value)}</span>
+                        ) : (
+                          isEditingValue ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleValueSave(); if (e.key === 'Escape') setIsEditingValue(false); }}
+                                className="h-7 w-28 text-[13px]"
+                                autoFocus
+                              />
+                              <Button variant="ghost" size="sm" className="h-[30px] w-[30px] p-0 rounded-[4px]" onClick={handleValueSave}>
+                                <Check className="w-3.5 h-3.5" strokeWidth={1.5} />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-[30px] w-[30px] p-0 rounded-[4px]" onClick={() => setIsEditingValue(false)}>
+                                <X className="w-3.5 h-3.5" strokeWidth={1.5} />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setIsEditingValue(true)} className="flex items-center gap-1.5 group">
+                              <span className="text-[13px] font-medium text-foreground">{formatCurrency(negocio.value)}</span>
+                              <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" strokeWidth={1.5} />
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Próxima ação — TODO quando migration next_action_* for aplicada (AC1) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Próxima Ação</p>
+                  <div className="border border-border rounded-[2px] p-3">
+                    {/* TODO ALTIORA-08: exibir next_action_type, next_action_description, next_action_due_at quando migration aplicada */}
+                    <p className="text-[12px] text-muted-foreground/40 italic">
+                      Defina a próxima ação no botão "Próx. Ação" na ficha principal.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Retomada (apenas quando perdido + Manager) */}
+                {negocio.status === 'lost' && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Encerramento</p>
+                    <div className="border border-border rounded-[2px] overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5">
+                        <span className="text-[12px] text-muted-foreground/60">Possibilidade de retomada</span>
+                        <span className={cn(
+                          "text-[11px] font-medium px-1.5 py-0.5 rounded-[2px] border leading-none",
+                          negocio.altiora_possibilidade_retomada
+                            ? "text-emerald-600 bg-emerald-500/10 border-emerald-200/30"
+                            : "text-muted-foreground/50 bg-muted border-border"
+                        )}>
+                          {negocio.altiora_possibilidade_retomada ? 'Sim' : 'Não'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </TabsContent>
+            )}
+
           </div>
         </ScrollArea>
       </Tabs>

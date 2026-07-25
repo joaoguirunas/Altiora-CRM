@@ -52,11 +52,13 @@ import AltioraR3Section, { STAGE_EM_CONTRATACAO } from "@/components/negocios/Al
 import RegistrarContatoModal, { type ContatoFormData } from "@/components/negocios/RegistrarContatoModal";
 import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
 import { useRegistrarContato, useSalvarProximaAcao } from "@/hooks/useAltioraContatos";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 const NegocioSingle = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isManager } = useUserPermissions();
   const { setNavigationState, clearNavigationState } = useNavigation();
 
   const { data: negocio, isLoading, error, isError } = useNegocio(id || "");
@@ -67,6 +69,8 @@ const NegocioSingle = () => {
   // Label dinâmico baseado no pipeline do negócio (AC2 — ALTIORA-04)
   const negocioPipelineId = negocio?.pipeline_id || negocio?.leads_pipelines_id;
   const negocioPipeline = pipelines.find(p => p.id === negocioPipelineId);
+  // ALTIORA-08: identifica se o negócio pertence ao pipeline Altiora
+  const isNegocioAltiora = isAltioraPipeline(negocioPipeline?.name ?? negocioPipeline?.nome ?? '');
   const negocioEntityLabel = getEntityLabel(negocioPipeline?.name ?? '');
   const updateNegocio = useUpdateNegocio({ entityLabel: negocioEntityLabel });
   const { data: estatisticas } = useEstatisticasMensagens(negocio?.people_id);
@@ -734,6 +738,8 @@ const NegocioSingle = () => {
             isLoadingCompanies={isLoadingCompanies}
             isPendingNegocio={updateNegocio.isPending}
             isPendingPessoa={atualizarPessoa.isPending}
+            isAltiora={isNegocioAltiora}
+            isManager={isManager}
           />
 
           {/* Content area */}
