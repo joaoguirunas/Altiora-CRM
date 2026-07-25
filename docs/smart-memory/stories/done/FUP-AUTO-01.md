@@ -94,6 +94,63 @@ Permitir que o agente IA agende FUPs programados (etapa_crm / agendamento / prog
 - `src/components/followup/FupProgramadosPanel.tsx` — UI-1
 - Integração tool `agendar_fup` em `ai-agent-execute` — TOOL-1
 
+## QA Results
+
+```
+VEREDICTO: PASS
+Story: FUP-AUTO-01 (parte DB) | Data: 2026-07-25
+Escopo: DB-1 a DB-5 (schema + índices + RLS + RPC + cron). UI-1/TOOL-1/WORKER-1 fora escopo.
+Rollback: 20260725340000_fup_programados.rollback.sql ✅
+
+DB-1 ✅  fup_programados: CREATE TABLE IF NOT EXISTS. Schema completo:
+         lead_id FK leads CASCADE, people_id FK clients_people SET NULL,
+         agent_id FK ai_agents SET NULL. ✅
+         tipo CHECK ('etapa_crm','agendamento','programado'). ✅
+         etapa_id FK leads_stages SET NULL (para tipo=etapa_crm). ✅
+         template_id text + mensagem text + agendamento_titulo text. ✅
+         motivo, scheduled_at, fired_at, status CHECK (5 estados). ✅
+         error_message, retry_count DEFAULT 0. ✅
+         cancelado_por FK auth.users SET NULL, cancelado_em. ✅
+         created_at, updated_at, deleted_at (soft delete). ✅
+         Trigger update_fup_programados_updated_at → update_updated_at_column(). ✅
+         COMMENT ON TABLE e colunas críticas documentadas. ✅
+
+DB-2 ✅  4 índices parciais com IF NOT EXISTS:
+         idx_fup_programados_pending — (scheduled_at) WHERE pending AND NOT deleted. ✅
+         idx_fup_programados_lead_id — (lead_id) WHERE NOT deleted. ✅
+         idx_fup_programados_status — (status, scheduled_at) WHERE NOT deleted. ✅
+         idx_fup_programados_agent_id — (agent_id) WHERE agent_id IS NOT NULL. ✅
+
+DB-3 ✅  RLS ENABLE ROW LEVEL SECURITY. 4 policies:
+         SELECT: auth.uid() IS NOT NULL + settings_users ativo/não-deletado. ✅
+         INSERT: super_admin OR user_type IN ('admin','manager') + ativo. ✅
+         UPDATE: mesmo gate de INSERT. ✅
+         service_role bypass: FOR ALL USING(true) WITH CHECK(true). ✅
+         GRANT SELECT/INSERT/UPDATE TO authenticated; ALL TO service_role. ✅
+
+DB-4 ✅  agendar_fup() SECURITY DEFINER + SET search_path = public. ✅
+         Validações em ordem: tipo IN lista, scheduled_at > now(), lead EXISTS. ✅
+         Validações por tipo: etapa_crm→etapa_id obrigatório. ✅
+                              programado→template_id OR mensagem obrigatório. ✅
+         INSERT via SELECT FROM leads (propaga people_id automaticamente). ✅
+         REVOKE ALL ON FUNCTION FROM PUBLIC + GRANT TO service_role, authenticated. ✅
+         (padrão de defesa-em-profundidade — melhor que _get_cron_health_metrics)
+
+DB-5 ✅  pg_cron fup-programados-worker, */5 (a cada 5 min). FORA do BEGIN/COMMIT. ✅
+         cron.unschedule() antes de cron.schedule() — idempotente. ✅
+         fn_cron_http_call() padrão (_app_config) — mesma arquitetura dos outros crons. ✅
+
+[INFO] Edge fn fup-programados-worker não existe ainda — cron vai falhar silenciosamente
+       até o WORKER-1 ser deployado. Comportamento seguro (documentado em Notas técnicas).
+       Não bloqueia o gate DB.
+
+Segurança ✅  SECURITY DEFINER + REVOKE ALL FROM PUBLIC + GRANT explícito. ✅
+              Validações defensivas na RPC antes de qualquer INSERT. ✅
+              FKs com ON DELETE CASCADE/SET NULL previnem órfãos. ✅
+
+Próximo passo: @dev-devops push migration. @dev-beta/gamma implementar WORKER-1 e TOOL-1.
+```
+
 ## Notas técnicas
 
 - **Separação de tabelas:** nova tabela `fup_programados` (não extende `followup_queue`) — mantém separação clara entre FUPs de cadência (stage/meeting) e FUPs programados por IA

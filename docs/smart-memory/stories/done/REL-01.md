@@ -153,10 +153,40 @@ Estabelecer modelo de release atômica versionada: cada PR mergado em main com m
 ## QA Results
 
 ```
-VEREDICTO (v1): FAIL — 2026-07-25 (anterior, superado pela resubmissão)
-VEREDICTO (v2): PASS — 2026-07-25 (AC2+AC3+AC4 escopo desta rodada)
+VEREDICTO (v1): FAIL — 2026-07-25 (anterior, superado)
+VEREDICTO (v2): PASS — 2026-07-25 (AC2+AC3+AC4)
+VEREDICTO (v3): PASS — 2026-07-25 (AC7 — sync-clients.yml + sync-clients.js)
 
-Story: REL-01 | Data: 2026-07-25 (revisão v2 — AC2+AC3+AC4)
+Story: REL-01 | Data: 2026-07-25 (revisão v3 — AC7 acumulado a v2)
+AC1 pré-existente. AC2+AC3+AC4 ✅ (v2). AC5/AC6 aguardam dev-beta. AC8 aguarda devops.
+
+──── AC7 ────
+AC7 ✅  .github/workflows/sync-clients.yml: workflow_dispatch ONLY — zero push trigger.
+        BREAKING CHANGE documentada em header extenso (linhas 1-29 do arquivo):
+          "A partir do REL-01, o sync automático de tenants foi REMOVIDO.
+           Push para main NÃO dispara mais sync para clientes."
+          Fluxo normal pós-REL-02 explicado passo a passo. ✅
+        Inputs: client_slug (opt), target_version (opt), deploy_functions (opt),
+          reason (REQUIRED — campo obrigatório para auditoria). ✅
+        Validação extra: if reason vazio → exit 1 (além do required:true). ✅
+        Audit log step no início: actor, datetime, target, target_version, reason. ✅
+        TRIGGERED_BY passado como "manual:${{ github.actor }}". ✅
+        SYNC_REASON passado de inputs.reason para sync-clients.js. ✅
+
+        scripts/sync-clients.js:
+          TARGET_VERSION (L48), TRIGGERED_BY (L50), SYNC_REASON (L51). ✅
+          Todos 3 enviados no body do adm-sync-client (L113-115). ✅
+          audit trail via console.log com reason+trigger (L214-218). ✅
+
+        Tenant updates agora opt-in via UI (REL-02) — sync automático desabilitado. ✅
+
+──── Status acumulado ────
+AC1 ✅ (pré-existente) | AC2 ✅ | AC3 ✅ | AC4 ✅ | AC7 ✅
+AC5 ⏳ dev-beta | AC6 ⏳ dev-beta | AC8 ⏳ dev-devops
+
+Próximo passo: @dev-beta AC5 (useAdmReleases) + AC6 (adm-sync-client refactor).
+               @dev-devops AC8 (CHANGELOG/README). Resubmeter para gate final.
+
 Escopo desta revisão: AC2 (release-tag.yml) + AC3 (migrations control plane) + AC4 (edge fn)
 AC1 pré-existente. AC5/AC6/AC7/AC8 aguardam dev-beta + dev-devops (fora deste gate).
 
