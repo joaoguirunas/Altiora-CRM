@@ -43,7 +43,8 @@ import MotivoPerdasModal, { type MotivoPerdasPayload } from "@/components/negoci
 import ReobrirReferralModal, { type ReobrirPayload } from "@/components/negocios/ReobrirReferralModal";
 import CamposExtrasSection from "@/components/negocios/CamposExtrasSection";
 import { ExtraFieldsCard } from "@/components/pessoas/ExtraFieldsCard";
-import { getEntityLabel } from "@/utils/pipelineLabels";
+import { getEntityLabel, isAltioraPipeline } from "@/utils/pipelineLabels";
+import AltioraFinvitySection from "@/components/negocios/AltioraFinvitySection";
 
 const NegocioSingle = () => {
   const { id } = useParams<{ id: string }>();
@@ -824,6 +825,16 @@ const NegocioSingle = () => {
                         leadId={id!}
                         pipelineId={negocio.leads_pipelines_id}
                         category="outros"
+                      />
+                    )}
+
+                    {/* ALTIORA-16: Seção Análise Finvity — apenas para pipeline Altiora */}
+                    {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                      <AltioraFinvitySection
+                        leadId={id!}
+                        currentStagePosition={
+                          filteredStages.findIndex(s => s.id === selectedStageId) + 1
+                        }
                       />
                     )}
 
