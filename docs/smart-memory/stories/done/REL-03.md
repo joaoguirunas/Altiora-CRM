@@ -99,6 +99,39 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 ## QA Results
 
 ```
+VEREDICTO: CONCERNS (escopo: AC2 — adm-drift-check edge fn + migration 20260725360000)
+Story: REL-03 | Data: 2026-07-25
+Checklist: 8/8 verificados | tsc: EXIT 0 ✅ | rollback: ✅
+
+──── AC2 — adm-drift-check edge fn ────
+Auth ✅        Bearer === SUPABASE_SERVICE_ROLE_KEY. Fail-secure se env ausente.
+Iteração ✅    .eq('status','active').not('current_version','is',null).
+Release cache ✅  Map<string,AdmRelease|null> in-memory; on-miss lookup; atualizado pós-baseline.
+Lazy baseline ✅  !expectedHash → storeReleaseHash .is('schema_hash',null) race-safe;
+               release.schema_hash atualizado in-memory para batch subsequente.
+Idempotência ✅  maybeSingle() (client_id, expected_release, status='detected') antes de INSERT.
+Resiliência ✅   computeTenantHash null → skip_no_hash_rpc + errors++ + continue.
+skip_no_credentials ✅  log + continue (sem throw).
+skip_no_release ✅      log + continue.
+Migration ✅   20260725360000: ADD COLUMN IF NOT EXISTS schema_hash text + COMMENT + rollback.
+Response ✅    {ok,checked,ok_count,drifted,baselined,errors,results[],ran_at}.
+
+Aprovado com observações:
+- [CONCERN-1 LOW] skip_no_credentials outcome não incrementa nenhum contador —
+  summary.errors subestima falhas de credencial. Sugestão: adicionar `skipped` counter.
+- [CONCERN-2 LOW] diff_summary hardcoded ('Schema diverges from expected release hash');
+  sem preview de hash. Aceitável v1 — DriftModal exibe full hashes.
+- [CONCERN-3 INFO] Race transient no lazy baseline: se 2 runs simultâneos tentam baseline
+  para mesma release, segundo falha silenciosamente no UPDATE (.is null). Cache local do
+  segundo run armazena hash do SEU tenant, mas próximo cron usa valor DB correto. Não persistente.
+
+Push LIBERADO. AC7 (adm-drift-repair) pendente dev-beta.
+Próximo passo: @dev-devops push adm-drift-check edge fn + migration 20260725360000.
+```
+
+---
+
+```
 VEREDICTO: PASS (escopo DB: AC1 + AC3 + AC4)
 Story: REL-03 | Data: 2026-07-25
 Escopo desta revisão: AC1 (adm_client_drift), AC3 (pg_cron), AC4 (compute_schema_hash).
