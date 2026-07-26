@@ -314,7 +314,7 @@ const DashLayout = () => {
       // Check module dependency: if item has a module, it must be active
       if (item.module) {
         const isModuleActive = activeModules.some(m =>
-          m.module_key === item.module && m.is_active === true
+          m.module_key === item.module
         );
 
         if (isModuleActive) {
