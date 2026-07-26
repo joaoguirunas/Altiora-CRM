@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   Plus, Pencil, Trash2, Zap, MessageCircle, MessageSquare,
   Heart, ChevronDown, X, Loader2, CheckCircle2, XCircle, Clock, SkipForward,
-  Hash, Play, Image, AlertTriangle, ChevronUp, Layers,
+  Hash, Play, Image, AlertTriangle, ChevronUp, Layers, Info, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -24,6 +27,9 @@ import {
   useDeleteInstagramAutomation,
   useInstagramAutomationLog,
   useInstagramPosts,
+  useInstagramLogAggregates,
+  useInstagramUnmatchedComments,
+  useInstagramCommentSubscribed,
   type InstagramAutomation,
   type InstagramPost,
   type AutomationFilter,
@@ -484,7 +490,15 @@ const DEFAULT_FORM: AutomationUpsert = {
 
 type View = { mode: 'list' } | { mode: 'form'; id: string | null };
 
-export default function InstagramAutomationsTab({ initialEditId, onClose }: { initialEditId?: string | null; onClose?: () => void } = {}) {
+export default function InstagramAutomationsTab({
+  initialEditId,
+  onClose,
+  onGoToIntegration,
+}: {
+  initialEditId?: string | null;
+  onClose?: () => void;
+  onGoToIntegration?: () => void;
+} = {}) {
   const [view, setView] = useState<View>(
     initialEditId != null ? { mode: 'form', id: initialEditId } : { mode: 'list' },
   );
@@ -502,6 +516,7 @@ export default function InstagramAutomationsTab({ initialEditId, onClose }: { in
     <AutomationList
       onNew={() => setView({ mode: 'form', id: null })}
       onEdit={(id) => setView({ mode: 'form', id })}
+      onGoToIntegration={onGoToIntegration}
     />
   );
 }
@@ -511,14 +526,18 @@ export default function InstagramAutomationsTab({ initialEditId, onClose }: { in
 function AutomationList({
   onNew,
   onEdit,
+  onGoToIntegration,
 }: {
   onNew: () => void;
   onEdit: (id: string) => void;
+  onGoToIntegration?: () => void;
 }) {
   const { data: automations = [], isLoading } = useInstagramAutomations();
   const { mutate: del, isPending: deleting } = useDeleteInstagramAutomation();
   const { mutate: update } = useUpdateInstagramAutomation();
   const { toast } = useToast();
+  const { data: aggregates } = useInstagramLogAggregates();
+  const { data: commentSubscribed } = useInstagramCommentSubscribed();
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Remover a automação "${name}"?`)) return;
@@ -559,6 +578,59 @@ function AutomationList({
         </Button>
       </div>
 
+      {/* AC5 — webhook subscription warning */}
+      {commentSubscribed === false && (
+        <div className="flex items-start gap-2 border border-amber-500/30 bg-amber-500/8 rounded-[4px] px-3 py-2.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+              Webhook de comentários não está inscrito
+            </p>
+            <p className="text-[10px] text-amber-600/80 dark:text-amber-400/70 mt-0.5">
+              Comentários do Instagram não chegam ao Altiora. Verifique a assinatura do webhook.
+              {onGoToIntegration && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    onClick={onGoToIntegration}
+                    className="underline underline-offset-2 hover:no-underline inline-flex items-center gap-0.5"
+                  >
+                    Ir para Integração
+                    <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AC2 — daily aggregates */}
+      {aggregates && (aggregates.commentsReceived > 0 || aggregates.success > 0 || aggregates.skipped > 0 || aggregates.cooldown > 0) && (
+        <div className="flex items-center gap-2 flex-wrap px-0.5">
+          <span className="text-[10px] font-medium text-muted-foreground">Hoje:</span>
+          <span className="text-[10px] text-foreground/70 bg-muted rounded px-1.5 py-0.5">
+            {aggregates.commentsReceived} comentário{aggregates.commentsReceived !== 1 ? 's' : ''} recebido{aggregates.commentsReceived !== 1 ? 's' : ''}
+          </span>
+          {aggregates.success > 0 && (
+            <span className="text-[10px] text-green-600 bg-green-500/10 rounded px-1.5 py-0.5">
+              {aggregates.success} disparo{aggregates.success !== 1 ? 's' : ''}
+            </span>
+          )}
+          {aggregates.skipped > 0 && (
+            <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+              {aggregates.skipped} ignorado{aggregates.skipped !== 1 ? 's' : ''}
+            </span>
+          )}
+          {aggregates.cooldown > 0 && (
+            <span className="text-[10px] text-amber-600 bg-amber-500/10 rounded px-1.5 py-0.5">
+              {aggregates.cooldown} cooldown
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Empty state */}
       {automations.length === 0 && (
         <div className="border border-dashed border-border rounded-[4px] py-10 flex flex-col items-center gap-3 text-center">
@@ -575,6 +647,17 @@ function AutomationList({
             <Plus className="w-3.5 h-3.5" />
             Criar automação
           </Button>
+          {/* AC4 — verificar webhooks link */}
+          {onGoToIntegration && (
+            <button
+              type="button"
+              onClick={onGoToIntegration}
+              className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Verificar webhooks Instagram
+            </button>
+          )}
         </div>
       )}
 
@@ -1335,6 +1418,11 @@ function AutomationForm({
         </div>
         </div>
 
+        {/* ── AC3: Comentários sem correspondência (post_comment, edição) ── */}
+        {id && isComment && (
+          <UnmatchedCommentsSection automationId={id} targetPostId={form.target_post_id} />
+        )}
+
         {/* ── Log colapsável (apenas ao editar) ── */}
         {id && (
           <AutomationLogSection
@@ -1556,9 +1644,12 @@ function AutomationLogSection({
   );
 
   const successCount = logs.filter(l => l.status === 'success').length;
-  const failCount = logs.filter(l => l.status === 'failed').length;
+  const failCount    = logs.filter(l => l.status === 'failed').length;
+  const skippedCount = logs.filter(l => l.status === 'skipped').length;
+  const cooldownCount = logs.filter(l => l.status === 'cooldown').length;
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="border border-border rounded-[4px] overflow-hidden">
       {/* Header */}
       <button
@@ -1581,6 +1672,12 @@ function AutomationLogSection({
               )}
               {failCount > 0 && (
                 <span className="text-[10px] text-red-500 font-medium">{failCount} falha{failCount !== 1 ? 's' : ''}</span>
+              )}
+              {skippedCount > 0 && (
+                <span className="text-[10px] text-muted-foreground font-medium">{skippedCount} ignorado{skippedCount !== 1 ? 's' : ''}</span>
+              )}
+              {cooldownCount > 0 && (
+                <span className="text-[10px] text-amber-600 font-medium">{cooldownCount} cooldown</span>
               )}
             </div>
           )}
@@ -1612,6 +1709,30 @@ function AutomationLogSection({
                 const triggerLabel = entry.trigger_type ? (TRIGGER_LABEL_MAP[entry.trigger_type] ?? entry.trigger_type) : null;
                 const actionLabel = entry.action_executed ? (ACTION_LABEL_MAP[entry.action_executed] ?? entry.action_executed) : null;
 
+                // AC1 — tooltip reason for skipped / cooldown / failed
+                const tooltipReason = (() => {
+                  if (entry.status === 'skipped') {
+                    return entry.error_message || 'Nenhum filtro correspondeu ao comentário';
+                  }
+                  if (entry.status === 'cooldown') {
+                    return entry.error_message || 'Cooldown ativo — aguarde antes da próxima execução para este usuário';
+                  }
+                  if (entry.status === 'failed') {
+                    return entry.error_message || 'Erro desconhecido';
+                  }
+                  return null;
+                })();
+
+                const statusBadge = (
+                  <span className={cn(
+                    'inline-flex items-center text-[9px] font-semibold px-1.5 py-px rounded-[3px] border shrink-0',
+                    sc.className,
+                  )}>
+                    {sc.label}
+                    {tooltipReason && <Info className="w-2.5 h-2.5 ml-0.5 opacity-60" />}
+                  </span>
+                );
+
                 return (
                   <div key={entry.id} className="px-3 py-2.5 group hover:bg-muted/20 transition-colors">
                     {/* Row 1: person + status badge + time */}
@@ -1621,12 +1742,16 @@ function AutomationLogSection({
                         <span className="text-[12px] font-medium text-foreground truncate">
                           {entry.person_name || 'Usuário'}
                         </span>
-                        <span className={cn(
-                          'inline-flex items-center text-[9px] font-semibold px-1.5 py-px rounded-[3px] border shrink-0',
-                          sc.className,
-                        )}>
-                          {sc.label}
-                        </span>
+                        {tooltipReason ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              {statusBadge}
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[240px] text-[11px]">
+                              {tooltipReason}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : statusBadge}
                       </div>
                       <span className="text-[10px] text-muted-foreground/50 shrink-0 whitespace-nowrap">{relTime}</span>
                     </div>
@@ -1661,8 +1786,8 @@ function AutomationLogSection({
                       </div>
                     )}
 
-                    {/* Row 4: error */}
-                    {entry.error_message && (
+                    {/* Row 4: error (only when no tooltip, avoid redundancy) */}
+                    {entry.error_message && !tooltipReason && (
                       <p className="text-[10px] text-red-500 mt-1 pl-[18px] line-clamp-2">{entry.error_message}</p>
                     )}
                   </div>
@@ -1672,6 +1797,72 @@ function AutomationLogSection({
           )}
         </div>
       )}
+    </div>
+    </TooltipProvider>
+  );
+}
+
+// ── UnmatchedCommentsSection (AC3) ────────────────────────────────────────────
+
+function UnmatchedCommentsSection({
+  automationId,
+  targetPostId,
+}: {
+  automationId: string;
+  targetPostId: string | null;
+}) {
+  const { data: unmatched = [], isLoading } = useInstagramUnmatchedComments(automationId, targetPostId);
+
+  if (isLoading) {
+    return (
+      <div className="border border-border rounded-[4px] px-3 py-2.5 flex items-center gap-2">
+        <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+        <span className="text-[11px] text-muted-foreground">Verificando comentários sem correspondência...</span>
+      </div>
+    );
+  }
+
+  if (unmatched.length === 0) return null;
+
+  return (
+    <div className="border border-border rounded-[4px] overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-border flex items-center gap-2">
+        <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <p className="text-[11px] font-semibold text-foreground">
+          Comentários sem correspondência
+        </p>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-[9px] text-muted-foreground/60 bg-muted rounded px-1.5 py-0.5 cursor-default">
+                {unmatched.length} recentes
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[240px] text-[11px]">
+              Comentários recebidos{targetPostId ? ' neste post' : ''} que não acionaram esta automação. Pode indicar que os filtros não bateram ou que o webhook não entregou o comentário.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+      <div className="divide-y divide-border/30">
+        {unmatched.map((c) => {
+          const relTime = (() => {
+            try { return formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: ptBR }); }
+            catch { return ''; }
+          })();
+          return (
+            <div key={c.id} className="px-3 py-2 flex items-start justify-between gap-2 hover:bg-muted/20 transition-colors">
+              <div className="flex items-start gap-1.5 min-w-0">
+                <MessageSquare className="w-3 h-3 text-muted-foreground/40 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-muted-foreground line-clamp-1">
+                  {c.message_text || '(sem texto)'}
+                </p>
+              </div>
+              <span className="text-[10px] text-muted-foreground/40 shrink-0 whitespace-nowrap">{relTime}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Key, Plus, Pencil, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
+import BiVoiceFeatureToggle from '@/components/settings/BiVoiceFeatureToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -319,6 +320,12 @@ const AIProvidersConfig = () => {
           })}
         </div>
       )}
+
+      {/* BI Voice Chat beta toggle — AC5/AC6/AC8 */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recursos Beta</p>
+        <BiVoiceFeatureToggle />
+      </div>
 
       {/* Info box */}
       <div className="rounded-[4px] border border-border bg-muted px-4 py-3 text-xs text-muted-foreground space-y-1">

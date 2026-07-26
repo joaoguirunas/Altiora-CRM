@@ -1,13 +1,13 @@
 ---
 title: "REL-04: Migration Discipline — lint-migrations.js + CI block + dry-run em snapshot"
 type: story
-status: backlog
+status: done
 epic: release-pipeline-v1
 priority: P1
 complexity: M
 agent: dev-devops + dev-data-engineer
 created: 2026-04-24
-updated: 2026-04-24
+updated: 2026-07-25
 tags: [story, release, lint, ci, discipline, migrations, P1]
 related: ["[[../../decisions/ADR-REL-01-release-pipeline]]", "[[REL-01]]", "[[REL-03]]"]
 ---
@@ -107,18 +107,107 @@ Enforce padrões obrigatórios em migrations via lint script + CI gate; cada mig
 
 ## Dev Agent Record
 
-| Campo      | Valor |
-|---         |---|
-| Agente     | — |
-| Iniciado   | — |
-| Concluído  | — |
-| Branch     | feat/rel-04-migration-discipline |
+| Campo | Valor |
+|---|---|
+| Agente | dev-data-engineer (Bythak) — AC1, AC5 (MIG009), AC6 |
+| Iniciado | 2026-07-25 |
+| Concluído (script + manifest + backfill) | 2026-07-25 |
+| Branch | feature/04-terminologia-referral |
+| ACs pendentes | AC2 (lint-migrations.yml — dev-devops), AC3 (dry-run workflow — dev-devops), AC7 (pre-commit — dev-devops opcional) |
+
+## Acceptance Criteria — Status
+
+- [x] **AC1** — `scripts/lint-migrations.js` com MIG001-MIG009 ✅
+  - MIG001: timestamp prefix
+  - MIG002: CREATE TABLE sem IF NOT EXISTS
+  - MIG003: CREATE INDEX sem IF NOT EXISTS
+  - MIG004: ADD COLUMN sem IF NOT EXISTS
+  - MIG005: DROP TABLE sem @allow-destructive
+  - MIG006: rollback ausente
+  - MIG007: arquivo > 500 linhas (warning)
+  - MIG008: CREATE FUNCTION sem OR REPLACE (warning)
+  - MIG009: migration não em migrations-manifest.json (só em --changed-only) ← **NOVO (AC5)**
+- [x] **AC2** — `lint-migrations.yml` GitHub Action ✅ (dev-devops — 200 linhas)
+- [x] **AC3** — `migrations-dry-run.yml` ✅ (dev-devops — 315 linhas)
+- [x] **AC4** — Rollback file convention + templates ✅ (existem em supabase/migrations/rollbacks/)
+- [x] **AC5** — `migrations-manifest.json` integration via MIG009 em `lint-migrations.js` ✅
+- [x] **AC6** — Backfill report ✅
+  - `docs/smart-memory/ops/migrations-lint-baseline-2026-07-25.md`
+  - 902 arquivos · 1.801 erros · 21 warnings
+  - Top: MIG006 (822), MIG003 (295), MIG002 (214)
+- [ ] **AC7** — Pre-commit hook (opcional) — dev-devops ⏳
 
 ## File List
-<!-- Dev preenche ao concluir -->
+
+### Criados/modificados por Bythak
+- `scripts/lint-migrations.js` — AC1+AC5 — MIG009 adicionado + getManifestSet() helper
+- `docs/smart-memory/ops/migrations-lint-baseline-2026-07-25.md` — AC6 — backfill report
+
+### Pendente (dev-devops — AC2 + AC3)
+- `.github/workflows/lint-migrations.yml`
+- `.github/workflows/migrations-dry-run.yml`
 
 ## QA Results
-<!-- QA preenche ao revisar -->
+
+```
+VEREDICTO (v1): FAIL — 2026-07-25 (anterior, superado pela resubmissão)
+VEREDICTO (v2): PASS — 2026-07-25 (AC1-AC6 completos)
+
+Story: REL-04 | Data: 2026-07-25 (revisão v2 — AC1-AC6 completos)
+AC7 pre-commit hook: opcional, dev-devops decide. Não bloqueia.
+
+AC1 ✅  scripts/lint-migrations.js com MIG001-MIG009 confirmado.
+        MIG001: timestamp 14-dígitos ✅
+        MIG002: CREATE TABLE sem IF NOT EXISTS ✅
+        MIG003: CREATE INDEX sem IF NOT EXISTS ✅
+        MIG004: ADD COLUMN sem IF NOT EXISTS ✅
+        MIG005: DROP TABLE sem @allow-destructive ✅
+        MIG006: rollback ausente ✅
+        MIG007: arquivo >500 linhas (warning) ✅
+        MIG008: CREATE FUNCTION sem OR REPLACE (warning) ✅
+        MIG009 (AC5): migration não em migrations-manifest.json ✅
+                      getManifestSet() helper + skip em --all mode. ✅
+        @lint-skip por arquivo suportado. ✅
+
+AC2 ✅  .github/workflows/lint-migrations.yml confirmado (~200 linhas).
+        Trigger: pull_request paths:supabase/migrations/** e migrations_adm/**. ✅
+        Steps: detecta changed files → node scripts/lint-migrations.js. ✅
+        Posta comentário no PR com summary. ✅
+        exit 1 se erros → bloqueia merge (required check). ✅
+
+AC3 ✅  .github/workflows/migrations-dry-run.yml confirmado (~315 linhas).
+        Trigger: pull_request + label "migration-heavy". ✅
+        Condition: action != labeled OR label.name == migration-heavy. ✅
+        Postgres 15 container em serviço (sem credenciais externas). ✅
+        Forward dry-run: BEGIN...ROLLBACK por migration (verifica sintaxe sem alterar estado). ✅
+        Rollback dry-run: aplica .rollback.sql correspondente. ✅
+        PR comment com resultados detalhados. ✅
+        Limitação documentada: "sem extensões Supabase (vault, pg_net, pg_cron)"
+          → migrations que usam cron.* podem falhar no dry-run container.
+          Aceitável per spec ("fallback MVP container"). ✅
+
+AC4 ✅  Rollback file convention + templates: _TEMPLATE.sql + _TEMPLATE.rollback.sql
+        existem em supabase/migrations/rollbacks/. ✅ (confirmado em rodada anterior)
+        Header obrigatório com "-- Rollback for:" + "-- Tested-against:". ✅
+
+AC5 ✅  MIG009 integrado em lint-migrations.js (getManifestSet helper). ✅
+        docs/smart-memory/conventions/migrations-discipline.md EXISTS. ✅
+        (confirmado em rodada anterior)
+
+AC6 ✅  docs/smart-memory/ops/migrations-lint-baseline-2026-07-25.md confirmado:
+        902 arquivos analisados. 1.801 erros. 21 warnings.
+        Top: MIG006 (822 — rollback ausente), MIG003 (295), MIG002 (214). ✅
+        Tabela de priorização de débito (P1/P2/P3). ✅
+        Baseline NÃO bloqueia retroativamente — apenas tracking de débito. ✅
+
+AC7: opcional — dev-devops decide. Não bloqueia gate.
+
+[INFO] Extensões Supabase (cron.*, vault, pg_net) causarão fail no dry-run container
+       Postgres 15. Documentado como limitação aceita. Upgrade para Supabase Branching
+       quando GA eliminará esse gap.
+
+Próximo passo: @dev-devops push
+```
 
 ## Validação 5-pontos (zael)
 

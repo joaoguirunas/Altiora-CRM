@@ -95,7 +95,10 @@ export default function CriarDisparoModal({ open, onClose }: CriarDisparoModalPr
     };
 
     if (config.agendar && config.scheduled_date && config.scheduled_time) {
-      sendData.scheduled_at = `${config.scheduled_date}T${config.scheduled_time}:00`;
+      // Use toISOString() to emit an explicit UTC timestamp — avoids Postgres
+      // interpreting the naive local-time string in the server's timezone (UTC),
+      // which would shift the scheduled_at by the user's UTC offset.
+      sendData.scheduled_at = new Date(`${config.scheduled_date}T${config.scheduled_time}:00`).toISOString();
     }
 
     if (tipo === 'filtered') {

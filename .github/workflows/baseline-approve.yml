@@ -1,0 +1,235 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# baseline-approve.yml — REL-05 AC2
+#
+# Workflow acionado ao adicionar label "baseline-squash-approved" em qualquer PR
+# que contenha um arquivo _baseline_vN.candidate.sql
+#
+# Passos:
+#   1. Detecta o candidato (maior vN)
+#   2. Dry-run no banco (SUPABASE_DB_URL)
+#   3. Renomeia .candidate.sql → _baseline_vN.sql
+#   4. Move migrations originais para supabase/migrations/archived/vN/
+#   5. Registra entrada em adm_releases (is_baseline=true) via Supabase API
+#   6. Commit + push na branch do PR
+#
+# Requer secrets:
+#   SUPABASE_DB_URL         — direct DB URL (postgres://...)
+#   SUPABASE_SERVICE_ROLE   — service role key para update adm_releases
+#   SUPABASE_URL            — project URL (https://xxx.supabase.co)
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Baseline Squash — Approve
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  approve-baseline:
+    if: github.event.label.name == 'baseline-squash-approved'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Detectar candidato ──────────────────────────────────────────────
+      - name: Detect baseline candidate
+        id: detect
+        run: |
+          set -euo pipefail
+
+          CANDIDATE=$(ls supabase/migrations/_baseline_v*.candidate.sql 2>/dev/null | sort -V | tail -1)
+          if [ -z "$CANDIDATE" ]; then
+            echo "❌ Nenhum _baseline_v*.candidate.sql encontrado"
+            exit 1
+          fi
+
+          BASENAME=$(basename "$CANDIDATE")
+          VERSION=$(echo "$BASENAME" | grep -oP '(?<=_baseline_v)\d+')
+          FINAL_NAME="_baseline_v${VERSION}.sql"
+          FINAL_PATH="supabase/migrations/${FINAL_NAME}"
+
+          echo "candidate=$CANDIDATE"        >> $GITHUB_OUTPUT
+          echo "version=$VERSION"            >> $GITHUB_OUTPUT
+          echo "final_name=$FINAL_NAME"      >> $GITHUB_OUTPUT
+          echo "final_path=$FINAL_PATH"      >> $GITHUB_OUTPUT
+          echo "archive_dir=supabase/migrations/archived/v${VERSION}" >> $GITHUB_OUTPUT
+
+          echo "✅ Candidato detectado: $BASENAME (v${VERSION})"
+
+      # ── 3. Instalar psql ───────────────────────────────────────────────────
+      - name: Install psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      # ── 4. Dry-run no banco ────────────────────────────────────────────────
+      - name: Dry-run (BEGIN ... ROLLBACK)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          CANDIDATE="${{ steps.detect.outputs.candidate }}"
+          echo "=== DRY-RUN: $CANDIDATE ==="
+
+          # Envolve o candidato em BEGIN...ROLLBACK para verificar sintaxe e DDL
+          psql "$SUPABASE_DB_URL" <<SQL
+          BEGIN;
+          \i $CANDIDATE
+          ROLLBACK;
+          SQL
+
+          echo "✅ Dry-run aprovado — nenhuma alteração aplicada"
+
+      # ── 5. Renomear candidato → final ─────────────────────────────────────
+      - name: Rename candidate to final baseline
+        run: |
+          set -euo pipefail
+
+          mv "${{ steps.detect.outputs.candidate }}" \
+             "${{ steps.detect.outputs.final_path }}"
+
+          echo "✅ Renomeado: $(basename ${{ steps.detect.outputs.final_path }})"
+
+      # ── 6. Arquivar migrations originais ──────────────────────────────────
+      - name: Archive original migrations
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_DIR="${{ steps.detect.outputs.archive_dir }}"
+          FINAL_PATH="${{ steps.detect.outputs.final_path }}"
+          FINAL_NAME="${{ steps.detect.outputs.final_name }}"
+          VERSION="${{ steps.detect.outputs.version }}"
+
+          mkdir -p "$ARCHIVE_DIR"
+
+          # Move todas as migrations que NÃO são _baseline_*.sql e NÃO são o novo final
+          MOVED=0
+          for f in supabase/migrations/*.sql; do
+            fname=$(basename "$f")
+            # Pula: _baseline_*.sql, o novo final, e arquivos de template
+            if [[ "$fname" == _baseline_*.sql ]] || [[ "$fname" == "$FINAL_NAME" ]]; then
+              continue
+            fi
+            # Só move se tem timestamp prefix (14 dígitos)
+            if [[ "$fname" =~ ^[0-9]{14}_ ]]; then
+              mv "$f" "$ARCHIVE_DIR/"
+              MOVED=$((MOVED + 1))
+            fi
+          done
+
+          # Cria README no archive dir
+          cat > "$ARCHIVE_DIR/README.md" <<EOF
+          # Archived migrations — Baseline v${VERSION}
+
+          Este diretório contém as ${MOVED} migrations originais que foram consolidadas
+          no baseline \`_baseline_v${VERSION}.sql\`.
+
+          **Data de arquivamento:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          **Baseline gerado por:** scripts/squash-baseline.js (REL-05 AC1)
+
+          Estas migrations são mantidas para referência histórica e NÃO devem ser
+          re-aplicadas. O baseline já as representa em forma consolidada.
+          EOF
+
+          echo "✅ ${MOVED} migrations arquivadas em ${ARCHIVE_DIR}/"
+
+      # ── 7. Registrar em adm_releases ──────────────────────────────────────
+      - name: Register baseline in adm_releases
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.detect.outputs.version }}"
+          FINAL_NAME="${{ steps.detect.outputs.final_name }}"
+          TODAY=$(date -u +%Y-%m-%d)
+          MIGRATIONS_COUNT=$(ls supabase/migrations/archived/v${VERSION}/ | grep '\.sql$' | wc -l | tr -d ' ')
+
+          PAYLOAD=$(jq -n \
+            --arg version "v${VERSION}" \
+            --arg title "Baseline Squash v${VERSION}" \
+            --arg description "Squash de ${MIGRATIONS_COUNT} migrations em ${FINAL_NAME}. Gerado por REL-05 (squash-baseline.js)." \
+            --arg released_at "${TODAY}T05:00:00Z" \
+            '{
+              version: $version,
+              title: $title,
+              description: $description,
+              released_at: $released_at,
+              is_baseline: true,
+              status: "released"
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "${SUPABASE_URL}/rest/v1/adm_releases" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "$PAYLOAD")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [[ "$HTTP_CODE" != "201" && "$HTTP_CODE" != "200" ]]; then
+            echo "⚠️  Falha ao registrar em adm_releases (HTTP $HTTP_CODE) — baseline ainda válido"
+            echo "$RESPONSE"
+          else
+            echo "✅ adm_releases atualizado: Baseline v${VERSION} (is_baseline=true)"
+          fi
+
+      # ── 8. Commit e push ───────────────────────────────────────────────────
+      - name: Commit and push baseline
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          VERSION="${{ steps.detect.outputs.version }}"
+          FINAL_NAME="${{ steps.detect.outputs.final_name }}"
+
+          git add supabase/migrations/ supabase/migrations/archived/
+          git commit -m "chore(baseline): squash v${VERSION} — ${FINAL_NAME} [REL-05]
+
+          - Candidato aprovado via label baseline-squash-approved
+          - Migrations originais arquivadas em supabase/migrations/archived/v${VERSION}/
+          - is_baseline=true registrado em adm_releases
+          - Dry-run aprovado antes da aplicação
+
+          Co-Authored-By: squash-baseline.js <noreply@anthropic.com>"
+
+          git push origin HEAD:"${{ github.head_ref }}"
+          echo "✅ Commit realizado na branch ${{ github.head_ref }}"
+
+      # ── 9. Comentário no PR ────────────────────────────────────────────────
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.detect.outputs.version }}';
+            const finalName = '${{ steps.detect.outputs.final_name }}';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `## ✅ Baseline v${version} aprovado`,
+                ``,
+                `**Arquivo:** \`supabase/migrations/${finalName}\``,
+                `**Migrations arquivadas:** \`supabase/migrations/archived/v${version}/\``,
+                `**adm_releases:** atualizado com \`is_baseline=true\``,
+                ``,
+                `O baseline foi gerado, verificado com dry-run e commitado nesta branch.`,
+                `Faça merge normalmente para completar o squash.`,
+              ].join('\n')
+            });

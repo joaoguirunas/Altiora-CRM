@@ -30,11 +30,11 @@ export const useScoreCategories = () => {
     queryKey: ['score-categories'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('score_categories' as 'score_objectives') // cast: not in types.ts yet
+        .from('score_categories')
         .select('*')
         .order('order_index', { ascending: true });
       if (error) throw error;
-      return (data || []) as unknown as ScoreCategory[];
+      return (data || []) as ScoreCategory[];
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -45,14 +45,14 @@ export const useCreateScoreCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { name: string }) => {
-      const { data: maxData } = await (supabase as unknown as { from: (t: string) => any })
+      const { data: maxData } = await supabase
         .from('score_categories')
         .select('order_index')
         .order('order_index', { ascending: false })
         .limit(1)
         .single();
       const nextOrder = (maxData?.order_index ?? -1) + 1;
-      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      const { data, error } = await supabase
         .from('score_categories')
         .insert({ name: payload.name, order_index: nextOrder })
         .select()
@@ -72,7 +72,7 @@ export const useUpdateScoreCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ScoreCategory> & { id: string }) => {
-      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      const { data, error } = await supabase
         .from('score_categories')
         .update(updates)
         .eq('id', id)
@@ -93,7 +93,7 @@ export const useDeleteScoreCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as unknown as { from: (t: string) => any })
+      const { error } = await supabase
         .from('score_categories')
         .delete()
         .eq('id', id);
@@ -115,7 +115,7 @@ export const useReorderScoreCategories = () => {
     mutationFn: async (items: { id: string; order_index: number }[]) => {
       await Promise.all(
         items.map((item) =>
-          (supabase as unknown as { from: (t: string) => any })
+          supabase
             .from('score_categories')
             .update({ order_index: item.order_index })
             .eq('id', item.id)
@@ -136,7 +136,7 @@ export const useScoreCategoryItems = (categoryId?: string) => {
     queryKey: ['score-category-items', categoryId],
     queryFn: async () => {
       if (!categoryId) return [];
-      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      const { data, error } = await supabase
         .from('score_category_items')
         .select('*')
         .eq('category_id', categoryId)
@@ -155,7 +155,7 @@ export const useAllScoreCategoryItems = () => {
   return useQuery({
     queryKey: ['score-category-items-all'],
     queryFn: async () => {
-      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      const { data, error } = await supabase
         .from('score_category_items')
         .select('*')
         .order('order_index', { ascending: true });
@@ -171,7 +171,7 @@ export const useCreateScoreCategoryItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { category_id: string; name: string; active?: boolean }) => {
-      const { data: maxData } = await (supabase as unknown as { from: (t: string) => any })
+      const { data: maxData } = await supabase
         .from('score_category_items')
         .select('order_index')
         .eq('category_id', payload.category_id)
@@ -179,7 +179,7 @@ export const useCreateScoreCategoryItem = () => {
         .limit(1)
         .single();
       const nextOrder = (maxData?.order_index ?? -1) + 1;
-      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      const { data, error } = await supabase
         .from('score_category_items')
         .insert({ ...payload, active: payload.active ?? true, order_index: nextOrder })
         .select()
@@ -204,7 +204,7 @@ export const useUpdateScoreCategoryItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ScoreCategoryItem> & { id: string }) => {
-      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      const { data, error } = await supabase
         .from('score_category_items')
         .update(updates)
         .eq('id', id)
@@ -229,7 +229,7 @@ export const useDeleteScoreCategoryItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, category_id }: { id: string; category_id: string }) => {
-      const { error } = await (supabase as unknown as { from: (t: string) => any })
+      const { error } = await supabase
         .from('score_category_items')
         .delete()
         .eq('id', id);
@@ -261,7 +261,7 @@ export const useReorderScoreCategoryItems = () => {
     }) => {
       await Promise.all(
         items.map((item) =>
-          (supabase as unknown as { from: (t: string) => any })
+          supabase
             .from('score_category_items')
             .update({ order_index: item.order_index })
             .eq('id', item.id)

@@ -175,7 +175,7 @@ const NegocioSingle = () => {
     let textoCompleto = motivo;
     if (negocio?.motivo_perda && negocio.motivo_perda_id) {
       const motivoEncontrado = motivos.find(m => m.id === negocio.motivo_perda_id);
-      if (motivoEncontrado && negocio.motivo_perda !== motivoEncontrado.nome) {
+      if (motivoEncontrado && negocio.motivo_perda !== motivoEncontrado.name) {
         textoCompleto += ` - ${negocio.motivo_perda}`;
       }
     }

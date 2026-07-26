@@ -5065,6 +5065,79 @@ export type Database = {
           },
         ]
       }
+      // ── Manually added 2026-07-25 (FIX-SCORE-01) — pending supabase gen types ──
+      score_categories: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      score_category_items: {
+        Row: {
+          active: boolean
+          category_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          order_index: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          order_index?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "score_category_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "score_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // ── End manually added ────────────────────────────────────────────────────
       score_framings: {
         Row: {
           created_at: string | null
@@ -5120,40 +5193,36 @@ export type Database = {
         Relationships: []
       }
       score_matrix: {
+        // Updated 2026-07-25 (FIX-SCORE-01): reflects schema after 20260311120000_score_dynamic_categories
+        // and 20260312120000_db_cleanup_audit (dropped legacy framing_id/investment_id/objective_id arrays)
         Row: {
+          category_selections: Json
           created_at: string | null
           detail_score: string | null
-          framing_id: string[] | null
           id: string
-          investment_id: string[] | null
           name: string | null
-          objective_id: string[] | null
           pre_description_score: string | null
           profile_score: string | null
           score_number: number
           updated_at: string | null
         }
         Insert: {
+          category_selections?: Json
           created_at?: string | null
           detail_score?: string | null
-          framing_id?: string[] | null
           id?: string
-          investment_id?: string[] | null
           name?: string | null
-          objective_id?: string[] | null
           pre_description_score?: string | null
           profile_score?: string | null
           score_number: number
           updated_at?: string | null
         }
         Update: {
+          category_selections?: Json
           created_at?: string | null
           detail_score?: string | null
-          framing_id?: string[] | null
           id?: string
-          investment_id?: string[] | null
           name?: string | null
-          objective_id?: string[] | null
           pre_description_score?: string | null
           profile_score?: string | null
           score_number?: number
@@ -5188,6 +5257,29 @@ export type Database = {
         }
         Relationships: []
       }
+      // ── Manually added 2026-07-25 (FIX-SCORE-01) ─────────────────────────────
+      score_settings: {
+        Row: {
+          created_at: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      // ── End manually added ────────────────────────────────────────────────────
       secret_access_log: {
         Row: {
           accessed_at: string

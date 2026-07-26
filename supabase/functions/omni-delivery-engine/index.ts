@@ -198,7 +198,11 @@ async function deliverWhatsApp(
           people_id: pid !== '__unknown__' ? pid : undefined,
           lead_id: group[0].lead_id ?? undefined,
           execution_id: group[0].execution_id ?? undefined,
-          wa_phone_number_id: group[0].wa_phone_number_id ?? undefined,
+          // FIX-SENDS-FIRST-MSG-01: was 'wa_phone_number_id' (DB column name) —
+          // whatsapp-outbound expects 'phone_number_id' for credential resolution.
+          // Key name mismatch caused the correct campaign channel to be ignored,
+          // falling back to default/any channel (wrong for multi-channel setups).
+          phone_number_id: group[0].wa_phone_number_id ?? undefined,
           // message_ids: whatsapp-outbound will update wa_message_id + status for each
           message_ids: group.map(m => m.id),
         }),

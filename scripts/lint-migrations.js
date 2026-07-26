@@ -11,6 +11,8 @@
  *   MIG006: rollback file missing (unless @no-rollback)
  *   MIG007: file > 500 lines (warning — suggests split)
  *   MIG008: CREATE FUNCTION without OR REPLACE (warning)
+ *   MIG009: migration not in supabase/migrations-manifest.json (AC5 REL-04)
+ *           Only checked in --changed-only / explicit file mode (not --all backfill)
  *
  * Usage:
  *   node scripts/lint-migrations.js --all
@@ -29,6 +31,30 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+
+// ─── Manifest integration (AC5) ───────────────────────────────────────────────
+// supabase/migrations-manifest.json lists ALL migration filenames known to the
+// control plane. A migration not in the manifest will never be applied to tenants.
+// MIG009 fires when a migration file is NOT listed in the manifest.
+// Note: skip for --all mode (backfill pass) since historical files pre-date manifest.
+const MANIFEST_PATH = join(ROOT, 'supabase', 'migrations-manifest.json');
+let manifestSet = null; // loaded lazily
+
+function getManifestSet() {
+  if (manifestSet !== null) return manifestSet;
+  if (!existsSync(MANIFEST_PATH)) {
+    manifestSet = new Set(); // manifest not found → skip MIG009
+    return manifestSet;
+  }
+  try {
+    const raw = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
+    const entries = Array.isArray(raw) ? raw : (raw.migrations ?? []);
+    manifestSet = new Set(entries.map(e => (typeof e === 'string' ? e : e.file)));
+  } catch {
+    manifestSet = new Set();
+  }
+  return manifestSet;
+}
 
 const MIGRATIONS_DIRS = [
   join(ROOT, 'supabase', 'migrations'),
@@ -166,6 +192,16 @@ function lintFile(filePath) {
     const siblingRollback = filePath.replace('.sql', '.rollback.sql');
     if (!existsSync(rollbackPath) && !existsSync(siblingRollback)) {
       err('MIG006', 0, `Rollback file missing. Create ${name.replace('.sql', '.rollback.sql')} or add -- @no-rollback reason: ...`);
+    }
+  }
+
+  // MIG009 — manifest check (only in --changed-only / explicit file mode, not --all backfill)
+  // Ensures that new migration files are registered in supabase/migrations-manifest.json
+  // so they will be applied to tenants by the control plane.
+  if (!flagAll) {
+    const manifest = getManifestSet();
+    if (manifest.size > 0 && !manifest.has(name)) {
+      err('MIG009', 0, `Migration not found in supabase/migrations-manifest.json. Run "node scripts/auto-update-manifest.js" to register it.`);
     }
   }
 

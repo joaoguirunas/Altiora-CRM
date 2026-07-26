@@ -51,6 +51,7 @@ import Score from "@/pages/Score";
 import LpPro from "@/pages/LpPro";
 import ReuniaoSingle from "@/pages/ReuniaoSingle";
 import ScheduleCalendarioConfig from "@/components/config/horarios/ScheduleCalendarioConfig";
+import MinhaAgendaCloser from "@/pages/MinhaAgendaCloser";
 import AgendamentoPublico from "@/pages/AgendamentoPublico";
 import PublicFormPage from "@/pages/PublicFormPage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
@@ -382,6 +383,13 @@ function AppContent() {
           <ModuleProtectedRoute moduleKey="agendamentos">
             <SectionErrorBoundary section="Calendário">
               <ScheduleCalendarioConfig />
+            </SectionErrorBoundary>
+          </ModuleProtectedRoute>
+        } />
+        <Route path="minha-agenda" element={
+          <ModuleProtectedRoute moduleKey="agendamentos">
+            <SectionErrorBoundary section="Minha Agenda">
+              <MinhaAgendaCloser />
             </SectionErrorBoundary>
           </ModuleProtectedRoute>
         } />

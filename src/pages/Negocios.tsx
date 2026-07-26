@@ -110,6 +110,15 @@ const Negocios = () => {
     }
   }, [isManager, getResponsavelFilter]);
 
+  const selectedPipeline = pipelines.find(p => p.id === pipelineFilter);
+  const pipelineStages = stages.filter(s => s.leads_pipelines_id === pipelineFilter);
+
+  // Labels dinâmicos baseados no pipeline selecionado (AC4 + AC5)
+  const entityLabel = getEntityLabel(selectedPipeline?.name ?? '');
+  const entityLabelPlural = getEntityLabelPlural(selectedPipeline?.name ?? '');
+  // Flag para renderização condicional Altiora — declarada antes dos useEffects que a referenciam
+  const isAltioraPipelineSelected = isAltioraPipeline(selectedPipeline?.name ?? '');
+
   // ALTIORA-10 AC1: auto-aplica filtro de Closer quando pipeline Altiora + perfil Closer
   // O profile.id corresponde ao settings_users.id referenciado por altiora_closer_id
   useEffect(() => {
@@ -130,34 +139,16 @@ const Negocios = () => {
       setTeamFilter(firstTeamId);
     }
   }, [isManager, isComercial, userTimes, teamFilter]);
-  
+
   // Auto-select first pipeline only if no saved filter or saved filter is invalid
   useEffect(() => {
-    console.log('🎯 Pipeline auto-select effect:', { 
-      pipelinesLength: pipelines.length, 
-      currentPipelineFilter: pipelineFilter,
-      firstPipelineId: pipelines[0]?.id
-    });
-    
     if (pipelines.length > 0) {
-      // Check if current filter is valid (exists in pipelines)
       const isValidFilter = pipelineFilter && pipelines.some(p => p.id === pipelineFilter);
-      
       if (!isValidFilter) {
-        console.log('✅ Auto-selecting first pipeline:', pipelines[0].id);
         setPipelineFilter(pipelines[0].id);
       }
     }
   }, [pipelines, pipelineFilter]);
-  
-  const selectedPipeline = pipelines.find(p => p.id === pipelineFilter);
-  const pipelineStages = stages.filter(s => s.leads_pipelines_id === pipelineFilter);
-
-  // Labels dinâmicos baseados no pipeline selecionado (AC4 + AC5)
-  const entityLabel = getEntityLabel(selectedPipeline?.name ?? '');
-  const entityLabelPlural = getEntityLabelPlural(selectedPipeline?.name ?? '');
-  // Flag para renderização condicional Altiora
-  const isAltioraPipelineSelected = isAltioraPipeline(selectedPipeline?.name ?? '');
 
   // Atualiza o document.title com o label correto (AC1)
   useEffect(() => {

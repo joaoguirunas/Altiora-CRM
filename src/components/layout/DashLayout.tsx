@@ -29,6 +29,7 @@ import {
   FolderKanban,
   Inbox,
   CalendarCheck,
+  CalendarDays,
   FormInput,
 } from "lucide-react";
 import {
@@ -71,6 +72,8 @@ interface SidebarItem {
   path: string;
   module?: "disparos" | "reunioes" | "clientes" | "negocios" | "dashboard" | "conversas" | "lp" | "agendamentos" | "agentes-ia";
   requireGestor?: boolean;
+  /** When true, item is only shown to users with isComercial=true */
+  requireComercial?: boolean;
   isComingSoon?: boolean;
   groupLabel?: string;
 }
@@ -114,6 +117,13 @@ const getModularSidebarItems = (t: (key: string) => string): SidebarItem[] => [
     icon: CalendarCheck,
     path: "/schedule",
     module: "agendamentos" as const,
+  },
+  {
+    title: "Minha Agenda",
+    icon: CalendarDays,
+    path: "/schedule/minha-agenda",
+    module: "agendamentos" as const,
+    requireComercial: true,
   },
   {
     title: "FORM PRO™",
@@ -224,7 +234,7 @@ const DashLayout = () => {
   // Check if user is gestor or super admin (NOT consultor)
   const isGestorOrAdmin = user?.profile?.gestor === true || user?.profile?.super_adm === true;
   const isConsultor = user?.profile?.consultor === true;
-  const { isCliente, isProvisional } = useUserPermissions();
+  const { isCliente, isProvisional, isComercial } = useUserPermissions();
   const { data: settings } = useSettings();
   const { isActive: isMfaActive } = useMFA();
   const [mfaBannerDismissed, setMfaBannerDismissed] = useState(
@@ -296,10 +306,15 @@ const DashLayout = () => {
         return; // Skip this item
       }
 
+      // Check permissions: if requireComercial, user must be comercial/closer
+      if (item.requireComercial && !isComercial) {
+        return; // Skip this item
+      }
+
       // Check module dependency: if item has a module, it must be active
       if (item.module) {
         const isModuleActive = activeModules.some(m =>
-          m.module_key === item.module && m.is_active === true
+          m.module_key === item.module
         );
 
         if (isModuleActive) {

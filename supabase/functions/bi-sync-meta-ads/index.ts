@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
     // === FETCH AD ACCOUNT ===
     const { data: account, error: accountError } = await supabase
       .from('bi_ad_accounts')
-      .select('id, account_id, access_token, platform')
+      .select('id, account_id, access_token, refresh_token, token_expires_at, platform')
       .eq('id', ad_account_id)
       .eq('platform', 'meta')
       .single();
@@ -94,7 +94,8 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: 'No access token configured for this account' }, 400);
     }
 
-    // Verify user has manager permission
+    // === PERMISSION CHECK (admin/manager) ===
+    // Must happen before any token operation — no renewal without verified permission.
     const { data: userRecord } = await supabase
       .from('settings_users')
       .select('super_admin, user_type')
@@ -108,6 +109,63 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, error: 'Requires admin or manager permission' }, 403);
     }
 
+    // === TOKEN EXPIRY CHECK + AUTO-EXTEND ===
+    const now = new Date();
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    let currentAccessToken: string = account.access_token;
+
+    if (account.token_expires_at) {
+      const expiresAt = new Date(account.token_expires_at);
+
+      if (expiresAt <= now) {
+        // Token has expired — sync is impossible until user reconnects
+        return json({
+          success: false,
+          error: 'Token Meta expirado. Reconecte a conta em Configurações > Marketing > Meta Ads.',
+          tokenExpired: true,
+        }, 401);
+      }
+
+      const msUntilExpiry = expiresAt.getTime() - now.getTime();
+      if (msUntilExpiry < SEVEN_DAYS_MS) {
+        // Token expiring within 7 days — try to extend it proactively
+        const { data: biSettings } = await supabase
+          .from('bi_settings')
+          .select('meta_app_id, meta_app_secret')
+          .maybeSingle();
+
+        if (biSettings?.meta_app_id && biSettings?.meta_app_secret) {
+          try {
+            const extendUrl = new URL(`${META_API_BASE}/oauth/access_token`);
+            extendUrl.searchParams.set('grant_type', 'fb_exchange_token');
+            extendUrl.searchParams.set('client_id', biSettings.meta_app_id);
+            extendUrl.searchParams.set('client_secret', biSettings.meta_app_secret);
+            extendUrl.searchParams.set('fb_exchange_token', currentAccessToken);
+
+            const extendRes = await fetch(extendUrl.toString());
+            const extendData = await extendRes.json();
+
+            if (extendRes.ok && extendData.access_token) {
+              const newExpiresAt = new Date(
+                now.getTime() + (extendData.expires_in ?? 5_184_000) * 1000,
+              ).toISOString();
+              await supabase
+                .from('bi_ad_accounts')
+                .update({ access_token: extendData.access_token, token_expires_at: newExpiresAt })
+                .eq('id', ad_account_id);
+              currentAccessToken = extendData.access_token;
+              console.log(`🔄 Meta token extended until ${newExpiresAt}`);
+            } else {
+              console.warn('⚠️ Meta token extension failed:', JSON.stringify(extendData));
+            }
+          } catch (extendErr) {
+            // Non-fatal: log and proceed with current token
+            console.warn('⚠️ Meta token extension error:', extendErr);
+          }
+        }
+      }
+    }
+
     // === FETCH META ADS INSIGHTS ===
     const metaAccountId = account.account_id.startsWith('act_')
       ? account.account_id
@@ -118,7 +176,7 @@ Deno.serve(async (req: Request) => {
     insightsUrl.searchParams.set('time_range', JSON.stringify({ since: date_from, until: date_to }));
     insightsUrl.searchParams.set('time_increment', '1');
     insightsUrl.searchParams.set('level', 'campaign');
-    insightsUrl.searchParams.set('access_token', account.access_token);
+    insightsUrl.searchParams.set('access_token', currentAccessToken);
     insightsUrl.searchParams.set('limit', '500');
 
     console.log(`📊 Fetching Meta Ads insights for account ${metaAccountId}, period ${date_from} → ${date_to}`);

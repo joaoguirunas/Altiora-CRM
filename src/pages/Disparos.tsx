@@ -8,11 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
   Plus, Search, Play, Pause, Square, Copy, Trash2, Eye, Users,
-  MoreVertical, RotateCcw, Send as SendIcon, CheckCircle2, TrendingUp,
+  MoreVertical, RotateCcw, Send as SendIcon, CheckCircle2, TrendingUp, Loader2,
 } from 'lucide-react';
 import { useSends } from '@/hooks/useSends';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useAtualizarSend, useDeletarSend, useDuplicarSend } from '@/hooks/useSendMutations';
+import { useSendDispatch } from '@/hooks/useSendDispatch';
 import { SendStatus } from '@/types/sends';
 import type { Send } from '@/types/sends';
 import StandardPageLoader from '@/components/loading/StandardPageLoader';
@@ -26,6 +27,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { DispatchHealthCard } from '@/components/disparos/DispatchHealthCard';
 
 // ─── Status display ───────────────────────────────────────────────────────────
 const STATUS_MAP: Record<SendStatus, { label: string; color: string }> = {
@@ -73,6 +75,10 @@ export default function Disparos() {
   const { mutate: updateSend, isPending: isUpdating } = useAtualizarSend();
   const { mutate: deletarSend } = useDeletarSend();
   const { mutate: duplicarSend, isPending: isDuplicating } = useDuplicarSend();
+  const { mutate: startFirstBatch } = useSendDispatch();
+
+  // AC3: track which send is currently being dispatched (to show spinner)
+  const [activatingSendId, setActivatingSendId] = React.useState<string | null>(null);
 
   // ── KPI summary ──────────────────────────────────────────────────────────
   const kpis = React.useMemo(() => {
@@ -86,13 +92,40 @@ export default function Disparos() {
   }, [sends]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
+
+  // AC3: handleAtivar invokes send-dispatch-worker (1 batch) after status update,
+  // matching DisparoControls.handleStart behavior — gives immediate UX feedback
+  // and reverts to draft if worker finds no pending contacts.
   const handleAtivar = (send: Send) => {
+    setActivatingSendId(send.id);
     updateSend(
       { id: send.id, data: { status: 'running', started_at: new Date().toISOString() } },
       {
         onSuccess: () => {
-          toast.success('Disparo ativado!');
-          navigate(`/send/${send.id}`);
+          startFirstBatch(
+            { sendId: send.id },
+            {
+              onSuccess: (data) => {
+                setActivatingSendId(null);
+                if ((data.processed ?? 0) === 0) {
+                  updateSend({ id: send.id, data: { status: 'draft', started_at: null } });
+                  toast.error('Nenhum contato pendente encontrado. Verifique se a lista foi importada corretamente.');
+                } else {
+                  toast.success('Disparo ativado!');
+                  navigate(`/send/${send.id}`);
+                }
+              },
+              onError: (err: Error) => {
+                setActivatingSendId(null);
+                updateSend({ id: send.id, data: { status: 'draft', started_at: null } });
+                toast.error('Erro ao ativar disparo: ' + err.message);
+              },
+            }
+          );
+        },
+        onError: () => {
+          setActivatingSendId(null);
+          toast.error('Erro ao ativar disparo');
         },
       }
     );
@@ -105,13 +138,37 @@ export default function Disparos() {
     );
   };
 
+  // AC3: handleRetomar also invokes worker — resume without overwriting started_at
   const handleRetomar = (send: Send) => {
+    setActivatingSendId(send.id);
     updateSend(
-      { id: send.id, data: { status: 'running' } },
+      { id: send.id, data: { status: 'running' } }, // no started_at — preserved from original start
       {
         onSuccess: () => {
-          toast.success('Disparo retomado!');
-          navigate(`/send/${send.id}`);
+          startFirstBatch(
+            { sendId: send.id },
+            {
+              onSuccess: (data) => {
+                setActivatingSendId(null);
+                if ((data.processed ?? 0) === 0) {
+                  updateSend({ id: send.id, data: { status: 'paused' } });
+                  toast.error('Nenhum contato pendente. O disparo continua pausado.');
+                } else {
+                  toast.success('Disparo retomado!');
+                  navigate(`/send/${send.id}`);
+                }
+              },
+              onError: (err: Error) => {
+                setActivatingSendId(null);
+                updateSend({ id: send.id, data: { status: 'paused' } });
+                toast.error('Erro ao retomar disparo: ' + err.message);
+              },
+            }
+          );
+        },
+        onError: () => {
+          setActivatingSendId(null);
+          toast.error('Erro ao retomar disparo');
         },
       }
     );
@@ -162,6 +219,9 @@ export default function Disparos() {
             <KpiCard label="Mensagens enviadas"   value={kpis.totalSent} icon={Users} />
           </div>
         )}
+
+        {/* ── OBS-DISPATCH-HEALTH-01 AC5: global cron health bar ── */}
+        {kpis.running > 0 && <DispatchHealthCard />}
 
         {/* ── Filters ────────────────────────────────────────────────────── */}
         <Card className="p-3 border border-border bg-card rounded-[2px]">
@@ -307,11 +367,14 @@ export default function Disparos() {
                               size="sm"
                               variant="outline"
                               className="h-[30px] rounded-[4px] px-2.5 gap-1.5 text-xs font-medium"
-                              disabled={isUpdating}
+                              disabled={isUpdating || activatingSendId === send.id}
                               onClick={() => handleAtivar(send)}
                             >
-                              <Play className="w-3 h-3 fill-current" />
-                              Ativar
+                              {activatingSendId === send.id
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <Play className="w-3 h-3 fill-current" />
+                              }
+                              {activatingSendId === send.id ? 'Ativando...' : 'Ativar'}
                             </Button>
                           )}
 
@@ -346,11 +409,14 @@ export default function Disparos() {
                                 size="sm"
                                 variant="outline"
                                 className="h-[30px] rounded-[4px] px-2.5 gap-1.5 text-xs font-medium"
-                                disabled={isUpdating}
+                                disabled={isUpdating || activatingSendId === send.id}
                                 onClick={() => handleRetomar(send)}
                               >
-                                <Play className="w-3 h-3 fill-current" />
-                                Retomar
+                                {activatingSendId === send.id
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <Play className="w-3 h-3 fill-current" />
+                                }
+                                {activatingSendId === send.id ? 'Retomando...' : 'Retomar'}
                               </Button>
                               <Button
                                 size="sm"

@@ -1,0 +1,11 @@
+-- Rollback for: 20260630000001_manychat_instagram_channel.sql
+-- Tested-against: PostgreSQL 15 (Supabase)
+-- @no-rollback reason: This migration extended channel CHECK constraints on
+--   messages, omni_channel_alerts, and omni_channel_configs to include
+--   'instagram-manychat' and related values. Reverting would break any rows
+--   that already use these channel values in production.
+--   Verify first: SELECT DISTINCT channel FROM public.messages WHERE channel LIKE '%manychat%';
+--   If count = 0: manually restore constraints to pre-manychat values.
+--   Also drops clients_people.manychat_subscriber_id column (data loss risk).
+
+-- no-op: see header comment

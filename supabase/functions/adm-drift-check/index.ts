@@ -69,12 +69,12 @@ interface DecryptedSecrets {
 }
 
 interface ClientResult {
-  client_id:   string;
-  client_name: string;
-  outcome:     'ok' | 'drifted' | 'baselined' | 'skip_no_hash_rpc' | 'skip_no_credentials' | 'skip_no_release' | 'error';
-  actual_hash?: string;
+  client_id:      string;
+  client_name:    string;
+  outcome:        'ok' | 'drifted' | 'baselined' | 'skip_no_hash_rpc' | 'skip_no_credentials' | 'skip_no_release' | 'error';
+  actual_hash?:   string;
   expected_hash?: string;
-  error?:      string;
+  error?:         string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -294,10 +294,10 @@ Deno.serve(async (req: Request) => {
     if (!actualHash) {
       // compute_schema_hash() not deployed to this tenant yet — cannot check drift
       results.push({
-        client_id: clientId,
+        client_id:   clientId,
         client_name: clientName,
-        outcome: 'skip_no_hash_rpc',
-        error: 'compute_schema_hash() RPC failed or not deployed to tenant',
+        outcome:     'skip_no_hash_rpc',
+        error:       'compute_schema_hash() RPC failed or not deployed to tenant',
       });
       errors++;
       continue;
@@ -314,9 +314,9 @@ Deno.serve(async (req: Request) => {
       releaseCache.set(version, release);
 
       results.push({
-        client_id: clientId,
+        client_id:   clientId,
         client_name: clientName,
-        outcome: 'baselined',
+        outcome:     'baselined',
         actual_hash: actualHash,
       });
       baselined++;
@@ -326,20 +326,20 @@ Deno.serve(async (req: Request) => {
     if (actualHash === expectedHash) {
       console.log(`[adm-drift-check] ${clientName} — schema OK ✓`);
       results.push({
-        client_id: clientId,
-        client_name: clientName,
-        outcome: 'ok',
-        actual_hash: actualHash,
+        client_id:     clientId,
+        client_name:   clientName,
+        outcome:       'ok',
+        actual_hash:   actualHash,
         expected_hash: expectedHash,
       });
       ok++;
     } else {
       await insertDriftIfNew(db, clientId, clientName, version, expectedHash, actualHash);
       results.push({
-        client_id: clientId,
-        client_name: clientName,
-        outcome: 'drifted',
-        actual_hash: actualHash,
+        client_id:     clientId,
+        client_name:   clientName,
+        outcome:       'drifted',
+        actual_hash:   actualHash,
         expected_hash: expectedHash,
       });
       drifted++;
@@ -347,14 +347,14 @@ Deno.serve(async (req: Request) => {
   }
 
   const summary = {
-    ok: true,
-    checked: activeClients.length,
+    ok:         true,
+    checked:    activeClients.length,
     ok_count:   ok,
     drifted,
     baselined,
     errors,
     results,
-    ran_at: new Date().toISOString(),
+    ran_at:     new Date().toISOString(),
   };
 
   console.log(

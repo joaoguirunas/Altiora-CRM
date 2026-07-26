@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, ChevronRight, Send, Calendar, Clock, Eye,
   AlertCircle, MessageCircle, Mail, Smartphone, Phone, Check,
-  Filter, Upload, Bot,
+  Filter, Upload, Bot, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ import FiltroContatosVisual from '@/components/disparos/FiltroContatosVisual';
 import LiveCounterSidebar from '@/components/disparos/LiveCounterSidebar';
 import { WhatsappTemplatePreview } from '@/components/config/WhatsappTemplatePreview';
 import { WhatsappTemplateModal } from '@/components/config/WhatsappTemplateModal';
+import { WhatsappTemplateVariablesModal } from '@/components/config/WhatsappTemplateVariablesModal';
 import { useCriarSend } from '@/hooks/useSendMutations';
 import { useWhatsappChannels } from '@/hooks/useWhatsappChannels';
 import { useWhatsappTemplates } from '@/hooks/useWhatsappTemplates';
@@ -53,6 +54,16 @@ const CADENCE_OPTIONS = [
 
 const DEBOUNCE_MS = 600;
 
+// ─── AC2: Extract {{N}} positional placeholders from template body ────────────
+function extractTemplateVars(jsonData: Record<string, unknown> | null | undefined): string[] {
+  if (!jsonData) return [];
+  const components = (jsonData.components as Array<{ type?: string; text?: string }> | undefined) ?? [];
+  const bodyText = components.find(c => c.type === 'BODY')?.text ?? '';
+  const matches = bodyText.match(/\{\{(\d+)\}\}/g) ?? [];
+  const positions = [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, '')))];
+  return positions.sort((a, b) => parseInt(a) - parseInt(b));
+}
+
 export default function CriarDisparo() {
   const navigate = useNavigate();
 
@@ -81,6 +92,7 @@ export default function CriarDisparo() {
   const [destPipelineId, setDestPipelineId] = React.useState<string | null>(null);
   const [destStageId, setDestStageId] = React.useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = React.useState(false);
+  const [showVariablesModal, setShowVariablesModal] = React.useState(false);
 
   // ── Data hooks ────────────────────────────────────────────────────────────
   const { data: waChannels } = useWhatsappChannels();
@@ -104,9 +116,26 @@ export default function CriarDisparo() {
     }
   }, [waChannels, waChannelId]);
 
-  const activeTemplates = templates?.filter(t => t.system_enabled === true) ?? [];
+  // AC1: only show APPROVED templates with a registered meta_template_name
+  // (matches WhatsappTemplateModal.tsx:251 + WhatsappTemplatePickerModal.tsx:31 filtering logic)
+  const activeTemplates = templates?.filter(
+    t => t.system_enabled === true
+      && t.meta_template_name != null
+      && t.status?.toLowerCase() === 'approved'
+  ) ?? [];
   const selectedTemplate = activeTemplates.find(t => t.id === templateId) ?? null;
   const destStages = stages.filter(s => s.pipeline_id === destPipelineId).sort((a, b) => a.order_index - b.order_index);
+
+  // AC2: detect unmapped {{N}} variables in selected template
+  const templateVars = React.useMemo(
+    () => extractTemplateVars(selectedTemplate?.json_data as Record<string, unknown> | null | undefined),
+    [selectedTemplate]
+  );
+  const variablesMap = React.useMemo(
+    () => (selectedTemplate?.json_data?.variables_map as Record<string, string> | undefined) ?? {},
+    [selectedTemplate]
+  );
+  const unmappedVars = templateVars.filter(pos => !variablesMap[pos]);
 
   // ── Auto-search on filter change (debounced) ──────────────────────────────
   const doSearch = React.useCallback(
@@ -154,6 +183,14 @@ export default function CriarDisparo() {
     }
     if (channel === 'whatsapp' && !isUser && !waChannelId) { toast.error('Selecione um número WhatsApp para o disparo'); return false; }
     if (channel === 'whatsapp' && !templateId) { toast.error('Selecione um template WhatsApp'); return false; }
+    // AC2: block if template has unresolved positional variables
+    if (channel === 'whatsapp' && selectedTemplate && unmappedVars.length > 0) {
+      toast.error(
+        `Template tem ${unmappedVars.length} variável(is) não mapeada(s) (${unmappedVars.map(v => `{{${v}}}`).join(', ')}). ` +
+        'Configure o mapeamento em Configurações → Templates antes de criar a campanha.'
+      );
+      return false;
+    }
     if (isVoice && !voiceAgentId) { toast.error('Selecione um voice agent para o disparo'); return false; }
     if (channel !== 'whatsapp' && !isVoice && !messageContent.trim()) { toast.error('Escreva a mensagem para o disparo'); return false; }
     if (agendar && (!scheduledDate || !scheduledTime)) { toast.error('Informe data e hora para agendamento'); return false; }
@@ -521,6 +558,50 @@ export default function CriarDisparo() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* AC1: hint when no APPROVED templates found */}
+                  {templates && templates.length > 0 && activeTemplates.length === 0 && (
+                    <div className="flex items-start gap-2 p-2 rounded-[4px] bg-yellow-500/10 border border-yellow-500/20">
+                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-yellow-600" />
+                      <p className="text-xs text-yellow-700">
+                        Nenhum template publicado na Meta disponível.{' '}
+                        <button
+                          type="button"
+                          onClick={() => window.location.href = '/settings/general/templates'}
+                          className="underline underline-offset-2"
+                        >
+                          Configurar templates →
+                        </button>
+                      </p>
+                    </div>
+                  )}
+                  {/* AC2: warn when selected template has unmapped positional variables + inline config CTA */}
+                  {selectedTemplate && unmappedVars.length > 0 && (
+                    <div className="flex items-start gap-2 p-2 rounded-[4px] bg-amber-500/10 border border-amber-500/20">
+                      <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-amber-700">
+                          Template tem {unmappedVars.length} variável(is) não mapeada(s):{' '}
+                          <span className="font-mono">{unmappedVars.map(v => `{{${v}}}`).join(', ')}</span>.{' '}
+                          O disparo será bloqueado até que todas estejam mapeadas.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowVariablesModal(true)}
+                          className="mt-1.5 text-xs text-amber-700 underline underline-offset-2 font-medium"
+                        >
+                          Configurar variáveis agora →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* AC2: confirmation when all vars are mapped */}
+                  {selectedTemplate && templateVars.length > 0 && unmappedVars.length === 0 && (
+                    <p className="text-[11px] text-green-600 flex items-center gap-1">
+                      <Check className="w-3 h-3" />
+                      {templateVars.length} variável(is) mapeada(s):{' '}
+                      {templateVars.map(pos => `{{${pos}}} → ${variablesMap[pos]}`).join(', ')}
+                    </p>
+                  )}
                   {selectedTemplate?.json_data?.components && (
                     <WhatsappTemplatePreview components={selectedTemplate.json_data.components} />
                   )}
@@ -652,7 +733,7 @@ export default function CriarDisparo() {
         </div>
       </div>
 
-      {/* Template modal */}
+      {/* Template preview modal */}
       {selectedTemplate && (
         <WhatsappTemplateModal
           template={selectedTemplate}
@@ -660,6 +741,13 @@ export default function CriarDisparo() {
           onOpenChange={setShowTemplateModal}
         />
       )}
+
+      {/* AC2: variables mapping modal — lets user configure {{N}} → CRM field inline */}
+      <WhatsappTemplateVariablesModal
+        template={selectedTemplate}
+        open={showVariablesModal}
+        onOpenChange={setShowVariablesModal}
+      />
     </div>
   );
 }

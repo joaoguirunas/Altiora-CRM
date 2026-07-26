@@ -429,6 +429,7 @@ function CRBenchmarks({
             <>
               <button
                 onClick={onCancel}
+                aria-label="Cancelar edição de benchmarks"
                 className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-md border border-border hover:bg-muted/40 transition-colors"
               >
                 <X className="w-3 h-3" /> Cancelar
@@ -436,6 +437,7 @@ function CRBenchmarks({
               <button
                 onClick={onSave}
                 disabled={isSaving}
+                aria-label={isSaving ? 'Salvando benchmarks…' : 'Salvar benchmarks'}
                 className="flex items-center gap-1 text-[11px] text-primary-foreground bg-primary hover:bg-primary/90 px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-50"
               >
                 <Save className="w-3 h-3" /> {isSaving ? 'Salvando...' : 'Salvar'}
@@ -444,6 +446,7 @@ function CRBenchmarks({
           ) : (
             <button
               onClick={onToggleEdit}
+              aria-label="Editar metas de benchmark"
               className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-md border border-border hover:bg-muted/40 transition-colors"
               title="Editar benchmarks"
             >
@@ -520,6 +523,8 @@ function CRBenchmarks({
               {hasDiagnosis && !isEditing && (
                 <button
                   onClick={() => setExpandedCR(isExpanded ? null : key)}
+                  aria-expanded={isExpanded}
+                  aria-controls={`cr-diagnosis-${key}`}
                   className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide mt-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -529,7 +534,7 @@ function CRBenchmarks({
 
               {/* Collapsible diagnosis list */}
               {hasDiagnosis && isExpanded && !isEditing && (
-                <div className="mt-1 pt-2.5 border-t border-border space-y-1.5 bg-muted/40 -mx-5 -mb-5 px-5 pb-4 pt-3 rounded-b-md">
+                <div id={`cr-diagnosis-${key}`} className="mt-1 pt-2.5 border-t border-border space-y-1.5 bg-muted/40 -mx-5 -mb-5 px-5 pb-4 pt-3 rounded-b-md">
                   {diag.diagnosis.map((d, i) => (
                     <p key={i} className="text-[11px] leading-snug text-muted-foreground">
                       • {d}

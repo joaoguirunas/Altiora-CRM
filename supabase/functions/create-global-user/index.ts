@@ -34,6 +34,25 @@ const CreateUserSchema = z.object({
 
 type CreateGlobalUserRequest = z.infer<typeof CreateUserSchema>;
 
+// Compensating rollback — deletes an auth user created earlier in the same request.
+// Only called when a freshly-created auth user must be removed because a downstream
+// step (e.g. settings_users INSERT) failed.  Never called for existing users.
+async function rollbackAuthUser(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (error) {
+      console.error('create-global-user rollback: failed to delete auth user', userId, error);
+    } else {
+      console.log('create-global-user rollback: auth user deleted', userId);
+    }
+  } catch (e: any) {
+    console.error('create-global-user rollback: exception deleting auth user', userId, e?.message);
+  }
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -134,6 +153,9 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Creating user with auth:', email, 'by:', callingUser.email);
 
     let userId: string | null = null;
+    // Tracks whether we created a NEW auth user (vs. resolved an existing one).
+    // Only freshly-created users are eligible for rollback on downstream failure.
+    let authUserCreated = false;
 
     const { data: authUser, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -183,6 +205,7 @@ const handler = async (req: Request): Promise<Response> => {
         );
       }
       userId = authUser.user.id;
+      authUserCreated = true; // compensable — eligible for rollback
       console.log('User created successfully:', userId);
     }
 
@@ -243,9 +266,14 @@ const handler = async (req: Request): Promise<Response> => {
 
       if (profileCreateError) {
         console.error('Error creating user profile:', profileCreateError);
+        // Rollback: remove the freshly-created auth user so the database stays consistent.
+        // Only roll back if we created a new user; existing-email users are left untouched.
+        if (authUserCreated && userId) {
+          await rollbackAuthUser(supabaseAdmin, userId);
+        }
         return new Response(
           JSON.stringify({ error: `Erro ao criar perfil: ${profileCreateError.message}` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       settingsUser = newUser;

@@ -172,9 +172,9 @@ export const useAuthLogic = (): AuthContextType => {
 
       const { data: profileData, error: profileError } = await supabase
         .from('settings_users')
-        .select('id, name, email, phone, user_type, active, super_admin, avatar_url, agente, created_at, updated_at')
+        .select('id, nome, email, whatsapp, user_type, ativo, super_adm, gestor, agente, created_at, updated_at')
         .eq('auth_user_id', authUser.id)
-        .eq('active', true)
+        .eq('ativo', true)
         .maybeSingle();
 
       if (profileError) throw profileError;
@@ -188,14 +188,14 @@ export const useAuthLogic = (): AuthContextType => {
       const profile = profileData ? {
         id: profileData.id,
         auth_user_id: authUser.id,
-        nome: profileData.name,
+        nome: profileData.nome,
         email: profileData.email,
-        whatsapp: profileData.phone || null,
-        avatar_url: profileData.avatar_url || null,
-        gestor: profileData.user_type === 'manager' || profileData.user_type === 'admin',
+        whatsapp: profileData.whatsapp || null,
+        avatar_url: null,
+        gestor: profileData.gestor === true || profileData.user_type === 'manager' || profileData.user_type === 'admin',
         consultor: false,
-        ativo: profileData.active,
-        super_adm: profileData.super_admin === true || profileData.user_type === 'admin',
+        ativo: profileData.ativo,
+        super_adm: profileData.super_adm === true || profileData.user_type === 'admin',
         user_type: profileData.user_type as UserType,
         agente: profileData.agente || null,
         created_at: profileData.created_at,

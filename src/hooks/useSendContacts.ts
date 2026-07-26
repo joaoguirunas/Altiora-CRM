@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ContactStatus } from '@/types/sends';
+import { SendContact, ContactStatus } from '@/types/sends';
 
 interface UseSendContactsFilters {
   status?: ContactStatus;
@@ -30,8 +30,9 @@ export const useSendContacts = (sendId: string, filters?: UseSendContactsFilters
 
       const { data, error } = await query;
       if (error) throw error;
-      // Normalise rows where person is null (RLS block or deleted person)
-      return (data ?? []).map((row: any) => ({
+      // Normalise rows where person is null (RLS block or deleted person).
+      // sends_contacts is not in generated types — cast via SendContact at return.
+      return (data ?? []).map((row) => ({
         ...row,
         person: row.person ?? {
           id: null,
@@ -39,7 +40,7 @@ export const useSendContacts = (sendId: string, filters?: UseSendContactsFilters
           email: null,
           status: null,
         },
-      }));
+      })) as SendContact[];
     },
     enabled: !!sendId,
   });

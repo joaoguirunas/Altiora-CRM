@@ -59,25 +59,24 @@ Deno.serve(async (req) => {
 
     for (const send of runningSends) {
       const intervalMs = (send.send_interval_seconds ?? 60) * 1000;
-      const lastBatchAt = send.last_batch_at ? new Date(send.last_batch_at).getTime() : 0;
-      const nextBatchDue = lastBatchAt + intervalMs;
+      const nowIso = new Date(now).toISOString();
+      // Threshold: last_batch_at must be <= (now - interval) para o batch estar due.
+      const lastDueIso = new Date(now - intervalMs).toISOString();
 
-      if (now < nextBatchDue) {
-        skipped++;
-        log.debug('skip — not due yet', { send_id: send.id, due_in_ms: nextBatchDue - now });
-        continue;
-      }
-
-      // Mark last_batch_at immediately to prevent double-dispatch from concurrent cron ticks
-      const { error: updateErr } = await supabase
+      // FIX-SENDS-DISPATCH-01: atomic claim via UPDATE+RETURNING com condição de cadência
+      // embutida. Elimina a race window entre o JS cadence check e o UPDATE separados.
+      // Se outro worker já fez claim (last_batch_at > lastDueIso), UPDATE retorna 0 rows → skip.
+      const { data: claimed, error: claimErr } = await supabase
         .from('sends')
-        .update({ last_batch_at: new Date().toISOString() })
+        .update({ last_batch_at: nowIso })
         .eq('id', send.id)
-        .eq('status', 'running');
+        .eq('status', 'running')
+        .or(`last_batch_at.is.null,last_batch_at.lte.${lastDueIso}`)
+        .select('id');
 
-      if (updateErr) {
-        log.warn('could not update last_batch_at', { send_id: send.id, error: updateErr.message });
+      if (claimErr || !claimed || claimed.length === 0) {
         skipped++;
+        log.debug('skip — not due or claimed by concurrent worker', { send_id: send.id });
         continue;
       }
 

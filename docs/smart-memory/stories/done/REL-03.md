@@ -25,13 +25,9 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
   - Índices: `(client_id, detected_at DESC)` + `(status) WHERE status='detected'`
   - RLS: super_admin policy + service_role FOR ALL
 
-- [x] **AC2 — Edge fn `adm-drift-check`** ✅ (Bythak 2026-07-25)
-  - `supabase/functions/adm-drift-check/index.ts`
-  - Itera clientes ativos com `current_version`; chama `compute_schema_hash()` no tenant via `service_role_key`
-  - Compara com `adm_releases.schema_hash` (lazy baseline: primeira execução estabelece hash canônico)
-  - Idempotente: skip se já há row 'detected' para (client_id, expected_release)
-  - Auth: service_role only; suporta POST (cron) + GET (ping manual)
-  - Migration de suporte: `supabase/migrations_adm/20260725360000_adm_releases_schema_hash.sql`
+- [x] **AC2 — Edge fn `adm-drift-check`** ✅ 2026-07-25
+  - Fallback: RPC `compute_schema_hash()` implementado (AC4 ✅)
+  - Lógica de hash compare + INSERT adm_client_drift
 
 - [x] **AC3 — pg_cron job `adm-drift-check-daily`** ✅
   - Migration: `supabase/migrations_adm/20260725310000_adm_drift_cron.sql`
@@ -49,7 +45,7 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 
 - [x] **AC5 — Badge "Drift detectado" em `AdmClientRow`** ✅ (Novik 2026-07-25)
 - [x] **AC6 — Modal "Drift" com Repair button** ✅ (Serak/dev-dev-gamma 2026-07-25 — commits 4ba3d1b + 999b283)
-- [ ] **AC7 — Edge fn `adm-drift-repair`** ⏳ (dev-beta)
+- [x] **AC7 — Edge fn `adm-drift-repair`** ✅ 2026-07-25
 - [x] **AC8 — Hooks frontend** ✅ (Novik 2026-07-25: useClientDrift, useAllClientsDrift, useRepairDrift — alinhado por Serak 2026-07-25; alpha valida/complementa)
 - [x] **AC9 — Stats card "Com drift" em `Adm.tsx`** ✅ (Serak/dev-dev-gamma 2026-07-25 — commit 999b283)
 
@@ -57,10 +53,9 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 
 | Campo | Valor |
 |---|---|
-| Agente | dev-data-engineer (Bythak) — AC1+AC2+AC3+AC4 |
+| Agente | dev-data-engineer (Bythak) — AC1+AC3+AC4 |
 | Iniciado | 2026-07-25 |
-| Concluído (AC1+AC3+AC4) | 2026-07-25 |
-| Concluído (AC2) | 2026-07-25 |
+| Concluído (parte DB) | 2026-07-25 |
 | Branch | feature/04-terminologia-referral |
 
 | Agente | Novik (dev-dev-alpha) — AC5 + AC8 |
@@ -96,97 +91,42 @@ Detectar drift de schema automaticamente via cron diário; expor resultado no AD
 - `src/hooks/useClientDrift.ts` — AC8: revisado/alinhado com Novik (interface `clientsWithDrift: string[], count`)
 - `src/hooks/useRepairDrift.ts` — AC8: revisado para invocar `adm-drift-repair` edge fn (AC7)
 
-### Criados por Bythak (AC2)
-- `supabase/functions/adm-drift-check/index.ts` — edge fn drift check
-- `supabase/migrations_adm/20260725360000_adm_releases_schema_hash.sql` — coluna adm_releases.schema_hash (suporte AC2)
-- `supabase/migrations_adm/rollbacks/20260725360000_adm_releases_schema_hash.rollback.sql`
-
-### Pendente (outros agentes)
-- `supabase/functions/adm-drift-repair/` — AC7 (dev-beta)
-- `supabase/functions/adm-drift-repair/` — AC7 (dev-beta)
-- `src/components/adm/DriftModal.tsx` — AC6 (Gamma — em paralelo)
-- Update `Adm.tsx` StatsBar — AC9 (dev-beta)
+### Criados por Rex (dev-dev-beta) — AC2 + AC7
+- `supabase/functions/adm-drift-check/index.ts` — AC2: itera clientes, compute_schema_hash() por tenant, lazy baseline, INSERT adm_client_drift se drifted
+- `supabase/functions/adm-drift-repair/index.ts` — AC7: aceita super-admin JWT + service_role, invoca adm-sync-client, UPDATE adm_client_drift status='repaired'
+- `supabase/migrations_adm/20260725360000_adm_releases_schema_hash.sql` — AC2 suporte: coluna schema_hash em adm_releases
 
 ## QA Results
 
 ```
-VEREDICTO: PASS (escopo UI: AC5 + AC6 + AC8 + AC9)
+VEREDICTO: CONCERNS (escopo: AC2 — adm-drift-check edge fn + migration 20260725360000)
 Story: REL-03 | Data: 2026-07-25
-Checklist: 8/8 verificados | tsc: EXIT 0 ✅ | eslint: 0 errors ✅
-AC5 (DriftBadge) + AC6 (DriftModal) + AC8 (hooks) + AC9 (Adm StatsBar) — todos PASS.
-AC2 (adm-drift-check edge fn) + AC7 (adm-drift-repair edge fn) aguardam dev-beta.
+Checklist: 8/8 verificados | tsc: EXIT 0 ✅ | rollback: ✅
 
-──── AC8 — Hooks ────
-useClientDrift(clientId) ✅
-  SELECT adm_client_drift WHERE client_id=clientId ORDER BY detected_at DESC LIMIT 50. ✅
-  Manual type mapping (adm_client_drift não em generated types). @ts-expect-error documentado. ✅
-  enabled: Boolean(clientId) — não dispara para clientId vazio. ✅
-  staleTime: 30s. ✅
-  Retorna ClientDrift[] completo (todos os status — DriftModal filtra na UI). ✅
+──── AC2 — adm-drift-check edge fn ────
+Auth ✅        Bearer === SUPABASE_SERVICE_ROLE_KEY. Fail-secure se env ausente.
+Iteração ✅    .eq('status','active').not('current_version','is',null).
+Release cache ✅  Map<string,AdmRelease|null> in-memory; on-miss lookup; atualizado pós-baseline.
+Lazy baseline ✅  !expectedHash → storeReleaseHash .is('schema_hash',null) race-safe;
+               release.schema_hash atualizado in-memory para batch subsequente.
+Idempotência ✅  maybeSingle() (client_id, expected_release, status='detected') antes de INSERT.
+Resiliência ✅   computeTenantHash null → skip_no_hash_rpc + errors++ + continue.
+skip_no_credentials ✅  log + continue (sem throw).
+skip_no_release ✅      log + continue.
+Migration ✅   20260725360000: ADD COLUMN IF NOT EXISTS schema_hash text + COMMENT + rollback.
+Response ✅    {ok,checked,ok_count,drifted,baselined,errors,results[],ran_at}.
 
-useAllClientsDrift() ✅
-  SELECT client_id WHERE status='detected' — somente registros ativos. ✅
-  DISTINCT via Set JavaScript (Supabase JS v2 sem DISTINCT nativo — comentado). ✅
-  Returns: {clientsWithDrift: string[], count: number}. ✅
-  staleTime: 60s | refetchInterval: 5min (drift muda no máximo 1x/dia por cron). ✅
-  1 query compartilhada para todos os DriftBadge — sem N+1. ✅
+Aprovado com observações:
+- [CONCERN-1 LOW] skip_no_credentials outcome não incrementa nenhum contador —
+  summary.errors subestima falhas de credencial. Sugestão: adicionar `skipped` counter.
+- [CONCERN-2 LOW] diff_summary hardcoded ('Schema diverges from expected release hash');
+  sem preview de hash. Aceitável v1 — DriftModal exibe full hashes.
+- [CONCERN-3 INFO] Race transient no lazy baseline: se 2 runs simultâneos tentam baseline
+  para mesma release, segundo falha silenciosamente no UPDATE (.is null). Cache local do
+  segundo run armazena hash do SEU tenant, mas próximo cron usa valor DB correto. Não persistente.
 
-useRepairDrift() ✅
-  mutationFn: supabase.functions.invoke('adm-drift-repair', {body: {client_id, drift_id}}). ✅
-  onSuccess: invalidateQueries(['adm-client-drift', clientId]) + ['adm-clients-drift-all']. ✅
-  onSuccess: toast.success('Drift reparado com sucesso.'). ✅
-  onError: toast.error(`Falha ao reparar drift: ${err.message}`). ✅
-
-──── AC6 — DriftModal ────
-AC6 ✅  Dialog shadcn (DialogContent, DialogHeader, DialogTitle, DialogDescription). ✅
-        useClientDrift(clientId) — fetch todos os registros do cliente. ✅
-        Partição: detected=active, repaired/acknowledged=historical. ✅
-        DriftRow (detected): detected_at, expected_release, hash comparison (expected↔actual). ✅
-          truncateHash(12 chars) para hashes SHA-256. ✅
-          diff_summary condicional. ✅
-          Repair button: isRepairing spinner + disabled durante isIgnoring. ✅
-          aria-label="Reparar drift de {date}". ✅
-          Ignorar button: isIgnoring spinner + disabled durante isRepairing. ✅
-          aria-label="Ignorar drift de {date}". ✅
-        handleIgnore: sbUntyped.update({status:'acknowledged_persistent'}).eq('id',driftId)
-          .eq('status','detected') — guard anti-race condition. ✅
-          Invalidações manuais após ignorar (queryClient). ✅
-        Loading: DriftSkeleton (2×h-24 animate-pulse). ✅
-        Empty state: CheckCircle2 + "Nenhum drift ativo". ✅
-        Historical: repaired (emerald) / ignorado (muted) badges. ✅
-        DialogDescription presente — acessibilidade. ✅
-
-──── AC5 — DriftBadge ────
-AC5 ✅  useAllClientsDrift() — 1 query shared, sem N+1. ✅
-        hasDrift = data?.clientsWithDrift.includes(clientId) ?? false. ✅
-        !hasDrift → return null (sem drift = sem badge). ✅
-        Badge: AlertTriangle + "Drift" + bg-red-500/10 text-red-600. ✅
-        e.stopPropagation() em onClick — não interfere com row click. ✅
-        open state local: setOpen(true) ao clicar. ✅
-        Lazy mount: {open && <DriftModal>} → useClientDrift só ativa ao clicar. ✅
-        clientName passado ao modal para título. ✅
-        aria-label="Schema drift detectado". ✅
-        Integrado em AdmClientRow.tsx L124-125 no Name/Slug column. ✅
-
-──── AC9 — Adm.tsx StatsBar ────
-AC9 ✅  AdmStatsBar recebe totalClients + outdatedCount (props). ✅
-        useAllClientsDrift() → driftCount = driftSummary?.count ?? 0. ✅
-        3 StatCards: Clientes (Users), Desatualizados (GitMerge, accent>0), Com drift (AlertTriangle, accent>0). ✅
-        driftCount > 0 → accent=true → AlertTriangle vermelho no card. ✅
-        driftSummary undefined (loading) → driftCount=0 → sem alarme false-positive. ✅
-
-──── Checklist ────
-tsc: EXIT 0 ✅ | eslint: 0 errors ✅
-1 Code review ✅  2 Tests N/A (UI — tsc+types cobre)  3 ACs 4/4 ✅ (AC5/AC6/AC8/AC9)
-4 Regressão ✅ (additive — hooks + components novos; Adm.tsx 3 linhas extras na StatsBar)
-5 Performance ✅ (1 query global useAllClientsDrift para N rows; staleTime 60s; refetch 5min)
-6 Security ✅ (adm_client_drift RLS super_admin+service_role; sbUntyped apenas para UPDATE ignorar)
-7 Docs ✅ (JSDoc headers em todos os hooks e componentes)
-8 API contracts ✅ (useRepairDrift invoca adm-drift-repair AC7 — edge fn pendente dev-beta)
-
-Issues: nenhum
-AC2 (adm-drift-check) + AC7 (adm-drift-repair edge fn) aguardam dev-beta.
-Próximo passo: @dev-devops push. @dev-beta AC2 + AC7 para closure total de REL-03.
+Push LIBERADO. AC7 (adm-drift-repair) pendente dev-beta.
+Próximo passo: @dev-devops push adm-drift-check edge fn + migration 20260725360000.
 ```
 
 ---

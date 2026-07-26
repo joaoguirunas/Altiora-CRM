@@ -14,6 +14,7 @@ import { BusinessHoursSettings } from '@/components/followups/BusinessHoursSetti
 import StandardPageLoader from '@/components/loading/StandardPageLoader';
 import { ChevronDown, GitBranch, Wand2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ScheduledCallbacksTab from '@/components/followups/ScheduledCallbacksTab';
 
 const MEETING_STATUSES: MeetingStatus[] = ['agendado', 'compareceu', 'nao_compareceu', 'cancelado', 'realizado'];
 
@@ -263,13 +264,15 @@ const Followups = () => (
   <Tabs defaultValue="etapas" className="space-y-4">
     <div className="flex items-center justify-between px-4 h-[45px] border-b border-border bg-card dark:bg-zinc-950">
       <TabsList className="h-full bg-transparent gap-1">
-        <TabsTrigger value="etapas" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary text-[13px]">Etapas CRM</TabsTrigger>
+        <TabsTrigger value="etapas"      className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary text-[13px]">Etapas CRM</TabsTrigger>
         <TabsTrigger value="agendamento" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary text-[13px]">Agendamento</TabsTrigger>
+        <TabsTrigger value="programado"  className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary text-[13px]">Programado</TabsTrigger>
       </TabsList>
     </div>
 
     <TabsContent value="etapas"      className="mt-0"><EtapasCRMTab /></TabsContent>
     <TabsContent value="agendamento" className="mt-0"><AgendamentoTab /></TabsContent>
+    <TabsContent value="programado"  className="mt-0 px-4 pb-6"><ScheduledCallbacksTab /></TabsContent>
   </Tabs>
 );
 

@@ -252,6 +252,57 @@ Log cronológico de migrations aplicadas pelo Bythak. Migrations são imutáveis
 
 ---
 
+---
+
+## 2026-07-25 — Wave 2: Backlog completion (REL-03, REL-05, FIX-SENDS-STATUS-BRIDGE-01, OBS-DISPATCH-HEALTH-01)
+
+**Objetivo:** Fechar backlog completo Altiora CRM. Migrations pendentes de apply via Grav (supabase db query --linked --file).
+
+| Arquivo | Tipo | AC | Descrição | Rollback |
+|---|---|---|---|---|
+| `20260725250000_fix_legacy_cron_urls.sql` | migration | FIX-SENDS-CRON-LEGACY-URLS | fn_cron_http_call() + 3 crons + 2 trigger functions (url_legacy→fn) | disponível |
+| `20260725260000_drop_rbac_granular.sql` | migration | ARCH-RBAC-02 | DROP tenant_roles, tenant_role_permissions, feature_key, role_id, seed_default_tenant_roles | disponível |
+| `20260725270000_messages_to_sends_contacts_bridge.sql` | migration | FIX-SENDS-STATUS-BRIDGE-01 AC3+AC4 | Trigger trg_messages_to_sends_contacts: status WhatsApp→sends_contacts monotônico (STATUS_RANK) | disponível |
+| `20260725280000_drop_sends_import_presets.sql` | migration | SENDS-IMPORT-02 cleanup | DROP sends_import_presets (órfã após SENDS-IMPORT-01) | disponível |
+| `20260725290000_obs_dispatch_health.sql` | migration | OBS-DISPATCH-HEALTH-01 AC1-AC3 | _get_cron_health_metrics() SECDEF + v_dispatch_health VIEW + get_send_health(uuid) RPC | disponível |
+| `20260725320000_compute_schema_hash.sql` | migration | REL-03 AC4 | compute_schema_hash() SECDEF — SHA-256 determinístico do schema public (tabelas, colunas, constraints, índices, funções, triggers) | disponível |
+| `migrations_adm/20260725300000_adm_client_drift.sql` | migrations_adm | REL-03 AC1 | CREATE TABLE adm_client_drift (drift detection log) + RLS super_admin | disponível |
+| `migrations_adm/20260725310000_adm_drift_cron.sql` | migrations_adm | REL-03 AC3 | pg_cron adm-drift-check-daily (4h UTC) via GUC app.supabase_url | disponível |
+| `migrations_adm/20260725330000_adm_releases_is_baseline.sql` | migrations_adm | REL-05 AC5 DB | ADD COLUMN is_baseline + adm-baseline-check-weekly cron (sábados 5h UTC) | disponível |
+
+| `20260725340000_fup_programados.sql` | migration | FUP-AUTO-01 DB-1..DB-5 | CREATE TABLE fup_programados + índices + RLS + RPC agendar_fup() + cron */5min | disponível |
+| `20260725350000_message_delivery_attempts.sql` | migration | FIX-SENDS-FIRST-MSG-01 AC8+AC9 | CREATE TABLE message_delivery_attempts (bigserial PK, FK messages bigint, attempt_no, channel, provider, started_at, finished_at, status CHECK pending/sent/failed/timeout, request_body jsonb SANITIZED, response_body, http_status, wamid, error_code, error_message, duration_ms GENERATED) + idx_mda_message_id_attempt + idx_mda_status_started + RLS mirrors messages (authenticated_read/write USING true) | disponível |
+
+**Notas de apply:**
+- Migrations regulares: `supabase db query --linked --file supabase/migrations/{arquivo}.sql`
+- Migrations ADM: `supabase db query --linked --file supabase/migrations_adm/{arquivo}.sql` (control plane apenas — NÃO propagar a tenants)
+- Após apply: INSERT manual em schema_migrations para cada migration regular
+
+---
+
+## 20260726100000 — closer_personal_booking (2026-07-26)
+
+**Objetivo:** Implementar camada DB para agendamento pessoal por closer.
+
+**Mudanças:**
+1. `ALTER TABLE booking_rule_sets ADD COLUMN owner_user_id uuid REFERENCES settings_users(id) ON DELETE SET NULL` + índice `idx_booking_rule_sets_owner`.
+2. `CREATE OR REPLACE FUNCTION get_booking_eligible_user_ids(p_rule_set_id, p_pipeline_id)` — corrigido nomes de colunas (ativo, usuario_id, time_id) + adicionado Priority 2 `specific_user` entre team_priority e all-users fallback. 1-arg variant delegada para 2-arg.
+3. `CREATE OR REPLACE FUNCTION provision_closer_rule_set(p_user_id uuid) RETURNS uuid` — cria rule_set + booking_rule `specific_user` para o closer. GRANT EXECUTE TO authenticated.
+4. `trg_closer_booking_provision_fn` + trigger `trg_closer_booking_provision` AFTER INSERT OR UPDATE OF user_type, ativo ON settings_users.
+5. Backfill: 1 user `closer` provisionado (uuid `cb53fa24-...`, owner `12b864eb-...`, url_id=2).
+6. `user_type` constraint atualizada para incluir `comercial` (era `admin/gestor_comercial/closer`; agora inclui `comercial`).
+
+**Coluna bug fix colateral:** a função `get_booking_eligible_user_ids` estava com coluna errada (`active`→`ativo`, `team_id`→`time_id`, `user_id`→`usuario_id`) e estava quebrando em produção. Corrigida nesta migration.
+
+**Verificação:**
+- `get_booking_eligible_user_ids('cb53fa24-...')` → `[12b864eb-...]` (somente o closer) ✅
+- `get_booking_eligible_user_ids(NULL, NULL)` → 3 usuários ativos (default rule set intacto) ✅
+
+**Arquivo:** `supabase/migrations/20260726100000_closer_personal_booking.sql`
+**Rollback:** não gerado (aditivo + fix de bug + backfill); reverter = DROP COLUMN owner_user_id + DROP FUNCTION provision_closer_rule_set + DROP TRIGGER + restaurar versão anterior da função.
+
+---
+
 ## Operação DML 2026-06-16 — Criar agente "Qualificação Consultoria" + desativar "Diagnóstico"
 
 DML em tabelas de aplicação (`ai_agents`, `ai_agents_steps`, `ai_agents_history`) — NÃO migration versionada. Via `db query --linked --file`, transação única.

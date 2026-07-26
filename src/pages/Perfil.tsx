@@ -224,7 +224,14 @@ const Perfil = () => {
           <div>
             <Label className="pl-1">Função</Label>
             <Input
-              value={user.profile?.user_type === 'admin' ? 'Admin' : user.profile?.user_type === 'manager' ? 'Manager' : 'User'}
+              value={
+                user.profile?.user_type === 'admin' ? 'Admin' :
+                user.profile?.user_type === 'manager' ? 'Manager' :
+                user.profile?.user_type === 'gestor_comercial' ? 'Gestor Comercial' :
+                user.profile?.user_type === 'closer' ? 'Closer' :
+                user.profile?.user_type === 'comercial' ? 'Closer' :
+                'User'
+              }
               disabled
               className="bg-muted"
             />

@@ -3,10 +3,12 @@ title: "Research: Mapeamento de Tipos de Usuário"
 type: research
 agent: dev-analyst
 created: 2026-05-07
-updated: 2026-05-10
+updated: 2026-07-25
 tags: [research, auth, rbac, user-types]
 related: ["[[../../project/tech-stack]]"]
 ---
+
+> **ARCH-RBAC-02 (2026-07-25):** Sistema RBAC granular (`tenant_roles`, `tenant_role_permissions`, `settings_users.role_id`, enum `feature_key`, função `seed_default_tenant_roles`) foi removido via migration `20260725260000_drop_rbac_granular.sql`. Os 8 feature gates (`canExportCRM`, `canDeleteCRM`, `canViewScore`, `canViewCoach`, `canEditCoach`, `canCreateSends`, `canViewBI`, `canViewSettings`) foram removidos de `useUserPermissions`. Sistema canônico (`user_type` admin/manager/user) é a única fonte de autorização. Histórico completo em git.
 
 # Mapeamento de Tipos de Usuário
 
@@ -26,7 +28,6 @@ O sistema possui **3 tipos canônicos** (`admin` | `manager` | `user`) na tabela
 | `admin` | `settings_users.user_type='admin'` (com `super_admin=true` para backward compat) | `useUserPermissions.isAdmin`, `useUserPermissions.isSuperAdmin`, `user.profile.super_adm`, edge functions checam `user_type === 'admin' || super_admin === true`, função SQL `is_admin_or_manager()` |
 | `manager` (alias `gestor` / `gerente` legado) | `settings_users.user_type='manager'` | `useUserPermissions.isManagerStrict`/`.isManager` (este último também aceita admin), `user.profile.gestor` (derivado: `user_type === 'manager' \|\| 'admin'`), `RestrictedRoute requireGestor` |
 | `user` (alias `consultor` / `atendente` / `cliente` legados) | `settings_users.user_type='user'` (default) | `useUserPermissions.isUser`, fallback profile quando perfil não carrega |
-| Tenant role customizado | `tenant_roles` (id, tenant_id, name) + FK `settings_users.role_id` | `useTenantRoles`, `useTenantRolePermissions`, hook `useUserPermissions` lê `tenant_role_permissions` e gera flags `canExportCRM`, `canDeleteCRM`, `canViewScore`, `canViewCoach`, `canEditCoach`, `canCreateSends`, `canViewBI`, `canViewSettings` |
 | Provisional (fallback) | flag em runtime: `user.profile.isProvisional=true` quando perfil falha em carregar | `useUserPermissions.isProvisional`; bloqueia mutations e mostra banner laranja em `RestrictedRoute` |
 | Super admin do control plane (`/adm`) | Projeto Supabase separado (não `wotuyxscsfralqpoiyfv`); rota `/adm` é externa, fora deste SPA | apenas referenciado em texto de doc (`SystemDocConfig.tsx:492`) e em fluxos `useUsersNew.ts` (call para control plane gateway) |
 
@@ -36,7 +37,7 @@ A migration `20260502120000_user_types_canonical_refactor.sql` consolidou:
 
 - `user_type text NOT NULL DEFAULT 'user' CHECK (user_type IN ('admin','manager','user'))`
 - `super_admin boolean` — **mantida para backward compat**, mas semanticamente redundante com `user_type='admin'`
-- `role_id uuid REFERENCES tenant_roles(id) ON DELETE SET NULL` — feature-level perms para usuários `user`
+- ~~`role_id uuid REFERENCES tenant_roles(id) ON DELETE SET NULL`~~ — **REMOVIDO** (ARCH-RBAC-02, 2026-07-25)
 - `active boolean`, `deleted_at timestamptz` — soft delete
 
 ### Atribuição de roles
@@ -115,10 +116,10 @@ Centraliza login/logout/session. `useSimpleAuthSingleTenant.ts` é apenas re-exp
 
 Camada de permissões consumida pelas telas:
 - Booleans: `isAdmin`, `isManagerStrict`, `isManager` (= admin OR manager), `isUser`, `isGestor` (alias de `isManager`), `isSuperAdmin` (alias de `isAdmin`), `isConsultor` (sempre false), `isCliente` (sempre false), `isProvisional`
-- Identidade: `currentUserId`, `currentUserName`, `roleId`, `isValid`
+- Identidade: `currentUserId`, `currentUserName`, `isValid`
 - Filtros para listagens: `getResponsavelFilter`, `getTeamFilter` (consultor só vê os próprios; manager/admin vê todos)
 - Capability flags: `canChangeFilters`, `canBlockSchedule`, `canBlockOwnSchedule`, `canCreateUser`, `canEditUser`, `canDeleteUser`, `canCreateClient`, `canEditClient`, `canDeleteClient`, `canAccessCRM` (true), `canAccessFullProjects` (true), `canAccessSettings` (true)
-- **Feature gates granulares** (US-CFG-06, lê `tenant_role_permissions` quando `roleId` presente e usuário NÃO é admin/manager): `canExportCRM`, `canDeleteCRM`, `canViewScore`, `canViewCoach`, `canEditCoach`, `canCreateSends`, `canViewBI`, `canViewSettings`
+- ~~Feature gates granulares (`canExportCRM`, `canDeleteCRM`, `canViewScore`, `canViewCoach`, `canEditCoach`, `canCreateSends`, `canViewBI`, `canViewSettings`)~~ — **REMOVIDOS** (ARCH-RBAC-02, 2026-07-25). Nunca foram exercidos em produção (tabela `tenant_role_permissions` sempre vazia).
 
 ---
 
@@ -216,7 +217,7 @@ A migration ainda regenera ~40 policies inline que comparavam `user_type = 'gest
 - `src/types/usuarios.ts`
 - `src/App.tsx` (composição de rotas)
 - `supabase/migrations/20260502120000_user_types_canonical_refactor.sql`
-- `supabase/migrations/20260423009000_tenant_role_permissions.sql`
+- ~~`supabase/migrations/20260423009000_tenant_role_permissions.sql`~~ — histórico (RBAC dropado em 20260725260000)
 - `supabase/migrations/20260426003000_settings_bi_voice_beta_role_guard.sql`
 - `supabase/functions/admin-unenroll-mfa/index.ts`
 - `supabase/functions/create-tenant-user/index.ts`

@@ -430,6 +430,7 @@ function ComparativoPorDataBlock({ weeks }: { weeks: WeekData[] }) {
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px]">
+          <caption className="sr-only">Comparativo de métricas comerciais por período semanal</caption>
           <thead>
             <tr className="bg-muted/40 border-b border-border">
               <th
@@ -719,6 +720,7 @@ function CloserLeadTable({
         </p>
       ) : (
         <table className="w-full">
+          <caption className="sr-only">Detalhe de leads por filtro de status selecionado</caption>
           <thead>
             <tr className="border-b border-border bg-muted/40">
               {['Cliente', 'Score', 'Reunião', 'Temperatura', 'Venda', ''].map(h => (
@@ -846,6 +848,7 @@ function CloserTable({
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[700px]">
+          <caption className="sr-only">Performance por closer: agendamentos, show rate, temperatura e conversão de vendas</caption>
           <thead>
             {/* Group labels */}
             <tr className="bg-muted/40 border-b border-border">
@@ -911,6 +914,9 @@ function CloserTable({
                       expanded ? "bg-muted/60" : "hover:bg-muted/40",
                     )}
                     onClick={() => toggle(c.userId)}
+                    role="button"
+                    aria-expanded={expanded}
+                    aria-controls={`closer-detail-${c.userId}`}
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -919,10 +925,12 @@ function CloserTable({
                         </div>
                         <span className="text-[13px] font-medium text-foreground">{c.name}</span>
                         <span className="ml-auto">
-                          {expanded
-                            ? <ChevronDown  className="w-3.5 h-3.5 text-primary" />
-                            : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
-                          }
+                          <ChevronDown
+                            className={cn(
+                              "w-3.5 h-3.5 transition-transform duration-200",
+                              expanded ? "rotate-0 text-primary" : "-rotate-90 text-muted-foreground/60",
+                            )}
+                          />
                         </span>
                       </div>
                     </td>
@@ -948,7 +956,7 @@ function CloserTable({
 
                   {/* Expanded lead detail (SEÇÃO 5) */}
                   {expanded && (
-                    <tr className="border-b border-border">
+                    <tr id={`closer-detail-${c.userId}`} className="border-b border-border">
                       <td colSpan={13} className="p-0">
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}

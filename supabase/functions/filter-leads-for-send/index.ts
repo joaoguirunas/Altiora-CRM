@@ -136,6 +136,7 @@ Deno.serve(async (req) => {
     console.log('Filtering leads with validated filters:', filters);
 
     // Build dynamic query - usar left join para incluir pessoas sem leads
+    // count: 'exact' retorna totalCount via Content-Range (sem range extra)
     let query = supabase
       .from('clients_people')
       .select(`
@@ -156,7 +157,7 @@ Deno.serve(async (req) => {
           value,
           created_at
         )
-      `);
+      `, { count: 'exact' });
 
     // Apply channel-specific contact field filtering
     switch (channel) {
@@ -179,10 +180,8 @@ Deno.serve(async (req) => {
         break;
     }
 
-    // Apply to all channels: only active people, paginated
-    query = query
-      .eq('status', 'active')
-      .range(offset, offset + limit - 1);
+    // Apply pagination range (person_status default applied later in person filters)
+    query = query.range(offset, offset + limit - 1);
 
     // Apply Lead filters - filtrar apenas se o filtro estiver presente
     let needsLeadFilter = false;
@@ -258,8 +257,13 @@ Deno.serve(async (req) => {
       query = query.ilike('email', `%${sanitizedEmail}%`);
     }
 
+    // FIX-SENDS-FILTER-01: person_status conditional — default active se não passado.
+    // Antes havia .eq('status','active') hardcoded incondicionalmente, causando predicado
+    // duplo em conflito: status='active' AND status IN ('inactive') → sempre zero resultados.
     if (filters.person_status && filters.person_status.length > 0) {
       query = query.in('status', filters.person_status);
+    } else {
+      query = query.eq('status', 'active');
     }
 
     if (filters.service_status && filters.service_status.length > 0) {
@@ -336,7 +340,7 @@ Deno.serve(async (req) => {
       query = query.ilike('q22_close_probability', `%${sanitized}%`);
     }
 
-    const { data, error } = await query;
+    const { data, error, count: totalCount } = await query;
 
     if (error) {
       console.error('Error filtering leads:', error);
@@ -378,13 +382,20 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Found ${contacts.length} unique contacts (needsLeadFilter: ${needsLeadFilter})`);
 
-    // has_more based on raw DB count (pre-dedup) — dedup can reduce contacts.length
-    // below limit even when more rows exist in the DB
+    // FIX-SENDS-FILTER-02: has_more usa totalCount do Content-Range quando disponível.
+    // totalCount = total de pessoas matching filtros sem .range() (via count:'exact').
+    // Se totalCount disponível: has_more = (offset + rawCount) < totalCount (exato).
+    // Fallback: rawCount === limit (comportamento anterior, seguro mas pode ter página extra vazia).
+    const hasMore = totalCount !== null
+      ? (offset + rawCount) < totalCount
+      : rawCount === limit;
+
     return new Response(
       JSON.stringify({
         total: contacts.length,
         contacts: contacts,
-        has_more: rawCount === limit,
+        has_more: hasMore,
+        count_total: totalCount ?? rawCount,
         offset: offset,
         limit: limit,
       }),

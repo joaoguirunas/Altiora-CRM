@@ -164,7 +164,7 @@ export default function InstagramMegaConfig() {
     <div className="space-y-5">
       <TabBar active={tab} onChange={setTab} />
 
-      {tab === 'automations' && <InstagramAutomationsTab />}
+      {tab === 'automations' && <InstagramAutomationsTab onGoToIntegration={() => setTab('settings')} />}
 
       {tab === 'first_contact' && (
         <div className="space-y-4">

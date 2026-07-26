@@ -600,6 +600,52 @@ const CALLBACK_TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ['motivo'],
     },
   },
+  {
+    name: 'agendar_fup',
+    description:
+      'Agenda um FUP programado para este lead para execução futura automática. ' +
+      'Use quando o lead indicar que quer ser contactado em data futura, mover de etapa no futuro, ou receber mensagem programada. ' +
+      'Difere de agendar_retorno (ad-hoc, só texto/template direto): agendar_fup suporta 3 tipos estruturados. ' +
+      'Resolva a data/hora ANTES de chamar, usando {{agora}} como referência — o backend NÃO interpreta linguagem natural. ' +
+      'Para tipo=etapa_crm: o lead será movido para a etapa informada em scheduled_at. ' +
+      'Para tipo=agendamento: uma reunião será criada em scheduled_at. ' +
+      'Para tipo=programado: uma mensagem WhatsApp (template ou texto) será enviada em scheduled_at.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tipo: {
+          type: 'string',
+          enum: ['etapa_crm', 'agendamento', 'programado'],
+          description: 'Tipo do FUP: etapa_crm=mover etapa no kanban | agendamento=criar reunião | programado=enviar WhatsApp',
+        },
+        scheduled_at: {
+          type: 'string',
+          description: 'Data/hora do FUP em ISO-8601 COM offset, ex: "2026-10-15T09:00:00-03:00". Deve ser futuro.',
+        },
+        motivo: {
+          type: 'string',
+          description: 'Contexto da conversa que originou o FUP (ex: "lead disse que volta em 3 meses após vacância no orçamento").',
+        },
+        etapa_id: {
+          type: 'string',
+          description: 'UUID da etapa destino no kanban. Obrigatório para tipo=etapa_crm.',
+        },
+        template_id: {
+          type: 'string',
+          description: 'Nome do template WhatsApp aprovado (meta_template_name). Para tipo=programado — alternativa à mensagem.',
+        },
+        mensagem: {
+          type: 'string',
+          description: 'Texto da mensagem (para tipo=programado sem template) ou notas da reunião (para tipo=agendamento).',
+        },
+        agendamento_titulo: {
+          type: 'string',
+          description: 'Título da reunião. Para tipo=agendamento. Padrão: motivo.',
+        },
+      },
+      required: ['tipo', 'scheduled_at', 'motivo'],
+    },
+  },
 ];
 
 // ── OpenAI-compatible tool format ─────────────────────────────────────────────
@@ -2640,6 +2686,58 @@ async function executeTool(
         ctx.retorno_pendente = '';
         callbackLog.info('cancelar_retorno_ok', { lead_id: leadId, count: cancelled.length });
         return `Retorno cancelado (motivo: ${motivo})`;
+      }
+
+      case 'agendar_fup': {
+        if (!leadId) return 'Error: no active lead';
+
+        const tipo = String(args.tipo ?? '').trim();
+        if (!['etapa_crm', 'agendamento', 'programado'].includes(tipo)) {
+          return `Error: tipo inválido "${tipo}". Use: etapa_crm | agendamento | programado`;
+        }
+
+        const rawScheduled = String(args.scheduled_at ?? '').trim();
+        const scheduledAt = new Date(rawScheduled);
+        if (!rawScheduled || isNaN(scheduledAt.getTime())) {
+          return 'Error: scheduled_at inválido — use ISO-8601 com offset, ex 2026-10-15T09:00:00-03:00';
+        }
+        if (scheduledAt.getTime() <= Date.now()) {
+          return `Error: scheduled_at deve ser no futuro (${ctx.agora ?? ''})`;
+        }
+
+        const motivo = String(args.motivo ?? '').trim();
+        if (!motivo) return 'Error: motivo é obrigatório';
+
+        if (tipo === 'etapa_crm' && !args.etapa_id) {
+          return 'Error: tipo etapa_crm requer etapa_id';
+        }
+        if (tipo === 'programado' && !args.template_id && !args.mensagem) {
+          return 'Error: tipo programado requer template_id ou mensagem';
+        }
+
+        const hidden = ctx as unknown as Record<string, string>;
+        const agentId = hidden.__callback_agent_id || null;
+
+        const { data: fupId, error: fupErr } = await (supabase as any)
+          .rpc('agendar_fup', {
+            p_lead_id:            leadId,
+            p_tipo:               tipo,
+            p_scheduled_at:       scheduledAt.toISOString(),
+            p_etapa_id:           args.etapa_id ? String(args.etapa_id) : null,
+            p_template_id:        args.template_id ? String(args.template_id) : null,
+            p_mensagem:           args.mensagem ? String(args.mensagem) : null,
+            p_agendamento_titulo: args.agendamento_titulo ? String(args.agendamento_titulo) : null,
+            p_motivo:             motivo,
+            p_agent_id:           agentId,
+          });
+
+        if (fupErr) {
+          callbackLog.error('agendar_fup_rpc_failed', { lead_id: leadId, tipo, error: fupErr.message });
+          return `Error: falha ao agendar FUP: ${fupErr.message}`;
+        }
+
+        callbackLog.info('agendar_fup_ok', { lead_id: leadId, tipo, scheduled_at: scheduledAt.toISOString(), fup_id: fupId });
+        return `FUP programado (${tipo}) para ${formatBrtHuman(scheduledAt)} — será executado automaticamente`;
       }
 
       default:

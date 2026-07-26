@@ -1,3 +1,9 @@
+// @deprecated — superseded by FIX-SENDS-STATUS-BRIDGE-01 (2026-07-25).
+// Status propagation from messages → sends_contacts is now handled by the
+// SQL trigger fn_messages_to_sends_contacts_bridge (migration 20260725270000),
+// fired automatically after whatsapp-inbound updates messages.status.
+// This edge function has zero runtime callers. Physical removal tracked in a
+// dedicated cleanup story (see FIX-SENDS-STATUS-BRIDGE-01 §Escopo OUT).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 

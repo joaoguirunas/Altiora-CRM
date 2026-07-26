@@ -1,0 +1,246 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# release-tag.yml — REL-01 AC2
+#
+# Workflow acionado ao fazer push em main com mudanças em supabase/migrations/**
+#
+# Passos:
+#   1. Detecta migrations novas desde o último tag release-v*
+#   2. Bumpa version.json (minor++)
+#   3. Gera release.json (lista de migrations + changelog extraído do git log)
+#   4. Commit release.json + tag release-v{version} + push
+#   5. POST para edge fn adm-releases-register (idempotente)
+#
+# Requer secrets:
+#   SUPABASE_URL          — project URL (https://xxx.supabase.co)
+#   SUPABASE_SERVICE_ROLE — service role key para adm-releases-register
+#
+# Idempotência:
+#   - Concurrency group impede execuções simultâneas
+#   - Commit message usa [skip ci] para evitar loop
+#   - adm-releases-register usa ON CONFLICT DO NOTHING
+# ══════════════════════════════════════════════════════════════════════════════
+
+name: Release Tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Setup Node.js ───────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── 3. Encontrar último tag release-v* ────────────────────────────────
+      - name: Get last release tag
+        id: last-tag
+        run: |
+          set -euo pipefail
+
+          git fetch --tags
+
+          LAST_TAG=$(git tag --list 'release-v*' --sort=-version:refname | head -1)
+
+          if [ -z "$LAST_TAG" ]; then
+            # Nenhum tag ainda — usa o primeiro commit como base
+            LAST_TAG=$(git rev-list --max-parents=0 HEAD)
+            echo "⚠️  Nenhum release-v* encontrado — usando commit inicial ($LAST_TAG)"
+          else
+            echo "✅ Último release tag: $LAST_TAG"
+          fi
+
+          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+
+      # ── 4. Detectar migrations novas ──────────────────────────────────────
+      - name: Detect new migrations
+        id: migrations
+        run: |
+          set -euo pipefail
+
+          LAST_TAG="${{ steps.last-tag.outputs.last_tag }}"
+
+          # Migrations adicionadas/modificadas desde o último release
+          # Exclui: templates, rollbacks, arquivos arquivados
+          NEW_MIGRATIONS=$(git diff --name-only "$LAST_TAG" HEAD \
+            -- 'supabase/migrations/*.sql' \
+               'supabase/migrations_adm/*.sql' \
+            | grep -v '_TEMPLATE' \
+            | grep -v '\.rollback\.sql' \
+            | grep -v '/archived/' \
+            | sort || true)
+
+          if [ -z "$NEW_MIGRATIONS" ]; then
+            echo "ℹ️  Nenhuma migration nova detectada — release não necessário"
+            echo "has_migrations=false" >> $GITHUB_OUTPUT
+          else
+            COUNT=$(echo "$NEW_MIGRATIONS" | wc -l | tr -d ' ')
+            echo "✅ ${COUNT} migration(s) nova(s) detectada(s):"
+            echo "$NEW_MIGRATIONS"
+            echo "has_migrations=true" >> $GITHUB_OUTPUT
+
+            # Serializa como JSON array para uso posterior
+            MIGRATIONS_JSON=$(echo "$NEW_MIGRATIONS" | jq -R . | jq -sc .)
+            echo "migrations_json=$MIGRATIONS_JSON" >> $GITHUB_OUTPUT
+            echo "count=$COUNT" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 5. Bumpar version.json ─────────────────────────────────────────────
+      - name: Bump version.json
+        if: steps.migrations.outputs.has_migrations == 'true'
+        id: version
+        run: |
+          set -euo pipefail
+
+          MAJOR=$(jq -r '.major' version.json)
+          MINOR=$(jq -r '.minor' version.json)
+          BUILD=$(jq -r '.build // 0' version.json)
+
+          NEW_MINOR=$((MINOR + 1))
+          NEW_BUILD=$((BUILD + 1))
+          NEW_VERSION="${MAJOR}.${NEW_MINOR}"
+          UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+
+          jq \
+            --argjson major "$MAJOR" \
+            --argjson minor "$NEW_MINOR" \
+            --argjson build "$NEW_BUILD" \
+            --arg version "$NEW_VERSION" \
+            --arg updated_at "$UPDATED_AT" \
+            '.major = $major | .minor = $minor | .build = $build | .version = $version | .updated_at = $updated_at' \
+            version.json > version.json.tmp && mv version.json.tmp version.json
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Version bumped: ${MAJOR}.${MINOR} → ${NEW_VERSION}"
+
+      # ── 6. Gerar release.json ──────────────────────────────────────────────
+      - name: Generate release.json
+        if: steps.migrations.outputs.has_migrations == 'true'
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.new_version }}"
+          GIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${GIT_SHA:0:7}"
+          LAST_TAG="${{ steps.last-tag.outputs.last_tag }}"
+          MIGRATIONS_JSON='${{ steps.migrations.outputs.migrations_json }}'
+          CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+
+          # Extrai changelog dos commits desde o último tag
+          # Remove commits [skip ci] e formata como pipe-separated para compatibilidade
+          CHANGELOG=$(git log "${LAST_TAG}..HEAD" \
+            --pretty=format:"%s" \
+            --no-merges \
+            | grep -v '\[skip ci\]' \
+            | head -30 \
+            | tr '\n' '|' \
+            | sed 's/|$//' \
+            || echo "Release v${VERSION}")
+
+          MAJOR=$(jq -r '.major' version.json)
+          MINOR=$(jq -r '.minor' version.json)
+
+          jq -n \
+            --arg version "$VERSION" \
+            --argjson major "$MAJOR" \
+            --argjson minor "$MINOR" \
+            --arg created_at "$CREATED_AT" \
+            --arg git_sha "$SHORT_SHA" \
+            --argjson migrations "$MIGRATIONS_JSON" \
+            --arg min_compat_from "1.0" \
+            --arg changelog "$CHANGELOG" \
+            '{
+              version: $version,
+              major: $major,
+              minor: $minor,
+              created_at: $created_at,
+              git_sha: $git_sha,
+              migrations: $migrations,
+              min_compat_from: $min_compat_from,
+              changelog: $changelog
+            }' > release.json
+
+          echo "✅ release.json gerado:"
+          cat release.json
+
+      # ── 7. Commit + tag + push ─────────────────────────────────────────────
+      - name: Commit, tag and push
+        if: steps.migrations.outputs.has_migrations == 'true'
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.new_version }}"
+          COUNT="${{ steps.migrations.outputs.count }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add version.json release.json
+          git commit -m "chore(release): release.json v${VERSION} — ${COUNT} migration(s) [skip ci]"
+
+          git tag -a "release-v${VERSION}" -m "Release v${VERSION}"
+
+          # Pull + rebase para lidar com race conditions (concurrency garante grupo único,
+          # mas o rebase garante histórico limpo caso haja commits de infra entre trigger e push)
+          git pull --rebase origin main || true
+
+          git push origin main
+          git push origin "release-v${VERSION}"
+
+          echo "✅ Commit e tag release-v${VERSION} publicados"
+
+      # ── 8. Registrar em adm_releases ──────────────────────────────────────
+      - name: Register in adm_releases
+        if: steps.migrations.outputs.has_migrations == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.new_version }}"
+          GIT_SHA="${{ github.sha }}"
+
+          # Enriquece o release.json com campos adicionais para a edge fn
+          PAYLOAD=$(jq \
+            --arg git_sha "$GIT_SHA" \
+            --arg status "released" \
+            '. + {git_sha: $git_sha, status: $status}' \
+            release.json)
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "${SUPABASE_URL}/functions/v1/adm-releases-register" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+            echo "✅ adm_releases registrado: v${VERSION}"
+          else
+            # Falha no registro não bloqueia o release — tag já foi criado
+            echo "⚠️  adm-releases-register retornou HTTP ${HTTP_CODE} — release ainda válido"
+            echo "Response: $BODY"
+          fi

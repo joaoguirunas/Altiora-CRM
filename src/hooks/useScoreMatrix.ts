@@ -3,10 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ScoreCategory, ScoreCategoryItem } from './useScoreCategories';
 
-// Helper to bypass strict Supabase generated types for score_matrix tables
-// (not in auto-generated schema)
-const db = () => supabase as any;
-
 export interface ScoreMatrixResolvedCategory {
   categoryId: string;
   categoryName: string;
@@ -33,12 +29,12 @@ const resolveMatrixNames = async (matrices: ScoreMatrix[]): Promise<ScoreMatrix[
   if (matrices.length === 0) return [];
 
   const [catsRes, itemsRes] = await Promise.all([
-    db().from('score_categories').select('id, name').order('order_index', { ascending: true }),
-    db().from('score_category_items').select('id, name, category_id'),
+    supabase.from('score_categories').select('id, name').order('order_index', { ascending: true }),
+    supabase.from('score_category_items').select('id, name, category_id'),
   ]);
 
-  const categories: ScoreCategory[] = catsRes.data || [];
-  const items: ScoreCategoryItem[] = itemsRes.data || [];
+  const categories = (catsRes.data || []) as ScoreCategory[];
+  const items = (itemsRes.data || []) as ScoreCategoryItem[];
 
   const catMap = new Map(categories.map((c) => [c.id, c.name]));
   const itemMap = new Map(items.map((i) => [i.id, i.name]));
@@ -65,7 +61,7 @@ export const useScoreMatrix = (filters?: Record<string, string>) => {
   return useQuery({
     queryKey: ['score-matrix', filters],
     queryFn: async () => {
-      let query = db()
+      let query = supabase
         .from('score_matrix')
         .select('*')
         .order('score_number', { ascending: false });
@@ -73,6 +69,7 @@ export const useScoreMatrix = (filters?: Record<string, string>) => {
       if (filters) {
         for (const [catId, itemId] of Object.entries(filters)) {
           if (itemId) {
+            // JSONB containment: { cat_id: [item_id] } ⊂ category_selections
             query = query.contains('category_selections', { [catId]: [itemId] });
           }
         }
@@ -92,13 +89,13 @@ export const useScoreMatrixById = (matrixId?: string | null) => {
     queryKey: ['score-matrix-by-id', matrixId],
     queryFn: async () => {
       if (!matrixId) return null;
-      const { data, error } = await db()
+      const { data, error } = await supabase
         .from('score_matrix')
         .select('*')
         .eq('id', matrixId)
         .single();
       if (error) throw error;
-      const [resolved] = await resolveMatrixNames([data as ScoreMatrix]);
+      const [resolved] = await resolveMatrixNames([data as unknown as ScoreMatrix]);
       return resolved;
     },
     enabled: !!matrixId,
@@ -121,7 +118,7 @@ export const useFindScoreMatrix = (
       if (!objective_id || !investment_id || !framing_id) return null;
 
       // Resolve category IDs from base slugs
-      const { data: cats } = await db()
+      const { data: cats } = await supabase
         .from('score_categories')
         .select('id, slug')
         .in('slug', ['objectives', 'investments', 'framings']);
@@ -133,7 +130,7 @@ export const useFindScoreMatrix = (
 
       if (!objCatId || !invCatId || !frmCatId) return null;
 
-      const { data, error } = await db()
+      const { data, error } = await supabase
         .from('score_matrix')
         .select('*')
         .contains('category_selections', {
@@ -146,7 +143,7 @@ export const useFindScoreMatrix = (
       if (!data || data.length === 0) return null;
 
       // Prioritise: most specific (fewer total items) → highest score → most recent
-      const sorted = (data as ScoreMatrix[]).sort((a, b) => {
+      const sorted = (data as unknown as ScoreMatrix[]).sort((a, b) => {
         const totalA = Object.values(a.category_selections || {}).reduce(
           (s, arr) => s + (arr?.length || 0),
           0
@@ -175,7 +172,7 @@ export const useCreateScoreMatrix = () => {
     mutationFn: async (
       matrix: Omit<ScoreMatrix, 'id' | 'created_at' | 'updated_at' | 'resolved_categories'>
     ) => {
-      const { data, error } = await db()
+      const { data, error } = await supabase
         .from('score_matrix')
         .insert({
           name: matrix.name,
@@ -206,19 +203,32 @@ export const useUpdateScoreMatrix = () => {
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ScoreMatrix> & { id: string }) => {
       // Strip computed fields before sending to DB
-      const { resolved_categories: _rc, ...clean } = updates as any;
-      const { data, error } = await db()
+      const { resolved_categories: _rc, ...clean } = updates;
+      const { data, error } = await supabase
         .from('score_matrix')
-        .update(clean)
+        .update({
+          name: clean.name,
+          category_selections: clean.category_selections,
+          score_number: clean.score_number,
+          detail_score: clean.detail_score,
+          profile_score: clean.profile_score,
+          pre_description_score: clean.pre_description_score,
+        })
         .eq('id', id)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['score-matrix'] });
       queryClient.invalidateQueries({ queryKey: ['score-matrix-find'] });
+      // AC3: async re-evaluation — keep persons linked to this matrix in sync
+      supabase.functions
+        .invoke('score-re-evaluate', { body: { matrix_id: variables.id } })
+        .then(({ error }) => {
+          if (error) console.error('score-re-evaluate (update) failed:', error);
+        });
       toast.success('Combinação atualizada com sucesso!');
     },
     onError: () => toast.error('Erro ao atualizar combinação'),
@@ -229,12 +239,19 @@ export const useDeleteScoreMatrix = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await db().from('score_matrix').delete().eq('id', id);
+      const { error } = await supabase.from('score_matrix').delete().eq('id', id);
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['score-matrix'] });
       queryClient.invalidateQueries({ queryKey: ['score-matrix-find'] });
+      // AC3: async re-evaluation — clear score for persons that had this matrix
+      supabase.functions
+        .invoke('score-re-evaluate', { body: { deleted_matrix_ids: [id] } })
+        .then(({ error }) => {
+          if (error) console.error('score-re-evaluate (delete) failed:', error);
+        });
       toast.success('Combinação excluída com sucesso!');
     },
     onError: () => toast.error('Erro ao excluir combinação'),

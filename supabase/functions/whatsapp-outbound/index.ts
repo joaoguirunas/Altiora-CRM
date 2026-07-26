@@ -85,7 +85,10 @@ function normalise(item: string | OutboundMessageObj): NormMsg {
 
 // ── Meta API helpers ──────────────────────────────────────────────────────────
 
-type MetaResult = { wamid: string } | { error: string } | null;
+type MetaResult =
+  | { wamid: string; httpStatus?: number; responseBody?: Record<string, unknown> }
+  | { error: string; httpStatus?: number; responseBody?: Record<string, unknown> }
+  | null;
 
 /**
  * Downloads a file from Supabase Storage using a direct HTTP fetch with the
@@ -595,16 +598,21 @@ async function sendToMeta(
     body: JSON.stringify(payload),
   });
 
+  // AC10 (FIX-SENDS-FIRST-MSG-01): capture http_status + response_body for delivery attempt log
+  const httpStatus = res.status;
   if (!res.ok) {
-    const err = await res.text();
-    console.error(`Meta API error (${res.status}) for ${msg.type} to ${to}: ${err}`);
-    return { error: `Meta ${res.status}: ${err}` };
+    const errText = await res.text();
+    let errBody: Record<string, unknown>;
+    try { errBody = JSON.parse(errText) as Record<string, unknown>; }
+    catch { errBody = { raw: errText.substring(0, 1000) }; }
+    console.error(`Meta API error (${httpStatus}) for ${msg.type} to ${to}: ${errText}`);
+    return { error: `Meta ${httpStatus}: ${errText}`, httpStatus, responseBody: errBody };
   }
 
-  const data = await res.json();
-  const wamid = data.messages?.[0]?.id ?? null;
+  const data = await res.json() as Record<string, unknown>;
+  const wamid = (data.messages as Array<{ id: string }> | undefined)?.[0]?.id ?? null;
   console.log(`sendToMeta: result wamid=${wamid} data=${JSON.stringify(data)}`);
-  return wamid ? { wamid } : null;
+  return wamid ? { wamid, httpStatus, responseBody: data } : null;
 }
 
 // ── Humanizer delay ───────────────────────────────────────────────────────────
@@ -664,6 +672,77 @@ async function recordDeliveryAttempt(
       .eq('id', msgId);
   } catch (e) {
     console.error('recordDeliveryAttempt failed:', (e as Error).message);
+  }
+}
+
+// ── Delivery attempt table helpers (AC10: FIX-SENDS-FIRST-MSG-01) ────────────
+// Two-phase: open before Meta call (status=pending) → close after (sent/failed).
+// Keeps messages.metadata.delivery_log via recordDeliveryAttempt() for backward compat.
+// request_body is already sanitized — Bearer token lives only in the Authorization
+// header, never in the JSON body, so no stripping needed here.
+
+async function openDeliveryAttempt(
+  supabase: ReturnType<typeof createClient>,
+  msgId: number,
+  requestBody: Record<string, unknown>,
+): Promise<number | null> {
+  try {
+    const { data: last } = await supabase
+      .from('message_delivery_attempts')
+      .select('attempt_no')
+      .eq('message_id', msgId)
+      .order('attempt_no', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextNo = ((last as { attempt_no?: number } | null)?.attempt_no ?? 0) + 1;
+
+    const { data: row, error } = await supabase
+      .from('message_delivery_attempts')
+      .insert({
+        message_id: msgId,
+        attempt_no: nextNo,
+        channel: 'whatsapp',
+        provider: 'meta_graph',
+        status: 'pending',
+        request_body: requestBody,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('openDeliveryAttempt: insert failed:', error.message);
+      return null;
+    }
+    return (row as { id: number } | null)?.id ?? null;
+  } catch (e) {
+    console.error('openDeliveryAttempt: exception:', (e as Error).message);
+    return null;
+  }
+}
+
+async function closeDeliveryAttempt(
+  supabase: ReturnType<typeof createClient>,
+  attemptId: number,
+  outcome: {
+    status: 'sent' | 'failed' | 'timeout';
+    wamid?: string | null;
+    httpStatus?: number | null;
+    responseBody?: Record<string, unknown> | null;
+    errorMessage?: string | null;
+  },
+): Promise<void> {
+  try {
+    const patch: Record<string, unknown> = {
+      finished_at: new Date().toISOString(),
+      status: outcome.status,
+    };
+    if (outcome.wamid != null) patch.wamid = outcome.wamid;
+    if (outcome.httpStatus != null) patch.http_status = outcome.httpStatus;
+    if (outcome.responseBody != null) patch.response_body = outcome.responseBody;
+    if (outcome.errorMessage != null) patch.error_message = outcome.errorMessage.substring(0, 1000);
+    await supabase.from('message_delivery_attempts').update(patch).eq('id', attemptId);
+  } catch (e) {
+    console.error('closeDeliveryAttempt: exception:', (e as Error).message);
   }
 }
 
@@ -757,15 +836,20 @@ async function sendTemplateToMeta(
     body: JSON.stringify(payload),
   });
 
+  // AC10 (FIX-SENDS-FIRST-MSG-01): capture http_status + response_body for delivery attempt log
+  const httpStatus = res.status;
   if (!res.ok) {
-    const err = await res.text();
-    console.error(`Meta API template error (${res.status}) to ${to}: ${err}`);
-    return { error: `Meta ${res.status}: ${err}` };
+    const errText = await res.text();
+    let errBody: Record<string, unknown>;
+    try { errBody = JSON.parse(errText) as Record<string, unknown>; }
+    catch { errBody = { raw: errText.substring(0, 1000) }; }
+    console.error(`Meta API template error (${httpStatus}) to ${to}: ${errText}`);
+    return { error: `Meta ${httpStatus}: ${errText}`, httpStatus, responseBody: errBody };
   }
 
-  const data = await res.json();
-  const wamid = data.messages?.[0]?.id ?? null;
-  return wamid ? { wamid } : null;
+  const data = await res.json() as Record<string, unknown>;
+  const wamid = (data.messages as Array<{ id: string }> | undefined)?.[0]?.id ?? null;
+  return wamid ? { wamid, httpStatus, responseBody: data } : null;
 }
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
@@ -879,7 +963,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Resolve credentials: channel_id > explicit phone_number_id+env > default channel auto-lookup
+    // Resolve credentials: channel_id > explicit phone_number_id lookup > default channel auto-lookup
     let accessToken = envAccessToken;
     let phoneNumberId = bodyPhoneNumberId ?? '';
 
@@ -900,9 +984,28 @@ Deno.serve(async (req: Request) => {
       } else {
         console.warn(`whatsapp-outbound: channel_id ${channel_id} not found or inactive, falling back to default`);
       }
+    } else if (bodyPhoneNumberId) {
+      // FIX-SENDS-FIRST-MSG-01: explicit phone_number_id (passed by omni-delivery-engine from
+      // messages.wa_phone_number_id). Look up the matching channel for its access_token.
+      // Without this, the env-fallback token might not match the campaign's WA channel credentials.
+      const { data: pnChannel } = await supabase
+        .from('settings_whatsapp_channels')
+        .select('phone_number_id, access_token')
+        .eq('phone_number_id', bodyPhoneNumberId)
+        .eq('active', true)
+        .maybeSingle();
+      if (pnChannel) {
+        const pnToken = (pnChannel as { phone_number_id: string; access_token: string | null }).access_token;
+        accessToken = pnToken || envAccessToken;
+        phoneNumberId = bodyPhoneNumberId;
+        if (!pnToken) console.warn(`whatsapp-outbound: channel phone_number_id=${bodyPhoneNumberId} has no access_token, using env fallback`);
+        else console.log(`whatsapp-outbound: resolved channel from body phone_number_id=${phoneNumberId}`);
+      } else {
+        console.warn(`whatsapp-outbound: phone_number_id=${bodyPhoneNumberId} not found in active channels, falling back to default`);
+      }
     }
 
-    // No channel_id, no phone_number_id, or token not yet resolved → try to resolve automatically (3 fallbacks)
+    // No phone_number_id or token not yet resolved → try to resolve automatically (3 fallbacks)
     if (!phoneNumberId || !accessToken) {
       // 1. Default channel (is_default = true)
       const { data: defaultChannel } = await supabase
@@ -1004,25 +1107,61 @@ Deno.serve(async (req: Request) => {
 
       // Template message — bypass normalise, use dedicated sender
       if (typeof rawItem === 'object' && rawItem.type === 'template') {
-        const result = await sendTemplateToMeta(accessToken, phoneNumberId, to, rawItem as TemplateMessageObj, resolvedPersonName);
+        const templateMsg = rawItem as TemplateMessageObj;
+        const msgId = message_ids?.[i];
+
+        // AC10 (FIX-SENDS-FIRST-MSG-01): open delivery attempt before Meta call.
+        // request_body mirrors what sendTemplateToMeta will POST (no auth headers in body).
+        const tplRequestBody: Record<string, unknown> = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'template',
+          template: {
+            name: templateMsg.template_name ?? '',
+            language: { code: templateMsg.language_code ?? 'pt_BR' },
+            ...(templateMsg.components && templateMsg.components.length > 0
+              ? { components: templateMsg.components }
+              : {}),
+          },
+        };
+        const attemptId = msgId
+          ? await openDeliveryAttempt(supabase, msgId, tplRequestBody)
+          : null;
+
+        const result = await sendTemplateToMeta(accessToken, phoneNumberId, to, templateMsg, resolvedPersonName);
 
         if (result && 'wamid' in result) {
           wamids.push(result.wamid);
-          const msgId = message_ids?.[i];
           if (msgId) {
             await supabase.from('messages').update({ wa_message_id: result.wamid, status: 'sent', sent_at: new Date().toISOString() }).eq('id', msgId);
             await recordDeliveryAttempt(supabase, msgId, { success: true, wamid: result.wamid });
+            if (attemptId != null) {
+              await closeDeliveryAttempt(supabase, attemptId, {
+                status: 'sent',
+                wamid: result.wamid,
+                httpStatus: result.httpStatus,
+                responseBody: result.responseBody,
+              });
+            }
           }
         } else {
           const errReason = (result && 'error' in result) ? result.error : 'Erro desconhecido ao enviar template';
           errors.push(errReason);
           failed.push(i);
           console.error(`Template send failed: ${errReason}`);
-          const msgId = message_ids?.[i];
           if (msgId) {
             // Update status first (critical) — then merge delivery log into metadata (preserves template_name/components/etc)
             await supabase.from('messages').update({ status: 'error' }).eq('id', msgId);
             await recordDeliveryAttempt(supabase, msgId, { success: false, error: errReason });
+            if (attemptId != null) {
+              await closeDeliveryAttempt(supabase, attemptId, {
+                status: 'failed',
+                httpStatus: (result as { httpStatus?: number } | null)?.httpStatus,
+                responseBody: (result as { responseBody?: Record<string, unknown> } | null)?.responseBody,
+                errorMessage: errReason,
+              });
+            }
           }
         }
         continue;
@@ -1050,6 +1189,28 @@ Deno.serve(async (req: Request) => {
         upload_media_id: null, upload_error: null, signed_url_ok: null,
         meta_payload_type: null, meta_payload_link_or_id: null,
       };
+
+      // AC10 (FIX-SENDS-FIRST-MSG-01): open delivery attempt before Meta call for tracked messages.
+      // Fuzzy-match (AI) messages without a direct message_id are not instrumented at this layer.
+      const regularMsgId = message_ids?.[i];
+      const regularRequestBody: Record<string, unknown> = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: msg.type,
+        ...(msg.type === 'text'
+          ? { text: { body: msg.text.substring(0, 500) } }
+          : {
+              media: {
+                ...(msg.media_url ? { url: msg.media_url } : {}),
+                ...(msg.mime_type ? { mime_type: msg.mime_type } : {}),
+              },
+            }),
+      };
+      const regularAttemptId = regularMsgId
+        ? await openDeliveryAttempt(supabase, regularMsgId, regularRequestBody)
+        : null;
+
       const result = await sendToMeta(accessToken, phoneNumberId, to, msg, supabaseUrl, serviceRoleKey, msgDiag);
       diagAll.push(msgDiag);
 
@@ -1057,7 +1218,7 @@ Deno.serve(async (req: Request) => {
         wamids.push(result.wamid);
 
         // Update the message row: prefer direct ID, fall back to fuzzy match for AI messages
-        const msgId = message_ids?.[i];
+        const msgId = regularMsgId;
         if (msgId) {
           await supabase
             .from('messages')
@@ -1068,6 +1229,14 @@ Deno.serve(async (req: Request) => {
             wamid: result.wamid,
             meta_payload_type: msgDiag.meta_payload_type,
           });
+          if (regularAttemptId != null) {
+            await closeDeliveryAttempt(supabase, regularAttemptId, {
+              status: 'sent',
+              wamid: result.wamid,
+              httpStatus: result.httpStatus,
+              responseBody: result.responseBody,
+            });
+          }
         } else if (people_id) {
           await supabase
             .from('messages')
@@ -1085,7 +1254,7 @@ Deno.serve(async (req: Request) => {
         else errors.push(errReason);
         failed.push(i);
 
-        const msgId = message_ids?.[i];
+        const msgId = regularMsgId;
         if (msgId) {
           await supabase.from('messages').update({ status: 'error' }).eq('id', msgId);
           await recordDeliveryAttempt(supabase, msgId, {
@@ -1093,6 +1262,14 @@ Deno.serve(async (req: Request) => {
             error: errReason,
             meta_payload_type: msgDiag.meta_payload_type,
           });
+          if (regularAttemptId != null) {
+            await closeDeliveryAttempt(supabase, regularAttemptId, {
+              status: 'failed',
+              httpStatus: (result as { httpStatus?: number } | null)?.httpStatus,
+              responseBody: (result as { responseBody?: Record<string, unknown> } | null)?.responseBody,
+              errorMessage: errReason,
+            });
+          }
         } else if (people_id) {
           // Fuzzy match: find the row by people_id+content, set status, then merge delivery log
           const { data: targetRow } = await supabase

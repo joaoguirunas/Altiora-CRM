@@ -1,0 +1,11 @@
+-- Rollback for: 20260609120000_fwup33_fix_messages_rls_instagram_dm.sql
+-- Tested-against: PostgreSQL 15 (Supabase)
+-- @no-rollback reason: This migration dropped several legacy policies and
+--   recreated authenticated_read + authenticated_write with USING(true) on messages.
+--   The prior policy definitions (users_read_lead_messages, users_manage_lead_messages,
+--   messages_select_policy, messages_tenant_isolation) are no longer available.
+--   Rolling back would require restoring those definitions from git history.
+--   The current USING(true) policies are required for basic Omni access — removing
+--   them without replacements would break the entire messaging UI.
+
+-- no-op: see header comment

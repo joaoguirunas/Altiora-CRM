@@ -1,0 +1,11 @@
+-- Rollback for: 20260623000000_tiktok_channel_constraint.sql
+-- Tested-against: PostgreSQL 15 (Supabase)
+-- @no-rollback reason: This migration was a superset idempotent reassertion of
+--   channel CHECK constraints (convergence of drift between 20260413230000 and
+--   20260421000000). Reverting would require knowing exactly which subset of
+--   values was active before — that state no longer exists in the migration chain.
+--   No rows use 'tldv' or 'tiktok' channel values in live DB at time of apply.
+--   If rollback is truly needed: restore the 20260421000000 constraint manually
+--   (values without 'tiktok' in omni_channel_configs_channel_check).
+
+-- no-op: see header comment

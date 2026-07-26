@@ -6,13 +6,21 @@
  * the adm-sync-client edge function via HTTP (avoids IPv6 issues on GitHub
  * Actions runners that can't reach db.PROJECT.supabase.co:5432 over IPv6).
  *
+ * ⚠️  BREAKING CHANGE (REL-01 AC7):
+ *   Este script NÃO é mais invocado automaticamente ao push em main.
+ *   É acionado apenas via workflow_dispatch (super-admin force-sync).
+ *   O fluxo normal de atualização de tenants é opt-in via ADM UI (REL-02).
+ *
  * Required env:
  *   CONTROL_PLANE_URL              – Growth Sales Supabase URL
  *   CONTROL_PLANE_SERVICE_ROLE_KEY – service_role key of control plane
  *
  * Optional env:
- *   CLIENT_SLUG   – sync only this client (by slug)
- *   TRIGGERED_BY  – 'github_actions' | 'manual' (default: 'github_actions')
+ *   CLIENT_SLUG      – sync only this client (by slug)
+ *   TARGET_VERSION   – release version to apply (e.g. "4.70"); empty = latest
+ *   DEPLOY_FUNCTIONS – "true" | "false" (default: "true")
+ *   TRIGGERED_BY     – 'github_actions' | 'manual:actor' (default: 'github_actions')
+ *   SYNC_REASON      – audit reason (logged to console; stored in adm_client_versions by edge fn)
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -34,10 +42,13 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const CONTROL_URL  = process.env.CONTROL_PLANE_URL?.replace(/\/$/, '');
-const CONTROL_KEY  = process.env.CONTROL_PLANE_SERVICE_ROLE_KEY;
-const CLIENT_SLUG  = process.env.CLIENT_SLUG || null;
-const TRIGGERED_BY = process.env.TRIGGERED_BY || 'github_actions';
+const CONTROL_URL       = process.env.CONTROL_PLANE_URL?.replace(/\/$/, '');
+const CONTROL_KEY       = process.env.CONTROL_PLANE_SERVICE_ROLE_KEY;
+const CLIENT_SLUG       = process.env.CLIENT_SLUG || null;
+const TARGET_VERSION    = process.env.TARGET_VERSION || null;    // REL-01 AC6+AC7
+const DEPLOY_FUNCTIONS  = process.env.DEPLOY_FUNCTIONS !== 'false'; // default true
+const TRIGGERED_BY      = process.env.TRIGGERED_BY || 'github_actions';
+const SYNC_REASON       = process.env.SYNC_REASON || null;
 
 // Read current system version from version.json
 let SYSTEM_VERSION = null;
@@ -95,10 +106,18 @@ async function updateClient(clientId, updates) {
 async function applyMigrations(client) {
   // Calls adm-sync-client edge function via HTTP — avoids IPv6 TCP issue
   const fnUrl = `${CONTROL_URL}/functions/v1/adm-sync-client`;
+
+  // REL-01 AC6: target_version opcional — se presente, aplica apenas migrations
+  // daquela release. adm-sync-client registra resultado em adm_client_versions.
+  const body = { client_id: client.id };
+  if (TARGET_VERSION) body.target_version = TARGET_VERSION;
+  if (TRIGGERED_BY)   body.triggered_by   = TRIGGERED_BY;
+  if (SYNC_REASON)    body.reason         = SYNC_REASON;
+
   const res = await fetch(fnUrl, {
     method:  'POST',
     headers: { 'Authorization': `Bearer ${CONTROL_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: client.id }),
+    body: JSON.stringify(body),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${body?.error ?? JSON.stringify(body)}`);
@@ -174,11 +193,15 @@ function deployFunctions(projectRef, managementToken) {
 async function syncClient(client) {
   const migResult = await applyMigrations(client);
 
-  // Deploy all edge functions to the client's Supabase project.
+  // Deploy edge functions — pode ser desabilitado via DEPLOY_FUNCTIONS=false
   // management_token is pgcrypto-encrypted at rest (ADR-ADM-02) — must decrypt via RPC.
-  const projectRef = extractProjectRef(client.supabase_url);
-  const decryptedToken = await getDecryptedToken(client.id);
-  deployFunctions(projectRef, decryptedToken);
+  if (DEPLOY_FUNCTIONS) {
+    const projectRef = extractProjectRef(client.supabase_url);
+    const decryptedToken = await getDecryptedToken(client.id);
+    deployFunctions(projectRef, decryptedToken);
+  } else {
+    console.log('  functions → skip (DEPLOY_FUNCTIONS=false)');
+  }
 
   return migResult;
 }
@@ -187,9 +210,12 @@ async function syncClient(client) {
 
 async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('  REVOS — Client Sync');
-  console.log(`  trigger: ${TRIGGERED_BY}${CLIENT_SLUG ? ` | target: ${CLIENT_SLUG}` : ''}`);
-  if (SYSTEM_VERSION) console.log(`  system version: ${SYSTEM_VERSION}`);
+  console.log('  REVOS — Client Sync (manual / force-sync)');
+  console.log(`  trigger       : ${TRIGGERED_BY}${CLIENT_SLUG ? ` | target: ${CLIENT_SLUG}` : ' | TODOS os clientes'}`);
+  if (SYSTEM_VERSION)  console.log(`  system version: ${SYSTEM_VERSION}`);
+  if (TARGET_VERSION)  console.log(`  target version: ${TARGET_VERSION}`);
+  else                 console.log('  target version: (última release)');
+  if (SYNC_REASON)     console.log(`  reason        : ${SYNC_REASON}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   const clients = await getClients();

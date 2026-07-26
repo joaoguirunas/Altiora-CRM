@@ -49,6 +49,7 @@ import { extractTemplateContent, buildMetaTemplateComponents } from "@/utils/tem
 import { useAuth } from "@/hooks/useAuth";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
+import { MessageDeliveryLog } from "@/components/conversas/MessageDeliveryLog";
 interface PessoaListItemProps {
   pessoa: any;
   isSelected: boolean;
@@ -1704,6 +1705,16 @@ const Conversas = () => {
                         <MessageStatusTicks status={conversa.status} />
                       )}
                     </div>
+
+                    {/* AC11-AC13: delivery log — lazy, WhatsApp outgoing only */}
+                    {isOutgoing && !isOptimistic && (
+                      <MessageDeliveryLog
+                        messageId={typeof conversa.id === 'number' ? conversa.id : undefined}
+                        createdAt={conversa.created_at}
+                        channel={conversa.channel}
+                        isFromClient={isFromClient}
+                      />
+                    )}
                   </div>
                 </div>
               );
