@@ -91,7 +91,7 @@ async function resolveAuth(
       .from('settings_users')
       .select('super_admin, active')
       .eq('user_id', user.id)
-      .eq('active', true)
+      .eq('ativo', true)
       .maybeSingle();
 
     if (suErr || !su?.super_admin) {

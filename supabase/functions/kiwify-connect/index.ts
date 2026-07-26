@@ -120,7 +120,7 @@ Deno.serve(async (req: Request) => {
       .from('settings_users')
       .select('id, user_type, super_admin')
       .eq('auth_user_id', user.id)
-      .eq('active', true)
+      .eq('ativo', true)
       .maybeSingle();
 
     const isManager = crmUser &&

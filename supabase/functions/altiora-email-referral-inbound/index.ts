@@ -288,7 +288,7 @@ Deno.serve(async (req: Request) => {
       .from('settings_users')
       .select('id, name, email')
       .eq('user_type', 'closer')
-      .eq('active', true)
+      .eq('ativo', true)
       .is('deleted_at', null) as unknown as {
         data: Array<{ id: string; name: string; email: string }> | null;
       };
@@ -317,7 +317,7 @@ Deno.serve(async (req: Request) => {
     .from('settings_users')
     .select('id, name')
     .eq('user_type', 'gestor_comercial')
-    .eq('active', true)
+    .eq('ativo', true)
     .is('deleted_at', null) as unknown as {
       data: Array<{ id: string; name: string }> | null;
     };

@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
       .from('settings_users')
       .select('super_admin, user_type')
       .eq('auth_user_id', user.id)
-      .eq('active', true)
+      .eq('ativo', true)
       .single();
     const isAdmin = userRecord?.super_admin === true || userRecord?.user_type === 'admin';
     const isManager = userRecord?.user_type === 'manager';

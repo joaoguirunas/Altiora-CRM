@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
       .from('settings_users')
       .select('id')
       .eq('auth_user_id', user.id)
-      .eq('active', true)
+      .eq('ativo', true)
       .single();
     if (crmError || !crmUser) {
       return json({ success: false, error: 'Usuário não encontrado' }, 403);
