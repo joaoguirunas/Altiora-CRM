@@ -259,6 +259,29 @@ Log cronológico de migrations aplicadas pelo Bythak. Migrations são imutáveis
 
 ---
 
+## 20260726100000 — closer_personal_booking (2026-07-26)
+
+**Objetivo:** Implementar camada DB para agendamento pessoal por closer.
+
+**Mudanças:**
+1. `ALTER TABLE booking_rule_sets ADD COLUMN owner_user_id uuid REFERENCES settings_users(id) ON DELETE SET NULL` + índice `idx_booking_rule_sets_owner`.
+2. `CREATE OR REPLACE FUNCTION get_booking_eligible_user_ids(p_rule_set_id, p_pipeline_id)` — corrigido nomes de colunas (ativo, usuario_id, time_id) + adicionado Priority 2 `specific_user` entre team_priority e all-users fallback. 1-arg variant delegada para 2-arg.
+3. `CREATE OR REPLACE FUNCTION provision_closer_rule_set(p_user_id uuid) RETURNS uuid` — cria rule_set + booking_rule `specific_user` para o closer. GRANT EXECUTE TO authenticated.
+4. `trg_closer_booking_provision_fn` + trigger `trg_closer_booking_provision` AFTER INSERT OR UPDATE OF user_type, ativo ON settings_users.
+5. Backfill: 1 user `closer` provisionado (uuid `cb53fa24-...`, owner `12b864eb-...`, url_id=2).
+6. `user_type` constraint atualizada para incluir `comercial` (era `admin/gestor_comercial/closer`; agora inclui `comercial`).
+
+**Coluna bug fix colateral:** a função `get_booking_eligible_user_ids` estava com coluna errada (`active`→`ativo`, `team_id`→`time_id`, `user_id`→`usuario_id`) e estava quebrando em produção. Corrigida nesta migration.
+
+**Verificação:**
+- `get_booking_eligible_user_ids('cb53fa24-...')` → `[12b864eb-...]` (somente o closer) ✅
+- `get_booking_eligible_user_ids(NULL, NULL)` → 3 usuários ativos (default rule set intacto) ✅
+
+**Arquivo:** `supabase/migrations/20260726100000_closer_personal_booking.sql`
+**Rollback:** não gerado (aditivo + fix de bug + backfill); reverter = DROP COLUMN owner_user_id + DROP FUNCTION provision_closer_rule_set + DROP TRIGGER + restaurar versão anterior da função.
+
+---
+
 ## Operação DML 2026-06-16 — Criar agente "Qualificação Consultoria" + desativar "Diagnóstico"
 
 DML em tabelas de aplicação (`ai_agents`, `ai_agents_steps`, `ai_agents_history`) — NÃO migration versionada. Via `db query --linked --file`, transação única.

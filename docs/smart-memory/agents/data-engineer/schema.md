@@ -357,6 +357,43 @@ Automações de pipeline acionadas por mudanças de status de agendamento.
 **RLS:** `authenticated_all` (FOR ALL TO authenticated USING (true))  
 **Índice único:** (pipeline_id, trigger_status) WHERE is_active = true
 
+### `booking_rule_sets` (atualizado 2026-07-26)
+| Coluna | Tipo | Constraints |
+|---|---|---|
+| id | uuid | PK |
+| name | text | NOT NULL |
+| description | text | nullable |
+| is_default | boolean | NOT NULL DEFAULT false |
+| is_active | boolean | NOT NULL DEFAULT true |
+| url_id | smallint | nullable, UNIQUE (partial) |
+| owner_user_id | uuid | nullable, FK → settings_users(id) ON DELETE SET NULL — NULL = global, não-NULL = rule set pessoal do closer |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT now() |
+
+**Índices:** `idx_booking_rule_sets_is_default WHERE is_default`, `idx_booking_rule_sets_url_id`, `idx_booking_rule_sets_owner (owner_user_id)`  
+**RLS:** ativo (authenticated full access)
+
+### `booking_rules`
+| Coluna | Tipo | Constraints |
+|---|---|---|
+| id | uuid | PK |
+| rule_set_id | uuid | NOT NULL FK → booking_rule_sets ON DELETE CASCADE |
+| order_index | integer | NOT NULL DEFAULT 0 |
+| rule_type | text | NOT NULL CHECK (team_priority/random/least_busy/specific_user/round_robin) |
+| config | jsonb | NOT NULL DEFAULT '{}' |
+| is_active | boolean | NOT NULL DEFAULT true |
+| created_at | timestamptz | NOT NULL DEFAULT now() |
+
+**RLS:** ativo
+
+### Functions / Triggers de Booking (atualizado 2026-07-26)
+
+| Função / Trigger | Descrição |
+|---|---|
+| `get_booking_eligible_user_ids(p_rule_set_id, p_pipeline_id)` | Priority: 1. team_priority → membros do time; 2. specific_user → usuários listados nas regras; 3. fallback → todos ativos. Pipeline filter defensivo. Colunas corretas: `ativo`, `usuario_id`, `time_id`. |
+| `provision_closer_rule_set(p_user_id uuid) RETURNS uuid` | Cria rule_set pessoal (`is_default=false`, `owner_user_id=p_user_id`) + booking_rule `specific_user` apontando para o closer. Idempotente chamado pelo trigger. GRANT EXECUTE TO authenticated. |
+| `trg_closer_booking_provision_fn()` | Trigger fn AFTER INSERT OR UPDATE OF user_type, ativo: provisiona rule_set se `user_type IN ('closer','comercial') AND ativo=true` e ainda não existe. |
+| `trg_closer_booking_provision` | Trigger em `settings_users`, chama `trg_closer_booking_provision_fn`. |
+
 ### `user_calendar_connections`
 Conexões de calendário por usuário. provider: google/microsoft/zoom. Colunas zoom_*: access_token, refresh_token, expires_at, user_id, account_id, email.
 

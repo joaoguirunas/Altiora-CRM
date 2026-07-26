@@ -49,10 +49,9 @@ import CriarDisparo from "@/pages/CriarDisparo";
 import TimeSingle from "@/pages/TimeSingle";
 import Score from "@/pages/Score";
 import LpPro from "@/pages/LpPro";
-import Adm from "@/pages/Adm";
-import AdmClientSingle from "@/pages/AdmClientSingle";
 import ReuniaoSingle from "@/pages/ReuniaoSingle";
 import ScheduleCalendarioConfig from "@/components/config/horarios/ScheduleCalendarioConfig";
+import MinhaAgendaCloser from "@/pages/MinhaAgendaCloser";
 import AgendamentoPublico from "@/pages/AgendamentoPublico";
 import PublicFormPage from "@/pages/PublicFormPage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
@@ -387,6 +386,13 @@ function AppContent() {
             </SectionErrorBoundary>
           </ModuleProtectedRoute>
         } />
+        <Route path="minha-agenda" element={
+          <ModuleProtectedRoute moduleKey="agendamentos">
+            <SectionErrorBoundary section="Minha Agenda">
+              <MinhaAgendaCloser />
+            </SectionErrorBoundary>
+          </ModuleProtectedRoute>
+        } />
         <Route path=":id" element={
           <ModuleProtectedRoute moduleKey="agendamentos">
             <SectionErrorBoundary section="Reunião Single">
@@ -608,28 +614,6 @@ function AppContent() {
         <Route index element={
           <SectionErrorBoundary section="Score PRO™">
             <Score />
-          </SectionErrorBoundary>
-        } />
-      </Route>
-
-      {/* ADM CONTROL PLANE — super-admin only */}
-      <Route path="/adm" element={
-        <ProtectedRoute>
-          <RestrictedRoute requireGestor>
-            <SectionErrorBoundary section="Layout">
-              <DashLayout />
-            </SectionErrorBoundary>
-          </RestrictedRoute>
-        </ProtectedRoute>
-      }>
-        <Route index element={
-          <SectionErrorBoundary section="ADM">
-            <Adm />
-          </SectionErrorBoundary>
-        } />
-        <Route path="clients/:id" element={
-          <SectionErrorBoundary section="ADM Client">
-            <AdmClientSingle />
           </SectionErrorBoundary>
         } />
       </Route>
