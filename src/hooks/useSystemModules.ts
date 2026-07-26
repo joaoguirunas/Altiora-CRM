@@ -7,8 +7,8 @@ interface SystemModule {
   id: string;
   module_key: string;
   module_name: string;
-  is_active: boolean;
-  order_index: number;
+  ativo: boolean;
+  ordem: number;
   icon?: string;
 }
 
@@ -21,7 +21,7 @@ export const useSystemModules = () => {
       const { data, error } = await supabase
         .from('settings_system_modules')
         .select('*')
-        .order('order_index');
+        .order('ordem');
 
       if (error) throw error;
       return data as SystemModule[];
@@ -52,7 +52,7 @@ export const useSystemModules = () => {
   });
 
   const activeModules = modules.filter(
-    m => m.is_active && ALL_MODULE_KEYS.has(m.module_key)
+    m => m.ativo && ALL_MODULE_KEYS.has(m.module_key)
   );
 
   return {
