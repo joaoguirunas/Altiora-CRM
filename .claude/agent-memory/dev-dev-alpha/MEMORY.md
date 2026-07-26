@@ -1,0 +1,3 @@
+- [Project: Altiora CRM](project_altiora.md) — Stack React+TS+Tailwind+shadcn/ui+ReactQuery+Supabase; dark theme+red accent; sem alterar design
+- [Patterns: Pipeline Labels](patterns_pipeline_labels.md) — Utilitário pipelineLabels.ts para terminologia Altiora vs outros pipelines
+- [Patterns: Altiora Filters](patterns_altiora_filters.md) — closerIdFilter+origemFilter propagados Negocios→KanbanBoard→useNegociosByStage→query; altiora_origem: avenue_email|manual|outros
