@@ -85,8 +85,12 @@ Deno.serve(async (req: Request) => {
       return json({ busy: [] });
     }
 
-    const dayStart = `${date}T00:00:00Z`;
-    const dayEnd = `${date}T23:59:59Z`;
+    // Brazil is fixed at UTC-3 (no DST since 2019) — the same offset used for
+    // event timeZone elsewhere (google-cal-upsert-event). Querying with 'Z' here
+    // would ask Google for the wrong day window (shifted 3h from the local day).
+    const BR_OFFSET = '-03:00';
+    const dayStart = `${date}T00:00:00${BR_OFFSET}`;
+    const dayEnd = `${date}T23:59:59${BR_OFFSET}`;
 
     // Busy intervals (UTC ISO) for one connection; refresh token by `id` if expired.
     const busyForConnection = async (connection: any): Promise<Array<{ start: string; end: string }>> => {
@@ -143,10 +147,14 @@ Deno.serve(async (req: Request) => {
     );
     const busySlots = perConn.flat();
 
-    // Convert UTC ISO times to HH:MM:SS strings (in user's local context — use time portion)
+    // Google returns busy times in UTC — shift by the fixed BR_OFFSET before
+    // extracting HH:MM:SS so it's comparable to the local wall-clock slots
+    // generated from settings_schedules (useConsultorDisponibilidade.ts).
+    const toBrTimeStr = (iso: string): string =>
+      new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).toISOString().split('T')[1].substring(0, 8);
     const busy = busySlots.map((slot) => ({
-      start: new Date(slot.start).toISOString().split('T')[1].substring(0, 8),
-      end: new Date(slot.end).toISOString().split('T')[1].substring(0, 8),
+      start: toBrTimeStr(slot.start),
+      end: toBrTimeStr(slot.end),
     }));
 
     console.log(`✅ google-cal-availability: ${busy.length} busy slots for user ${user_id} on ${date} across ${connections.length} connection(s)`);

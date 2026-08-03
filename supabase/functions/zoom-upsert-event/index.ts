@@ -159,8 +159,11 @@ Deno.serve(async (req: Request) => {
     const endDt   = new Date(meeting.end_time as string);
     const durationMin = Math.round((endDt.getTime() - startDt.getTime()) / 60_000);
 
+    // Sufixo [ref:<meeting_id>] — ver comentário equivalente em google-cal-upsert-event
+    const refSuffix = ` [ref:${meeting_id}]`;
+
     const zoomPayload = {
-      topic:    (meeting.title as string) || `Reunião — ${clientName}`,
+      topic:    ((meeting.title as string) || `Reunião — ${clientName}`) + refSuffix,
       type:     2, // scheduled
       start_time: startDt.toISOString(),
       duration:   durationMin,

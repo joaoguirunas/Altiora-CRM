@@ -97,7 +97,7 @@ export function useBIProSchedules(options: UseBIProSchedulesOptions = {}) {
       // Meetings with lead info (+ pipeline/score filtering via lead join)
       let meetingsQ = supabase
         .from('meetings')
-        .select('id, lead_id, user_id, status, date, start_time, lead:leads!meetings_leads_id_fkey(id, status, value, created_at, won_at, leads_stages(leads_pipelines_id))');
+        .select('id, leads_id, users_id, status, date, start_time, lead:leads!meetings_leads_id_fkey(id, status, value, created_at, won_at, leads_stages(leads_pipelines_id))');
 
       if (dateFilter) {
         meetingsQ = meetingsQ

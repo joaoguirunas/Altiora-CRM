@@ -29,9 +29,9 @@ export const useProfile = () => {
       const { error: updateError } = await supabase
         .from('settings_users')
         .update({
-          name: data.nome,
+          nome: data.nome,
           email: data.email,
-          phone: data.whatsapp || null,
+          whatsapp: data.whatsapp || null,
           ...(data.agente !== undefined ? { agente: data.agente || null } : {}),
           updated_at: new Date().toISOString()
         })

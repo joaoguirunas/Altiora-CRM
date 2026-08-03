@@ -44,7 +44,7 @@ interface DbMeetingsFollowup {
   control: number | null;
   as_queue_id: string | null;
   whatsapp_template_id: string | null;
-  whatsapp_template: { name: string } | null;
+  whatsapp_template: { nome: string } | null;
   business_hours_only: boolean;
   bh_only_last: boolean;
   created_at: string;
@@ -89,7 +89,7 @@ const mapDb = (r: DbMeetingsFollowup): AgendamentoFollowup => ({
   control:        r.control ?? null,
   as_queue_id:    r.as_queue_id ?? null,
   whatsapp_template_id:   r.whatsapp_template_id ?? null,
-  whatsapp_template_name: r.whatsapp_template?.name ?? null,
+  whatsapp_template_name: r.whatsapp_template?.nome ?? null,
   business_hours_only:    r.business_hours_only ?? false,
   bh_only_last:           r.bh_only_last ?? true,
   created_at:     r.created_at,
@@ -102,7 +102,7 @@ export const useAgendamentosFollowups = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('meetings_followups')
-        .select('*, whatsapp_template:whatsapp_templates!whatsapp_template_id(name)')
+        .select('*, whatsapp_template:whatsapp_templates!whatsapp_template_id(nome)')
         .eq('source', 'channel')
         .order('meeting_status', { ascending: true })
         .order('days', { ascending: true })

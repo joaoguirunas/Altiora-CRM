@@ -33,10 +33,12 @@ import { toast } from 'sonner';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MOTIVOS_NOSHOW = [
-  'Sem aviso prévio',
-  'Avisou com antecedência',
-  'Problema técnico',
-  'Outro motivo',
+  'Não compareceu sem aviso prévio',
+  'Avisou e pediu remarcação',
+  'Problema técnico (conexão, link do Meet)',
+  'Esqueceu o compromisso',
+  'Imprevisto de última hora (justificado)',
+  'Outro (detalhar em observações)',
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────

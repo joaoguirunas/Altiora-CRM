@@ -198,11 +198,11 @@ export function useBIProRevOps(options: UseBIProRevOpsOptions = {}) {
       let leadsQ = supabase
         .from('leads')
         .select(
-          'id, value, status, created_at, updated_at, won_at, user_id, utm_campaign, utm_source, leads_stages_id, leads_stages(id, leads_pipelines_id)'
+          'id, value, status, created_at, updated_at, won_at, users_id, utm_campaign, utm_source, leads_stages_id, leads_stages(id, leads_pipelines_id)'
         );
       if (scoreFilter && scoreFilter.length > 0) {
         leadsQ = leadsQ
-          .select('id, value, status, created_at, updated_at, won_at, user_id, utm_campaign, utm_source, leads_stages_id, leads_stages(id, leads_pipelines_id), clients_people!inner(score)')
+          .select('id, value, status, created_at, updated_at, won_at, users_id, utm_campaign, utm_source, leads_stages_id, leads_stages(id, leads_pipelines_id), clients_people!inner(score)')
           .in('clients_people.score', scoreFilter);
       }
       if (dateFilter) {
@@ -214,7 +214,7 @@ export function useBIProRevOps(options: UseBIProRevOpsOptions = {}) {
       // Meetings: SQL = any meeting (not cancelled), SAL = compareceu
       let meetingsQ = supabase
         .from('meetings')
-        .select('id, lead_id, user_id, status, created_at');
+        .select('id, leads_id, users_id, status, created_at');
       if (dateFilter) {
         meetingsQ = meetingsQ
           .gte('created_at', dateFilter.from)
@@ -234,7 +234,7 @@ export function useBIProRevOps(options: UseBIProRevOpsOptions = {}) {
         created_at: string | null;
         updated_at: string | null;
         won_at: string | null;
-        user_id: string | null;
+        users_id: string | null;
         utm_campaign: string | null;
         utm_source: string | null;
         leads_stages_id: string | null;
@@ -244,7 +244,7 @@ export function useBIProRevOps(options: UseBIProRevOpsOptions = {}) {
       type MeetingRow = {
         id: string;
         lead_id: string | null;
-        user_id: string | null;
+        users_id: string | null;
         status: string | null;
         created_at: string | null;
       };
@@ -304,18 +304,18 @@ export function useBIProRevOps(options: UseBIProRevOpsOptions = {}) {
       // ── By Closer (CR4 focus) ─────────────────────────────────────────────
       const closerMap = new Map<string, { sal: Set<string>; win: LeadRow[]; cycles: number[] }>();
       for (const m of shownMeetings) {
-        const uid = m.user_id ?? '__none__';
+        const uid = m.users_id ?? '__none__';
         if (!closerMap.has(uid)) closerMap.set(uid, { sal: new Set(), win: [], cycles: [] });
         closerMap.get(uid)!.sal.add(m.lead_id!);
       }
       for (const lead of leads) {
         if (lead.status !== 'won') continue;
-        const uid = lead.user_id ?? '__none__';
+        const uid = lead.users_id ?? '__none__';
         if (!closerMap.has(uid)) closerMap.set(uid, { sal: new Set(), win: [], cycles: [] });
         const c = closerMap.get(uid)!;
         c.win.push(lead);
         const closeTime = lead.won_at ? new Date(lead.won_at).getTime() : new Date(lead.updated_at ?? '').getTime();
-        const salMeeting = shownMeetings.find(m => m.lead_id === lead.id && m.user_id === uid);
+        const salMeeting = shownMeetings.find(m => m.lead_id === lead.id && m.users_id === uid);
         if (salMeeting?.created_at) {
           const d = (closeTime - new Date(salMeeting.created_at).getTime()) / (1000 * 60 * 60 * 24);
           if (d > 0 && d < 730) c.cycles.push(d);

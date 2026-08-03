@@ -6,13 +6,18 @@ import { Loader2 } from "lucide-react";
 // Módulos restritos a gestor/admin — user_type='user'/'comercial' não tem acesso
 const GESTOR_ONLY_MODULES = new Set(['dashboard', 'lp', 'disparos']);
 
+// Módulos restritos exclusivamente a super_adm — nem gestor tem acesso.
+// OMNI PRO™ (conversas) fica em pausa para ADM e closer nesta versão (WhatsApp
+// pessoal via QR não-oficial ficou para uma versão futura).
+const SUPER_ADMIN_ONLY_MODULES = new Set(['conversas']);
+
 // Módulos acessíveis para user_type='user'/'comercial', em ordem de prioridade
 // para redirect — NUNCA inclua aqui uma chave que também esteja em
-// GESTOR_ONLY_MODULES: se o módulo bloqueado for o primeiro ativo encontrado,
-// o redirect aponta pra ele mesmo e gera loop infinito (tela fica "piscando").
+// GESTOR_ONLY_MODULES ou SUPER_ADMIN_ONLY_MODULES: se o módulo bloqueado for o
+// primeiro ativo encontrado, o redirect aponta pra ele mesmo e gera loop
+// infinito (tela fica "piscando").
 const USER_ACCESSIBLE_MODULE_REDIRECT: Record<string, string> = {
   'negocios': '/crm/kanban',
-  'conversas': '/omni',
 };
 
 interface ModuleProtectedRouteProps {
@@ -44,6 +49,18 @@ const ModuleProtectedRoute = ({ children, moduleKey }: ModuleProtectedRouteProps
     }
   }
 
+  // Bloqueia módulos super-admin-only para gestor e closer/consultor
+  if (SUPER_ADMIN_ONLY_MODULES.has(moduleKey)) {
+    const isSuperAdmin = user?.profile?.super_adm === true;
+    if (!isSuperAdmin) {
+      const firstAccessible = activeModules.find(m => USER_ACCESSIBLE_MODULE_REDIRECT[m.module_key]);
+      const redirectPath = firstAccessible
+        ? USER_ACCESSIBLE_MODULE_REDIRECT[firstAccessible.module_key]
+        : '/crm/kanban';
+      return <Navigate to={redirectPath} replace />;
+    }
+  }
+
   const isModuleActive = activeModules.some(m => m.module_key === moduleKey);
 
   if (!isModuleActive) {
@@ -61,18 +78,17 @@ const ModuleProtectedRoute = ({ children, moduleKey }: ModuleProtectedRouteProps
     }
 
     const firstActiveModule = activeModules[0];
+    // 'dashboard' (BI PRO™), 'disparos' (Sends PRO™) e 'lp' (Form PRO™) removidos
+    // do mapa — essas páginas estão ocultas da navegação por enquanto, então não
+    // faz sentido redirecionar o usuário pra lá; cai no fallback (Negócios).
     const redirectMap: Record<string, string> = {
-      'dashboard': '/bipro',
-      'conversas': '/omni',
       'negocios': '/crm/kanban',
       'clientes': '/crm/clients',
       'agendamentos': '/schedule',
       'agentes-ia': '/settings/crm/aiagents',
-      'disparos': '/send',
-      'lp': '/lp',
     };
 
-    const redirectPath = redirectMap[firstActiveModule.module_key] || '/bipro';
+    const redirectPath = redirectMap[firstActiveModule.module_key] || '/crm/kanban';
     return <Navigate to={redirectPath} replace />;
   }
 

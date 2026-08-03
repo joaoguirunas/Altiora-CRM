@@ -2,9 +2,76 @@
 title: Migrations Log
 type: task-log
 agent: dev-data-engineer
-updated: 2026-07-25
+updated: 2026-07-26
 tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
+---
+
+## 2026-07-26 — Meeting Flow Complete Fix (channel blocker)
+
+**Objetivo:** Resolver `column "channel" does not exist` ao criar reunião. Causa raiz: trigger `trg_meeting_followup_queue` (ativo em `meetings`) faz SELECT de `channel` e `webhook_url` em `meetings_followups`, colunas que nunca foram aplicadas neste banco.
+
+**Migration aplicada:**
+
+| Arquivo | Aplicada | Descrição | Rollback |
+|---|---|---|---|
+| `20260726240000_meeting_flow_complete_fix.sql` | 2026-07-26 | 9 colunas em `meetings_followups` + CREATE TABLE `meeting_followup_queue` + CREATE TABLE `followup_queue` | não requer (IF NOT EXISTS) |
+
+**Detalhamento dos gaps corrigidos:**
+
+`meetings_followups` — 9 colunas adicionadas:
+- `channel` text NOT NULL DEFAULT 'whatsapp' CHECK (email/sms/whatsapp/phone)
+- `webhook_url` text
+- `name` text
+- `source` text NOT NULL DEFAULT 'channel' CHECK (webhook/channel)
+- `whatsapp_template_id` uuid FK → whatsapp_templates
+- `control` integer
+- `as_queue_id` text
+- `business_hours_only` boolean
+- `bh_only_last` boolean
+
+`meeting_followup_queue` — tabela criada (destino do trigger):
+- FK: rule_id→meetings_followups, meeting_id→meetings, person_id→clients_people, leads_id→leads
+- Colunas: scheduled_for, status, channel, webhook_url, message_snapshot, template_id, fired_at, response_status, response_body
+- RLS: ativo (select: ativo=true; write: super_adm/gestor)
+
+`followup_queue` — tabela criada (hooks + trigger de stage):
+- FK: followup_id→leads_stages_followups, lead_id→leads, person_id→clients_people
+- Colunas pós-FWUP-11 (inglês): channel, message, subject, scheduled_for, source_type
+- RLS: ativo
+
+**Blocker secundário identificado (NÃO bloqueia criar reunião):**
+- `whatsapp_templates.name` não existe (coluna é `nome`) — hook `useAgendamentosFollowups` em `Followups.tsx` faz join com `whatsapp_templates(name)`. Afeta apenas a página de Followups, não o fluxo de criação de reunião.
+
+**Smoke test:** SELECT em `meetings_followups.channel` sem erro; 9/9 colunas confirmadas; 2/2 tabelas criadas.
+
+---
+
+## 2026-07-26 — SD-02: Schema Drift Fix — meetings table
+
+**Objetivo:** Adicionar 7 colunas faltantes na tabela `meetings` identificadas no gap report SD-01.
+
+**Migration aplicada:**
+
+| Arquivo | Aplicada | Descrição | Rollback |
+|---|---|---|---|
+| `20260726210000_schema_drift_fix.sql` | 2026-07-26 | ADD 7 colunas em meetings + 2 índices | não requer (IF NOT EXISTS) |
+
+**Colunas adicionadas em `meetings`:**
+- `title` (text)
+- `people_id` (uuid FK → clients_people)
+- `description` (text)
+- `meeting_link` (text)
+- `updated_at` (timestamptz)
+- `ms_meeting_id` (text, unique index)
+- `google_last_synced_at` (timestamptz)
+
+**Método de aplicação:** `supabase db query --linked --file` (db push bloqueado por migration anterior 20250801 com bug em `crm_messages`).
+
+**Smoke test:** 7/7 colunas confirmadas via `information_schema.columns`. 2/2 índices confirmados via `pg_indexes`.
+
+**Gap report:** `docs/smart-memory/agents/data-engineer/schema-gap-report.md`
+
 ---
 
 ## 2026-07-25 — REL-03 AC2: Edge fn adm-drift-check

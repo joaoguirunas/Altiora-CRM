@@ -14,26 +14,7 @@ export interface KiwifyProductOption {
 export const useKiwifyProductsInPipeline = (pipelineId?: string) => {
   return useQuery({
     queryKey: ['kiwify-products-in-pipeline', pipelineId],
-    queryFn: async (): Promise<KiwifyProductOption[]> => {
-      if (!pipelineId) return [];
-
-      const { data, error } = await sbUntyped
-        .from('leads')
-        .select('pessoa:clients_people!inner(cursos:kiwify_lead_products!inner(product_id, product_name))')
-        .eq('leads_pipelines_id', pipelineId);
-
-      if (error) throw error;
-
-      const map = new Map<string, string>();
-      (data ?? []).forEach((row: any) => {
-        const cursos = row.pessoa?.cursos ?? [];
-        cursos.forEach((c: { product_id: string; product_name: string }) => {
-          if (c.product_id && !map.has(c.product_id)) map.set(c.product_id, c.product_name);
-        });
-      });
-
-      return Array.from(map.entries()).map(([product_id, product_name]) => ({ product_id, product_name }));
-    },
+    queryFn: async (): Promise<KiwifyProductOption[]> => [],
     enabled: !!pipelineId,
     staleTime: 60_000,
   });

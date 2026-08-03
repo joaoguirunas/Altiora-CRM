@@ -21,11 +21,17 @@ interface MotivoPerdasModalProps {
   onClose: () => void;
   onConfirm: (payload: MotivoPerdasPayload) => void;
   isLoading?: boolean;
+  /**
+   * Categoria de motivos a exibir (ver `motivoPerdaCategoria.ts`):
+   * 'pre_venda' | 'reprovacao' | 'pos_r2'. Omitida = lista genérica
+   * (pipelines fora do Altiora, ou etapa sem categoria mapeada).
+   */
+  categoria?: string | null;
 }
 
-const MotivoPerdasModal = ({ isOpen, onClose, onConfirm, isLoading = false }: MotivoPerdasModalProps) => {
+const MotivoPerdasModal = ({ isOpen, onClose, onConfirm, isLoading = false, categoria = null }: MotivoPerdasModalProps) => {
 
-  const { motivos } = useMotivosPerda('single-tenant');
+  const { motivos, loading: motivosLoading } = useMotivosPerda(categoria);
   const [selectedMotivoId, setSelectedMotivoId] = useState<string>("");
   const [observacoes, setObservacoes] = useState<string>("");
   const [possibilidadeRetomada, setPossibilidadeRetomada] = useState<boolean>(false);
@@ -75,9 +81,14 @@ const MotivoPerdasModal = ({ isOpen, onClose, onConfirm, isLoading = false }: Mo
                 <SelectValue placeholder="Selecione um motivo" />
               </SelectTrigger>
               <SelectContent className="rounded-[4px]">
-                {motivos.length === 0 && (
+                {motivosLoading && (
                   <SelectItem value="__loading__" disabled>
                     Carregando motivos...
+                  </SelectItem>
+                )}
+                {!motivosLoading && motivos.length === 0 && (
+                  <SelectItem value="__empty__" disabled>
+                    Nenhum motivo cadastrado para esta etapa
                   </SelectItem>
                 )}
                 {motivos.map((motivo) => (

@@ -20,6 +20,8 @@ export interface AgendamentoSimple {
   google_meet_link?: string;
   calendar_id?: string;
   gcal_sync_error?: string | null;
+  /** R1/R2/R3 — presente apenas em reuniões Altiora; ausente em reuniões avulsas */
+  altiora_tipo?: 'R1' | 'R2' | 'R3' | null;
   // Backward compatibility
   data?: string;
   hora_inicio?: string;
@@ -60,15 +62,15 @@ export const useAgendamentosSimple = (userId?: string | null, enabled = true) =>
               email
             )
           ),
-          settings_users (
+          settings_users:users_id (
             id,
-            name,
+            nome,
             email
           )
         `)
         .order('start_time', { ascending: true });
 
-      if (userId) query = query.eq('user_id', userId);
+      if (userId) query = query.eq('users_id', userId);
 
       const { data, error } = await query;
 
@@ -89,8 +91,8 @@ export const useAgendamentosSimple = (userId?: string | null, enabled = true) =>
           id: item.id,
           start_time: item.start_time,
           end_time: item.end_time,
-          lead_id: item.lead_id,
-          user_id: item.user_id,
+          lead_id: item.leads_id,
+          user_id: item.users_id,
           status: item.status,
           notes: item.notes,
           location: item.location,
@@ -103,6 +105,7 @@ export const useAgendamentosSimple = (userId?: string | null, enabled = true) =>
           google_meet_link: item.meeting_link,
           calendar_id: item.calendar_id,
           gcal_sync_error: item.gcal_sync_error ?? null,
+          altiora_tipo: item.altiora_tipo ?? null,
           negocio: item.leads ? {
             id: item.leads.id,
             titulo: item.leads.title,
@@ -116,7 +119,7 @@ export const useAgendamentosSimple = (userId?: string | null, enabled = true) =>
           } : null,
           consultor: item.settings_users ? {
             id: item.settings_users.id,
-            nome: item.settings_users.name,
+            nome: item.settings_users.nome || item.settings_users.name,
             email: item.settings_users.email
           } : null,
           // Backward compatibility — hora local, não UTC
@@ -124,8 +127,8 @@ export const useAgendamentosSimple = (userId?: string | null, enabled = true) =>
           data: startDate,
           hora_inicio: item.start_time ? toLocalTimeStr(item.start_time) : '',
           hora_fim:    item.end_time   ? toLocalTimeStr(item.end_time)   : '',
-          negocio_id: item.lead_id,
-          usuario_id: item.user_id,
+          negocio_id: item.leads_id,
+          usuario_id: item.users_id,
           observacoes: item.notes,
           local: item.location,
           quantidade: item.quantity,

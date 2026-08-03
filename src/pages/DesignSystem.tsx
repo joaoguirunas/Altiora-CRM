@@ -1387,7 +1387,7 @@ const DesignSystem = () => {
   // Guard: only super_adm
   if (!user) return null;
   if (!user.profile?.super_adm) {
-    return <Navigate to="/bipro" replace />;
+    return <Navigate to="/crm/kanban" replace />;
   }
 
   return (

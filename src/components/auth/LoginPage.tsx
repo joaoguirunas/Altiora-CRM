@@ -78,7 +78,7 @@ const LoginPage = () => {
   useEffect(() => {
     if (user && !isLoading) {
       console.log('✅ Usuário já autenticado, redirecionando para dashboard');
-      navigate('/bipro', { replace: true });
+      navigate('/crm/kanban', { replace: true });
     }
   }, [user, isLoading, navigate]);
 
@@ -114,7 +114,7 @@ const LoginPage = () => {
       } else {
         setFailedAttempts(0);
         toast.success('Login realizado com sucesso!');
-        navigate('/bipro', { replace: true });
+        navigate('/crm/kanban', { replace: true });
       }
     } catch (err) {
       const duration = performance.now() - startTime;

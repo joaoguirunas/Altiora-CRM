@@ -25,7 +25,7 @@ export const useDashboardNegociosOptimized = (filters: DashboardFiltersType = {}
         let baseQuery = (supabase as any)
           .from('leads')
           .select(`
-            id, value, status, created_at, user_id, leads_loss_reasons_id, loss_reason,
+            id, value, status, created_at, users_id, leads_loss_reasons_id, loss_reason,
             leads_stages!inner(name, order_index, color, leads_pipelines_id)
           `);
 
@@ -33,7 +33,7 @@ export const useDashboardNegociosOptimized = (filters: DashboardFiltersType = {}
         if (filters.pipelineId) baseQuery = baseQuery.eq('leads_stages.leads_pipelines_id', filters.pipelineId);
         if (filters.stageId) baseQuery = baseQuery.eq('leads_stages_id', filters.stageId);
         if (filters.status) baseQuery = baseQuery.eq('status', filters.status);
-        if (filters.responsavel) baseQuery = baseQuery.eq('user_id', filters.responsavel);
+        if (filters.responsavel) baseQuery = baseQuery.eq('users_id', filters.responsavel);
 
         if (dataInicio && dataFim) {
           baseQuery = baseQuery.gte('created_at', dataInicio).lte('created_at', dataFim);

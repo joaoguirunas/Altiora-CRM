@@ -9,7 +9,7 @@ export const useAgendamentosSimples = (pessoaId: string | null) => {
 
       const { data, error } = await supabase
         .from('meetings')
-        .select('id, title, description, start_time, end_time, location, status, user_id, settings_users:user_id(name)')
+        .select('id, title, description, start_time, end_time, location, status, users_id, settings_users:users_id(nome)')
         .eq('people_id', pessoaId)
         .order('start_time', { ascending: false })
         .limit(10);

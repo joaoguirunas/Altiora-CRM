@@ -42,11 +42,9 @@ export interface NegocioOptimized {
     name: string;
     email?: string;
     whatsapp?: string;
-    score?: number;
     score_matrix?: { name: string; score_number: number } | null;
-    cursos?: { product_id: string; product_name: string }[];
-  };
-  empresa?: { id: string; trade_name: string } | null;
+  } | null;
+  empresa?: null;
 }
 
 interface NegocioFilters {
@@ -64,7 +62,6 @@ interface NegocioFilters {
   utm_term?: string;
   utm_content?: string;
   motivoFilter?: string | null;
-  productId?: string;
   /**
    * Filtro por Closer Altiora — filtra por `altiora_closer_id` (ALTIORA-10 AC1).
    * Apenas utilizado no pipeline Altiora.
@@ -108,23 +105,13 @@ export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters
     queryFn: async () => {
       if (!pipelineId) return [];
       
-      // Filtro por produto exige !inner em pessoa e em cursos (dois níveis) — sem
-      // isso o PostgREST só filtraria o array aninhado, não as leads retornadas.
-      // Só troca pra !inner quando o filtro está ativo, pra não mudar o
-      // comportamento (left join) do caso comum sem filtro de produto.
-      const pessoaJoin = filters?.productId ? 'clients_people!inner' : 'clients_people';
-      const cursosJoin = filters?.productId ? 'kiwify_lead_products!inner' : 'kiwify_lead_products';
-
       let query = sbUntyped
         .from('leads')
         .select(`
           *,
-          pessoa:${pessoaJoin}(id, name, email, whatsapp, score, score_matrix:score_matrix(name, score_number), cursos:${cursosJoin}(product_id, product_name)),
-          empresa:clients_companies(id, trade_name)
+          pessoa:clients_people(id, name, email, whatsapp, score_matrix:score_matrix(name, score_number))
         `)
         .eq('leads_pipelines_id', pipelineId);
-
-      if (filters?.productId) query = query.eq('pessoa.cursos.product_id', filters.productId);
 
       const statusDbMap: Record<string, string> = {
         perdido: 'lost',
@@ -138,7 +125,7 @@ export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters
         query = query.eq('status', statusDbMap[filters.status] ?? filters.status);
       }
       if (filters?.motivoFilter) query = query.eq('leads_loss_reasons_id', filters.motivoFilter);
-      if (filters?.user_id) query = query.eq('user_id', filters.user_id);
+      if (filters?.user_id) query = query.eq('users_id', filters.user_id);
       if (filters?.teams_id) query = query.or(`teams_id.eq.${filters.teams_id},teams_id.is.null`);
       if (filters?.dataInicio) query = query.gte('created_at', filters.dataInicio);
       if (filters?.dataFim) query = query.lte('created_at', filters.dataFim);
@@ -148,13 +135,11 @@ export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters
       if (filters?.utm_term) query = query.eq('utm_term', filters.utm_term);
       if (filters?.utm_content) query = query.eq('utm_content', filters.utm_content);
       if (filters?.searchFilter) {
-        // AC2 (ALTIORA-09): busca por nome, e-mail e telefone (whatsapp) além de título e empresa
         query = query.or(
           `title.ilike.%${filters.searchFilter}%,` +
           `clients_people.name.ilike.%${filters.searchFilter}%,` +
           `clients_people.email.ilike.%${filters.searchFilter}%,` +
-          `clients_people.whatsapp.ilike.%${filters.searchFilter}%,` +
-          `clients_companies.trade_name.ilike.%${filters.searchFilter}%`
+          `clients_people.whatsapp.ilike.%${filters.searchFilter}%`
         );
       }
       // AC1 (ALTIORA-10): filtro por Closer responsável via altiora_closer_id

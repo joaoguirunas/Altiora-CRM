@@ -136,8 +136,8 @@ export const useAltioraMetrics = (params: UseAltioraMetricsParams) => {
       // ── 2. Fetch meetings for these leads ─────────────────────────────────
       const { data: meetings, error: meetingsError } = await supabase
         .from('meetings')
-        .select('id, lead_id, altiora_tipo, altiora_compareceu, status')
-        .in('lead_id', leadIds)
+        .select('id, leads_id, altiora_tipo, altiora_compareceu, status')
+        .in('leads_id', leadIds)
         .not('altiora_tipo', 'is', null);
 
       if (meetingsError) throw new Error(meetingsError.message);

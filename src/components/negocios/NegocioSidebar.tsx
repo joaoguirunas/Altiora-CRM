@@ -215,19 +215,19 @@ const NegocioSidebar = ({
 
         {/* ── Tab bar — same pattern as main content ── */}
         <div className="flex-none border-b border-border bg-card dark:bg-zinc-950">
-          <TabsList className="flex w-full bg-transparent p-0 h-[45px] gap-0">
+          <TabsList className="flex w-full bg-transparent p-0 h-[45px] gap-0 overflow-x-auto scrollbar-none">
             {sidebarTabs.map(tab => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 text-[13px] font-normal h-[45px]",
-                  "border-b-2 border-transparent rounded-none transition-colors",
+                  "flex-1 flex items-center justify-center gap-1 text-[12px] font-normal h-[45px] min-w-0 px-2",
+                  "border-b-2 border-transparent rounded-none transition-colors whitespace-nowrap",
                   "text-muted-foreground/60 hover:text-foreground/80 bg-transparent",
                   "data-[state=active]:text-foreground data-[state=active]:border-primary data-[state=active]:font-medium"
                 )}
               >
-                <tab.icon className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <tab.icon className="w-3 h-3 shrink-0" strokeWidth={1.5} />
                 {tab.label}
               </TabsTrigger>
             ))}

@@ -21,8 +21,8 @@ interface CreateAgendamentoData {
 
 interface UpdateAgendamentoData {
   id: string;
-  lead_id?: string;
-  user_id?: string;
+  leads_id?: string;
+  users_id?: string;
   date?: string;
   start_time?: string;
   end_time?: string;
@@ -30,6 +30,8 @@ interface UpdateAgendamentoData {
   notes?: string;
   google_meet_link?: string | null;
   status?: string;
+  attendees?: string[];
+  quantity?: number | null;
 }
 
 // Main hook - alias to useAgendamentosSimple for backwards compatibility
@@ -50,18 +52,19 @@ export const useCriarAgendamento = () => {
       // Combinar date + time e converter para UTC respeitando o fuso local do browser
       const startTimestamp = new Date(`${data.date}T${data.start_time}`).toISOString();
       const endTimestamp   = new Date(`${data.date}T${data.end_time}`).toISOString();
-      
+
       const { data: meeting, error } = await supabase
         .from('meetings')
         .insert({
-          lead_id: data.lead_id || null,
+          leads_id: data.lead_id || null,
           people_id: data.people_id || null,
-          user_id: data.user_id || null,
+          users_id: data.user_id || null,
+          date: data.date,
           start_time: startTimestamp,
           end_time: endTimestamp,
           location: data.location || null,
           notes: data.notes || null,
-          meeting_link: data.google_meet_link || null,
+          google_meet_link: data.google_meet_link || null,
           status: data.status || 'agendado',
           title: data.title || 'Reunião',
         })
@@ -70,7 +73,48 @@ export const useCriarAgendamento = () => {
 
       if (error) throw error;
 
-      // Audit log
+      // Rollback helper — deletes the meeting if GCal confirmation fails
+      const rollback = async (reason: string) => {
+        await supabase.from('meetings').delete().eq('id', meeting.id);
+        const messages: Record<string, string> = {
+          no_calendar_connection: 'Reunião não salva — consultor sem Google Calendar conectado. Configure em Integrações.',
+          no_consultant: 'Reunião não salva — consultor não definido.',
+          token_refresh_failed: 'Reunião não salva — token do Google Calendar expirou. Reconecte em Integrações.',
+          create_failed: 'Reunião não salva — Google Calendar rejeitou o evento. Verifique as permissões.',
+          meeting_not_found: 'Reunião não salva — erro interno ao sincronizar.',
+        };
+        throw new Error(messages[reason] ?? `Reunião não salva — Google Calendar não confirmou (${reason}).`);
+      };
+
+      // Aguarda confirmação do Google Calendar antes de confirmar o meeting
+      let gcalEventId: string | undefined;
+      try {
+        const { data: gcalData, error: gcalErr } = await supabase.functions
+          .invoke('google-cal-upsert-event', { body: { meeting_id: meeting.id, action: 'create' } });
+
+        if (gcalErr) {
+          console.warn('[GCal] upsert error:', gcalErr);
+          await rollback('create_failed');
+        }
+
+        const d = gcalData as { skipped?: boolean; reason?: string; success?: boolean; google_event_id?: string } | null;
+
+        if (d?.skipped) {
+          await rollback(d.reason ?? 'create_failed');
+        }
+
+        if (!d?.success) {
+          await rollback('create_failed');
+        }
+
+        gcalEventId = d?.google_event_id;
+        console.info('[GCal] evento confirmado:', gcalEventId);
+      } catch (err) {
+        // rollback já foi feito dentro, só re-lança
+        throw err;
+      }
+
+      // Audit log (só chega aqui se GCal confirmou)
       await auditLogger.log({
         action: 'meeting_created',
         resource_type: 'meeting',
@@ -80,56 +124,18 @@ export const useCriarAgendamento = () => {
           user_id: data.user_id,
           start_time: startTimestamp,
           end_time: endTimestamp,
-          status: data.status || 'agendado'
+          status: data.status || 'agendado',
+          google_event_id: gcalEventId,
         }
       });
-      
-      return meeting;
+
+      return { meeting, gcalEventId, sendConfirmation: data.sendConfirmation };
     },
-    onSuccess: (meeting, variables) => {
+    onSuccess: ({ meeting, sendConfirmation }) => {
       queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
-      toast.success('Meeting scheduled successfully!');
-      // Sync to Google Calendar — chain confirmation after sync to have meet link
-      supabase.functions
-        .invoke('google-cal-upsert-event', { body: { meeting_id: meeting.id, action: 'create' } })
-        .then(({ data, error }) => {
-          if (error) {
-            console.warn('[GCal] upsert error:', error);
-            toast.warning('Agendamento criado, mas falhou ao sincronizar com Google Calendar.');
-            return;
-          }
-          const d = data as { skipped?: boolean; reason?: string; success?: boolean; google_event_id?: string; detail?: string } | null;
-          if (d?.skipped) {
-            console.info('[GCal] skipped:', d.reason);
-            const reasonMessages: Record<string, string> = {
-              no_consultant: 'Agendamento criado, mas sem sync com Google Calendar — consultor não definido.',
-              no_calendar_connection: 'Agendamento criado, mas sem sync com Google Calendar — consultor sem conexão Google. Configure em Integrações.',
-              token_refresh_failed: 'Agendamento criado, mas a conexão Google do consultor expirou. Reconecte em Integrações.',
-              create_failed: 'Agendamento criado, mas o Google Calendar rejeitou o evento.',
-              meeting_not_found: 'Agendamento criado, mas não foi possível sincronizar (meeting não encontrado).',
-            };
-            const msg = (d.reason && reasonMessages[d.reason]) || `Agendamento criado, mas sem sync com Google Calendar (${d.reason ?? 'motivo desconhecido'}).`;
-            toast.warning(msg);
-          }
-          else if (d?.success) {
-            console.info('[GCal] synced to Google Calendar:', d.google_event_id);
-            queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
-          }
-          // Send WhatsApp confirmation after GCal sync (meet link now available)
-          if (variables.sendConfirmation) {
-            supabase.functions
-              .invoke('send-meeting-confirmation', { body: { meeting_id: meeting.id } })
-              .then(({ data: confirmData, error: confirmErr }) => {
-                const cd = confirmData as { sent?: boolean; error?: string } | null;
-                if (confirmErr) console.warn('[MeetConfirm] error:', confirmErr.message);
-                else if (cd?.sent) toast.success('Confirmação enviada por WhatsApp');
-                else if (cd?.error) console.warn('[MeetConfirm]', cd.error);
-              })
-              .catch((err) => console.warn('[MeetConfirm] invoke error:', err));
-          }
-        })
-        .catch((err) => console.warn('[GCal] upsert-event exception:', err));
-      // Sync to Microsoft Teams (fire-and-forget — skips if provider != microsoft)
+      toast.success('Reunião agendada e confirmada no Google Calendar!');
+
+      // Microsoft Teams: fire-and-forget (secundário)
       supabase.functions
         .invoke('ms-teams-upsert-event', { body: { meeting_id: meeting.id, action: 'create' } })
         .then(({ data, error }) => {
@@ -142,10 +148,23 @@ export const useCriarAgendamento = () => {
           }
         })
         .catch((err) => console.warn('[Teams] upsert-event exception:', err));
+
+      // WhatsApp confirmation após GCal (meet link disponível)
+      if (sendConfirmation) {
+        supabase.functions
+          .invoke('send-meeting-confirmation', { body: { meeting_id: meeting.id } })
+          .then(({ data: confirmData, error: confirmErr }) => {
+            const cd = confirmData as { sent?: boolean; error?: string } | null;
+            if (confirmErr) console.warn('[MeetConfirm] error:', confirmErr.message);
+            else if (cd?.sent) toast.success('Confirmação enviada por WhatsApp');
+            else if (cd?.error) console.warn('[MeetConfirm]', cd.error);
+          })
+          .catch((err) => console.warn('[MeetConfirm] invoke error:', err));
+      }
     },
     onError: (error: Error) => {
       console.error('Error creating meeting:', error);
-      toast.error(error.message || 'Error creating meeting');
+      toast.error(error.message || 'Erro ao criar reunião.');
     },
   });
 };
@@ -179,22 +198,28 @@ export const useUpdateAgendamento = () => {
     },
     onSuccess: (meeting, variables) => {
       queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
-      toast.success('Meeting updated successfully!');
+      const isCancelling = variables.status === 'cancelado';
+      toast.success(isCancelling ? 'Reunião cancelada e removida do calendário.' : 'Reunião atualizada com sucesso!');
+
+      // 'cancelado' → remove o evento (dispara e-mail de cancelamento aos convidados via sendUpdates=all).
+      // Qualquer outra alteração → PATCH do evento existente (dispara e-mail de atualização).
+      const syncAction = isCancelling ? 'delete' : 'update';
+
       // Sync to Google Calendar (fire-and-forget)
       supabase.functions
-        .invoke('google-cal-upsert-event', { body: { meeting_id: meeting.id, action: 'update' } })
-        .catch((err) => console.warn('google-cal-upsert-event (update) error:', err));
+        .invoke('google-cal-upsert-event', { body: { meeting_id: meeting.id, action: syncAction } })
+        .catch((err) => console.warn(`google-cal-upsert-event (${syncAction}) error:`, err));
       // Sync to Microsoft Teams (fire-and-forget — skips if provider != microsoft)
       supabase.functions
-        .invoke('ms-teams-upsert-event', { body: { meeting_id: meeting.id, action: 'update' } })
-        .catch((err) => console.warn('ms-teams-upsert-event (update) error:', err));
+        .invoke('ms-teams-upsert-event', { body: { meeting_id: meeting.id, action: syncAction } })
+        .catch((err) => console.warn(`ms-teams-upsert-event (${syncAction}) error:`, err));
       // Trigger meeting follow-ups when status changes (fire-and-forget)
-      const meetingRecord = meeting as { id: string; lead_id?: string | null; google_event_id?: string; ms_meeting_id?: string };
-      if ('status' in variables && variables.status && meetingRecord.lead_id) {
+      const meetingRecord = meeting as { id: string; leads_id?: string | null; google_event_id?: string; ms_meeting_id?: string };
+      if ('status' in variables && variables.status && meetingRecord.leads_id) {
         supabase.functions
           .invoke('followup-enqueue', {
             body: {
-              lead_id:        meetingRecord.lead_id,
+              lead_id:        meetingRecord.leads_id,
               source_type:    'meeting',
               meeting_status: variables.status,
             },

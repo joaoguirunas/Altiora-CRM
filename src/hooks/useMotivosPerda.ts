@@ -5,21 +5,33 @@ import { toast } from 'sonner';
 export interface MotivoPerda {
   id: string;
   name: string;
+  category: string | null;
+  order_index: number | null;
   created_at: string;
   updated_at: string;
 }
 
 const QUERY_KEY = ['leads_loss_reasons'];
 
-export const useMotivosPerda = (_tenantId?: string) => {
+/**
+ * @param category - Quando informada, retorna só os motivos dessa categoria
+ * (ex: 'pre_venda' | 'reprovacao' | 'pos_r2' — ver `motivoPerdaCategoria.ts`).
+ * Quando omitida/undefined, retorna os motivos genéricos (category IS NULL) —
+ * comportamento usado por pipelines fora do Altiora.
+ */
+export const useMotivosPerda = (category?: string | null) => {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: [...QUERY_KEY, category ?? 'generic'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leads_loss_reasons')
-        .select('*')
+      let queryBuilder = supabase.from('leads_loss_reasons').select('*');
+      queryBuilder = category
+        ? queryBuilder.eq('category', category)
+        : queryBuilder.is('category', null);
+
+      const { data, error } = await queryBuilder
+        .order('order_index', { ascending: true, nullsFirst: false })
         .order('name');
 
       if (error) throw error;

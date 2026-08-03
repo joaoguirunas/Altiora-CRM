@@ -9,8 +9,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
-  ArrowLeft, User, Mail, Phone, Calendar, DollarSign, Edit2, Check, X,
-  Trophy, XCircle, RotateCcw, Users, UserCheck, MessageSquare, FileText,
+  ArrowLeft, User, Mail, Phone, Calendar, CalendarPlus, DollarSign, Edit2, Check, X,
+  Trophy, XCircle, RotateCcw, Users, UserCheck, FileText,
   Plus, TrendingUp, Clock, Target, UserCircle, Brain, AlertTriangle,
   Settings, Building2, RefreshCw, ChevronsUpDown, Trash2, Flame, Star, GitBranch
 } from "lucide-react";
@@ -30,8 +30,6 @@ import { toast } from "sonner";
 import EditableField from "@/components/common/EditableField";
 import { NegocioScoreSection } from "@/components/negocios/NegocioScoreSection";
 import { AtribuirTimeResponsavel } from "@/components/conversas/AtribuirTimeResponsavel";
-import NegocioConversa from "@/components/negocios/NegocioConversa";
-import ConversaErrorBoundary from "@/components/negocios/conversa/ConversaErrorBoundary";
 import NegocioArquivos from "@/components/negocios/NegocioArquivos";
 import NegocioNotas from "@/components/negocios/NegocioNotas";
 import NegocioSidebar from "@/components/negocios/NegocioSidebar";
@@ -40,11 +38,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import NegocioReunioes from "@/components/negocios/NegocioReunioes";
 import { AltioraReunioes } from "@/components/negocios/AltioraReunioes";
+import { AltioraAgendarReuniaoModal } from "@/components/negocios/AltioraAgendarReuniaoModal";
 import MotivoPerdasModal, { type MotivoPerdasPayload } from "@/components/negocios/MotivoPerdasModal";
 import ReobrirReferralModal, { type ReobrirPayload } from "@/components/negocios/ReobrirReferralModal";
 import CamposExtrasSection from "@/components/negocios/CamposExtrasSection";
 import { ExtraFieldsCard } from "@/components/pessoas/ExtraFieldsCard";
 import { getEntityLabel, isAltioraPipeline } from "@/utils/pipelineLabels";
+import { getMotivoPerdaCategoria } from "@/utils/motivoPerdaCategoria";
 import AltioraFinvitySection from "@/components/negocios/AltioraFinvitySection";
 import AltioraR1Section from "@/components/negocios/AltioraR1Section";
 import AltioraR2Section from "@/components/negocios/AltioraR2Section";
@@ -107,6 +107,7 @@ const NegocioSingle = () => {
   // ALTIORA-11: modais de contato e próxima ação
   const [showContatoModal, setShowContatoModal] = useState(false);
   const [showProximaAcaoModal, setShowProximaAcaoModal] = useState(false);
+  const [showAgendarReuniaoModal, setShowAgendarReuniaoModal] = useState(false);
   // ALTIORA-12: modal de transição de etapa com validação de campos obrigatórios
   const [transicaoModal, setTransicaoModal] = useState<{
     fromStageId: string;
@@ -617,6 +618,17 @@ const NegocioSingle = () => {
                   Registrar contato
                 </Button>
               )}
+              {showGanharButton && isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                <Button
+                  onClick={() => setShowAgendarReuniaoModal(true)}
+                  size="sm"
+                  variant="outline"
+                  className="h-[30px] px-3 text-xs gap-1.5 rounded-[4px]"
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  Agendar Reunião
+                </Button>
+              )}
               {showGanharButton && (
                 <Button
                   onClick={() => handleStatusChange('won')}
@@ -770,13 +782,13 @@ const NegocioSingle = () => {
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <Tabs defaultValue="conversas" className="flex-1 flex flex-col overflow-hidden">
+            <Tabs defaultValue="informacoes" className="flex-1 flex flex-col overflow-hidden">
 
               {/* Tab bar */}
               <div className="flex-none border-b border-border bg-card dark:bg-zinc-950">
                 <TabsList className="flex justify-start bg-transparent p-0 h-[45px] gap-0">
                   {[
-                    { value: 'conversas', icon: MessageSquare, label: 'Conversas' },
+                    /* Aba Conversas removida temporariamente — CONVERSAS_TAB_ENABLED */
                     { value: 'informacoes', icon: UserCheck, label: 'Informações' },
                     { value: 'arquivos', icon: FileText, label: 'Notas' },
                     { value: 'reunioes', icon: Calendar, label: 'Reuniões' },
@@ -804,12 +816,7 @@ const NegocioSingle = () => {
               {/* Tab content */}
               <div className="flex-1 overflow-auto">
 
-                {/* Conversas */}
-                <TabsContent value="conversas" className="h-full mt-0">
-                  <ConversaErrorBoundary>
-                    <NegocioConversa negocioId={id!} />
-                  </ConversaErrorBoundary>
-                </TabsContent>
+                {/* Conversas — removida temporariamente da UI (CONVERSAS_TAB_ENABLED) */}
 
                 {/* Informações */}
                 <TabsContent value="informacoes" className="mt-0 p-5 overflow-auto">
@@ -1050,6 +1057,7 @@ const NegocioSingle = () => {
         onClose={() => setShowMotivoPerdasModal(false)}
         onConfirm={handleMotivoPerdasConfirm}
         isLoading={updateNegocio.isPending}
+        categoria={getMotivoPerdaCategoria(currentStage?.nome)}
       />
 
       {/* ALTIORA-19 AC4: modal de reabertura (apenas Gestor/Admin) */}
@@ -1060,6 +1068,17 @@ const NegocioSingle = () => {
         isLoading={updateNegocio.isPending}
         stages={stages}
         pipelineId={negocio.pipeline_id || negocio.leads_pipelines_id}
+      />
+
+      {/* Botão "Agendar Reunião" do cabeçalho — mesmo modal usado na aba Reuniões */}
+      <AltioraAgendarReuniaoModal
+        open={showAgendarReuniaoModal}
+        onOpenChange={setShowAgendarReuniaoModal}
+        leadId={id!}
+        closerId={negocioAltiora.altiora_closer_id ?? ''}
+        peopleId={negocio.people_id ?? null}
+        clientEmail={negocio.pessoa?.email ?? null}
+        clientName={negocio.pessoa?.name || negocio.pessoa?.nome || null}
       />
 
       {/* ALTIORA-11 AC1-AC2: modal de registro de contato */}

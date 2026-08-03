@@ -7,11 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Trash2, Save, Clock } from 'lucide-react';
-import { toast } from 'sonner';
 import { useUsuarios } from '@/hooks/useUsuarios';
 import { AgendamentoSimple } from '@/hooks/useAgendamentosSimple';
+import { useUpdateAgendamento, useDeleteAgendamento } from '@/hooks/useAgendamentos';
 import MultiSelectPessoas from '@/components/common/MultiSelectPessoas';
-import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
 // Gerar horários disponíveis de 08:00 até 18:00 em intervalos de 30 minutos
@@ -53,6 +52,8 @@ const EditarReuniaoModal: React.FC<EditarReuniaoModalProps> = ({
   const [googleMeetLink, setGoogleMeetLink] = useState('');
   
   const { usuarios = [], isLoading: isLoadingUsuarios } = useUsuarios();
+  const updateMutation = useUpdateAgendamento();
+  const deleteMutation = useDeleteAgendamento();
 
   useEffect(() => {
     if (agendamento) {
@@ -71,32 +72,29 @@ const EditarReuniaoModal: React.FC<EditarReuniaoModalProps> = ({
   }, [agendamento]);
 
   const handleSubmit = async () => {
-    if (!agendamento) return;
+    if (!agendamento || !date || !startTime || !endTime) return;
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('meetings')
-        .update({
-          start_time: startTime + ':00',
-          end_time: endTime + ':00',
-          notes,
-          user_id: consultorId || null,
-          attendees,
-          status,
-          quantity: quantity ? parseInt(quantity) : null,
-          location,
-          google_meet_link: googleMeetLink || null,
-        })
-        .eq('id', agendamento.id);
+      // ISO completo (data + hora) — start_time/end_time são timestamptz.
+      // Passa por useUpdateAgendamento para sincronizar Google Calendar/Teams
+      // (e-mail de aviso aos convidados via sendUpdates=all) e registrar auditoria.
+      await updateMutation.mutateAsync({
+        id: agendamento.id,
+        start_time: new Date(`${date}T${startTime}:00`).toISOString(),
+        end_time: new Date(`${date}T${endTime}:00`).toISOString(),
+        notes,
+        users_id: consultorId || undefined,
+        attendees,
+        status,
+        quantity: quantity ? parseInt(quantity) : null,
+        location,
+        google_meet_link: googleMeetLink || null,
+      });
 
-      if (error) throw error;
-
-      toast.success('Reunião atualizada com sucesso!');
       onOpenChange(false);
     } catch (error) {
       console.error('Erro ao atualizar reunião:', error);
-      toast.error('Erro ao atualizar reunião');
     } finally {
       setIsSubmitting(false);
     }
@@ -106,18 +104,10 @@ const EditarReuniaoModal: React.FC<EditarReuniaoModalProps> = ({
     if (!agendamento) return;
 
     try {
-      const { error } = await supabase
-        .from('meetings')
-        .delete()
-        .eq('id', agendamento.id);
-
-      if (error) throw error;
-
-      toast.success('Reunião excluída com sucesso!');
+      await deleteMutation.mutateAsync(agendamento.id);
       onOpenChange(false);
     } catch (error) {
       console.error('Erro ao excluir reunião:', error);
-      toast.error('Erro ao excluir reunião');
     }
   };
 

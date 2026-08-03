@@ -5,8 +5,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { auditLogger } from '@/utils/auditLogger';
 
-// kiwify_lead_products is not yet in the generated Supabase types; the detail
-// query joins it through an untyped view of the client (see useNegocio).
 const sbUntyped = supabase as unknown as SupabaseClient;
 
 export interface Negocio {
@@ -177,7 +175,7 @@ export const useNegocio = (negocioId: string) => {
         .from('leads')
         .select(`
           *,
-          pessoa:clients_people!leads_people_id_fkey (*, cursos:kiwify_lead_products(product_id, product_name)),
+          pessoa:clients_people!leads_people_id_fkey (*),
           pipeline:leads_pipelines!leads_leads_pipelines_id_fkey (
             id,
             name

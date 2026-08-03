@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useMemo } from "react";
-import { List, Search, Plus, RefreshCw, Edit, X, Shield, CalendarDays, Calendar, ExternalLink, ChevronUp, ChevronDown, AlertCircle, CheckCircle2, WifiOff, Filter, AlertTriangle } from "lucide-react";
+import { List, Search, Plus, RefreshCw, Edit, X, Shield, CalendarDays, Calendar, ExternalLink, ChevronUp, ChevronDown, AlertCircle, CheckCircle2, WifiOff, Filter, AlertTriangle, MoreHorizontal, CalendarClock, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,25 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useAgendamentosSimple, AgendamentoSimple } from "@/hooks/useAgendamentosSimple";
+import { useUpdateAgendamento } from "@/hooks/useAgendamentos";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUsuarios } from "@/hooks/useUsuarios";
 import { useTimesWithMethods, useUsuariosDoTenant, useUsuariosTimes } from "@/hooks/useTimes";
@@ -23,6 +40,7 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import NovaReuniaoWizardModal from "@/components/modals/NovaReuniaoWizardModal";
 import BloquearAgendaModal from "@/components/modals/BloquearAgendaModal";
 import EditarReuniaoModal from "@/components/modals/EditarReuniaoModal";
+import { RescheduleModal } from "@/components/reunioes/RescheduleModal";
 import CalendarioView from "@/components/reunioes/CalendarioView";
 import CalendarioSemanalView from "@/components/reunioes/CalendarioSemanalView";
 import StandardPageLoader from "@/components/loading/StandardPageLoader";
@@ -60,6 +78,13 @@ const STATUS_BADGE: Record<string, string> = {
   cancelado:          "text-rose-600 bg-rose-500/8 border-rose-500/20",
 };
 
+// Mesmas cores usadas em AltioraReunioes.tsx (TIPO_CONFIG), para consistência visual
+const TIPO_BADGE: Record<"R1" | "R2" | "R3", string> = {
+  R1: "text-[#3B82F6] bg-[#3B82F6]/10 border-[#3B82F6]/20",
+  R2: "text-[#8B5CF6] bg-[#8B5CF6]/10 border-[#8B5CF6]/20",
+  R3: "text-[#10B981] bg-[#10B981]/10 border-[#10B981]/20",
+};
+
 const Reunioes = () => {
   const { canChangeFilters, currentUserId, userTimes, isSuperAdmin, isGestor } = useUserPermissions();
   const navigate = useNavigate();
@@ -70,6 +95,7 @@ const Reunioes = () => {
   const [calendarCurrentDate, setCalendarCurrentDate] = useState(new Date());
   const [searchTerm, setSearchTerm]           = useState("");
   const [statusFilter, setStatusFilter]       = useState("all");
+  const [tipoFilter, setTipoFilter]           = useState("all");
   const [dateFilter, setDateFilter]           = useState("all");
   const [currentPage, setCurrentPage]         = useState(1);
   const [activeStatusFilter, setActiveStatusFilter] = useState("");
@@ -85,7 +111,25 @@ const Reunioes = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedAgendamento, setSelectedAgendamento] = useState<AgendamentoSimple | null>(null);
   const [retryingSync, setRetryingSync] = useState<string | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<AgendamentoSimple | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<AgendamentoSimple | null>(null);
   const itemsPerPage = 20;
+
+  const updateAgendamentoMutation = useUpdateAgendamento();
+
+  const getDurationMinutes = (a: AgendamentoSimple) => {
+    if (!a.hora_inicio || !a.hora_fim) return 60;
+    const [h1, m1] = a.hora_inicio.split(":").map(Number);
+    const [h2, m2] = a.hora_fim.split(":").map(Number);
+    const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+    return diff > 0 ? diff : 60;
+  };
+
+  const confirmCancelAgendamento = async () => {
+    if (!cancelTarget) return;
+    await updateAgendamentoMutation.mutateAsync({ id: cancelTarget.id, status: "cancelado" });
+    setCancelTarget(null);
+  };
 
   const gcDateRange = useMemo(() => {
     if (viewMode === "calendar") {
@@ -219,7 +263,7 @@ const Reunioes = () => {
   useEffect(() => {
     if (viewMode !== "list") refetch();
   }, [calendarCurrentDate, viewMode, refetch]);
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter, dateFilter, activeStatusFilter, equipeFilter, consultorFilter]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter, tipoFilter, dateFilter, activeStatusFilter, equipeFilter, consultorFilter]);
 
   const filteredUsuarios = equipeFilter === "all" ? usuariosDoTenant : teamMembers;
 
@@ -272,13 +316,16 @@ const Reunioes = () => {
         : true;
       const consultor = consultorFilter === "all" || a.usuario_id === consultorFilter;
       const equipe    = equipeFilter === "all" || teamMembers.some(m => m.id === a.usuario_id);
+      const tipo      = tipoFilter === "all" ? true
+        : tipoFilter === "outras" ? !a.altiora_tipo
+        : a.altiora_tipo === tipoFilter;
       // Regular users (canChangeFilters=false) see all their meetings in list view,
       // including Google-synced ones — they connect their calendar to see everything in one place.
       // Admins/gestors keep the old behavior: list view shows only non-Google meetings.
       const isFromPlatform = !canChangeFilters || viewMode !== "list" || a.source !== "google";
-      return search && status && dateMatch && consultor && equipe && isFromPlatform;
+      return search && status && dateMatch && consultor && equipe && tipo && isFromPlatform;
     });
-  }, [agendamentos, searchTerm, activeStatusFilter, statusFilter, dateFilter, consultorFilter, equipeFilter, usuariosDoTenant, teamMembers, viewMode, canChangeFilters]);
+  }, [agendamentos, searchTerm, activeStatusFilter, statusFilter, tipoFilter, dateFilter, consultorFilter, equipeFilter, usuariosDoTenant, teamMembers, viewMode, canChangeFilters]);
 
   const sortedAgendamentos = useMemo(() => {
     return [...filteredAgendamentos].sort((a, b) => {
@@ -377,9 +424,9 @@ const Reunioes = () => {
     );
   }
 
-  const hasActiveFilters = activeStatusFilter || statusFilter !== "all" || dateFilter !== "all" || searchTerm || equipeFilter !== "all" || consultorFilter !== "all";
-  const advancedFilterCount = [activeStatusFilter, statusFilter !== "all", dateFilter !== "all", equipeFilter !== "all", consultorFilter !== "all"].filter(Boolean).length;
-  const clearAllFilters = () => { setActiveStatusFilter(""); setStatusFilter("all"); setDateFilter("all"); setSearchTerm(""); if (canChangeFilters) { setEquipeFilter("all"); setConsultorFilter("all"); } };
+  const hasActiveFilters = activeStatusFilter || statusFilter !== "all" || tipoFilter !== "all" || dateFilter !== "all" || searchTerm || equipeFilter !== "all" || consultorFilter !== "all";
+  const advancedFilterCount = [activeStatusFilter, statusFilter !== "all", tipoFilter !== "all", dateFilter !== "all", equipeFilter !== "all", consultorFilter !== "all"].filter(Boolean).length;
+  const clearAllFilters = () => { setActiveStatusFilter(""); setStatusFilter("all"); setTipoFilter("all"); setDateFilter("all"); setSearchTerm(""); if (canChangeFilters) { setEquipeFilter("all"); setConsultorFilter("all"); } };
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -616,6 +663,23 @@ const Reunioes = () => {
                 </div>
               </div>
 
+              {/* Tipo de reunião (R1/R2/R3) */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Tipo de reunião</p>
+                <Select value={tipoFilter} onValueChange={setTipoFilter}>
+                  <SelectTrigger className="h-[30px] w-40 text-xs rounded-[4px] bg-muted border-border">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-[4px] text-xs">
+                    <SelectItem value="all" className="text-xs">Todos os tipos</SelectItem>
+                    <SelectItem value="R1" className="text-xs">R1 — Diagnóstico</SelectItem>
+                    <SelectItem value="R2" className="text-xs">R2 — Proposta</SelectItem>
+                    <SelectItem value="R3" className="text-xs">R3 — Fechamento</SelectItem>
+                    <SelectItem value="outras" className="text-xs">Outras reuniões</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Date + Equipe + Consultor */}
               <div className="space-y-1.5">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Período e equipe</p>
@@ -668,6 +732,7 @@ const Reunioes = () => {
               {[
                 activeStatusFilter && { label: activeStatusFilter, clear: () => setActiveStatusFilter("") },
                 statusFilter !== "all" && { label: statusFilter, clear: () => setStatusFilter("all") },
+                tipoFilter !== "all" && { label: tipoFilter === "outras" ? "Outras reuniões" : tipoFilter, clear: () => setTipoFilter("all") },
                 dateFilter !== "all" && { label: dateFilter === "today" ? "Hoje" : dateFilter === "week" ? "Esta semana" : "Este mês", clear: () => setDateFilter("all") },
                 searchTerm && { label: `"${searchTerm}"`, clear: () => setSearchTerm("") },
                 equipeFilter !== "all" && canChangeFilters && { label: times.find(t => t.id === equipeFilter)?.nome ?? equipeFilter, clear: () => setEquipeFilter("all") },
@@ -738,7 +803,7 @@ const Reunioes = () => {
                       <SortTh field="consultor">Consultor</SortTh>
                       <SortTh field="status">Status</SortTh>
                       <TableHead className="text-xs font-medium text-muted-foreground">Negócio</TableHead>
-                      <TableHead className="text-xs font-medium text-muted-foreground text-right" title="Lead score (pessoa)">Lead</TableHead>
+                      <TableHead className="text-xs font-medium text-muted-foreground">Link</TableHead>
                       {hasQuantidadeData && <TableHead className="text-xs font-medium text-muted-foreground">Qtd</TableHead>}
                       {hasLocalData && <TableHead className="text-xs font-medium text-muted-foreground">Local</TableHead>}
                       <TableHead className="w-10" />
@@ -758,7 +823,14 @@ const Reunioes = () => {
                           <TableCell className="text-xs font-medium text-foreground max-w-[180px]">
                             {isBlocked
                               ? <span className="flex items-center gap-1.5 text-muted-foreground"><Shield className="w-3.5 h-3.5 text-slate-400" />Bloqueio</span>
-                              : <span className="truncate block">{pessoa?.nome ?? "—"}</span>}
+                              : <span className="flex items-center gap-1.5">
+                                  {a.altiora_tipo && (
+                                    <span className={cn("shrink-0 inline-flex items-center justify-center h-4 px-1 rounded-[2px] text-[9px] font-bold border leading-none", TIPO_BADGE[a.altiora_tipo])}>
+                                      {a.altiora_tipo}
+                                    </span>
+                                  )}
+                                  <span className="truncate">{pessoa?.nome ?? "—"}</span>
+                                </span>}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(a.data)}</TableCell>
                           <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(a.hora_inicio, a.hora_fim)}</TableCell>
@@ -804,10 +876,13 @@ const Reunioes = () => {
                                 </button>
                               : <span>—</span>}
                           </TableCell>
-                          <TableCell className="text-xs text-right pr-2">
-                            {!isBlocked && pessoa?.score != null
-                              ? <span className="font-medium text-foreground tabular-nums">{pessoa.score}</span>
-                              : <span className="text-white/40">—</span>}
+                          <TableCell className="text-xs pr-2">
+                            {a.google_meet_link
+                              ? <a href={a.google_meet_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-blue-500 hover:text-blue-400 transition-colors">
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                  <span className="truncate max-w-[120px]">Abrir link</span>
+                                </a>
+                              : <span className="text-muted-foreground/40">—</span>}
                           </TableCell>
                           {hasQuantidadeData && (
                             <TableCell className="text-xs text-muted-foreground tabular-nums">
@@ -820,9 +895,39 @@ const Reunioes = () => {
                             </TableCell>
                           )}
                           <TableCell className="pr-3">
-                            <Button size="sm" variant="ghost" className="h-[30px] w-[30px] p-0 rounded-[4px] opacity-0 group-hover:opacity-100 hover:bg-muted" onClick={e => { e.stopPropagation(); handleAgendamentoClick(a); }}>
-                              <Edit className="w-3.5 h-3.5 text-muted-foreground" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-[30px] w-[30px] p-0 rounded-[4px] hover:bg-muted"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+                                <DropdownMenuItem onClick={() => handleAgendamentoClick(a)}>
+                                  <Edit className="w-3.5 h-3.5 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                {!isBlocked && a.status !== "cancelado" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => setRescheduleTarget(a)}>
+                                      <CalendarClock className="w-3.5 h-3.5 mr-2" />
+                                      Reagendar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-rose-600 focus:text-rose-600"
+                                      onClick={() => setCancelTarget(a)}
+                                    >
+                                      <Ban className="w-3.5 h-3.5 mr-2" />
+                                      Cancelar reunião
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
@@ -886,6 +991,40 @@ const Reunioes = () => {
       <NovaReuniaoWizardModal open={isModalOpen} onOpenChange={setIsModalOpen} />
       <BloquearAgendaModal open={isBloquearModalOpen} onClose={() => setIsBloquearModalOpen(false)} />
       <EditarReuniaoModal open={isEditModalOpen} onOpenChange={setIsEditModalOpen} agendamento={selectedAgendamento || undefined} />
+
+      {rescheduleTarget && (
+        <RescheduleModal
+          open={!!rescheduleTarget}
+          onOpenChange={open => !open && setRescheduleTarget(null)}
+          meetingId={rescheduleTarget.id}
+          consultorId={rescheduleTarget.usuario_id ?? rescheduleTarget.user_id ?? ""}
+          leadsId={rescheduleTarget.negocio_id ?? rescheduleTarget.lead_id ?? ""}
+          duration={getDurationMinutes(rescheduleTarget)}
+          onSuccess={() => setRescheduleTarget(null)}
+        />
+      )}
+
+      <AlertDialog open={!!cancelTarget} onOpenChange={open => !open && setCancelTarget(null)}>
+        <AlertDialogContent className="rounded-[4px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar reunião?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A reunião com {cancelTarget?.negocio?.person?.nome ?? "o cliente"} em{" "}
+              {cancelTarget ? formatDate(cancelTarget.data) : ""} será cancelada e o evento será removido do Google Calendar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelAgendamento}
+              disabled={updateAgendamentoMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+            >
+              Cancelar reunião
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

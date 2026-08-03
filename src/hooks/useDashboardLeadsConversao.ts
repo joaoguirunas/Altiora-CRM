@@ -70,16 +70,16 @@ export const useDashboardLeadsConversao = (filters: LeadsConversaoFilters = {}, 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let leadsQuery: any = supabase
         .from('leads')
-        .select('id, value, created_at, leads_stages_id, status, user_id');
+        .select('id, value, created_at, leads_stages_id, status, users_id');
 
       if (filters.pipelineId) {
         leadsQuery = leadsQuery
-          .select('id, value, created_at, leads_stages_id, status, user_id, leads_stages!inner(leads_pipelines_id)')
+          .select('id, value, created_at, leads_stages_id, status, users_id, leads_stages!inner(leads_pipelines_id)')
           .eq('leads_stages.leads_pipelines_id', filters.pipelineId);
       }
       if (filters.stageId) leadsQuery = leadsQuery.eq('leads_stages_id', filters.stageId);
       if (filters.status) leadsQuery = leadsQuery.eq('status', filters.status);
-      if (filters.responsavel) leadsQuery = leadsQuery.eq('user_id', filters.responsavel);
+      if (filters.responsavel) leadsQuery = leadsQuery.eq('users_id', filters.responsavel);
       if (dataInicio && dataFim) {
         leadsQuery = leadsQuery.gte('created_at', dataInicio).lte('created_at', dataFim);
       }
@@ -87,7 +87,7 @@ export const useDashboardLeadsConversao = (filters: LeadsConversaoFilters = {}, 
       // Filtro de score
       if (filters.scores && filters.scores.length > 0) {
         leadsQuery = leadsQuery
-          .select('id, value, created_at, leads_stages_id, status, user_id, clients_people!inner(score)')
+          .select('id, value, created_at, leads_stages_id, status, users_id, clients_people!inner(score)')
           .in('clients_people.score', filters.scores);
       }
 
@@ -100,14 +100,14 @@ export const useDashboardLeadsConversao = (filters: LeadsConversaoFilters = {}, 
 
       const { data: meetings, error: meetingsError } = await supabase
         .from('meetings')
-        .select('lead_id, date');
+        .select('leads_id, date');
 
       if (meetingsError) {
         console.error('❌ Erro ao buscar reuniões:', meetingsError);
         throw meetingsError;
       }
 
-      const leadsComAgendamento = new Set((meetings || []).map(m => m.lead_id));
+      const leadsComAgendamento = new Set((meetings || []).map(m => m.leads_id));
       const totalLeads = leads?.length || 0;
       const totalAgendamentos = leadsComAgendamento.size;
       const percentualGeral = totalLeads > 0 ? (totalAgendamentos / totalLeads) * 100 : 0;

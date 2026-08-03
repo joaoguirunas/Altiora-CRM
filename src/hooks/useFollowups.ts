@@ -48,7 +48,7 @@ interface DbFollowup {
   audio_file: string | null;
   template_id: string | null;
   whatsapp_template_id: string | null;
-  whatsapp_template?: { name: string } | null; // not joined — always null
+  whatsapp_template?: { nome: string } | null; // not joined — always null
   as_queue_id: string | null;
   active: boolean;
   control: number | null;
@@ -72,7 +72,7 @@ const mapDbToFollowup = (d: DbFollowup): StageFollowup => ({
   arquivo_audio:          d.audio_file,
   template_id:            d.template_id,
   whatsapp_template_id:   d.whatsapp_template_id,
-  whatsapp_template_name: d.whatsapp_template?.name ?? null,
+  whatsapp_template_name: d.whatsapp_template?.nome ?? null,
   as_queue_id:            d.as_queue_id,
   ativo:                  d.active,
   control:                d.control,

@@ -158,7 +158,7 @@ export const useLeadsUpdates = (leadId: string) => {
       const { data, error } = await supabase
         .from('leads_updates')
         .select('*')
-        .eq('lead_id', leadId)
+        .eq('leads_id', leadId)
         .order('changed_at', { ascending: false });
       
       if (error) throw error;

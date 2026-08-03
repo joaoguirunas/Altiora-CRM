@@ -7,13 +7,11 @@ import { useMotivosPerda } from '@/hooks/useMotivosPerda';
 import { useTranslation } from '@/hooks/useTranslation';
 import { toast } from 'sonner';
 
-interface MotivosConfigProps {
-  selectedTenantId?: string;
-}
-
-const MotivosConfig = ({ selectedTenantId }: MotivosConfigProps) => {
+const MotivosConfig = () => {
   const { t } = useTranslation();
-  const { motivos, loading, addMotivo, updateMotivo, deleteMotivo } = useMotivosPerda(selectedTenantId);
+  // Lista genérica (category IS NULL) — motivos categorizados do Altiora
+  // (pre_venda/reprovacao/pos_r2) são geridos via seed, não por esta tela.
+  const { motivos, loading, addMotivo, updateMotivo, deleteMotivo } = useMotivosPerda();
   const [novoMotivo, setNovoMotivo] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingNome, setEditingNome] = useState('');

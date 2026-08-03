@@ -132,7 +132,7 @@ class AdvancedErrorBoundary extends Component<
   };
 
   private handleGoHome = () => {
-    window.location.href = '/bipro';
+    window.location.href = '/crm/kanban';
   };
 
   private handleReportBug = () => {

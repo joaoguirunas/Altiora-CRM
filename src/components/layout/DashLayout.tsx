@@ -7,11 +7,9 @@ import { useSystemModules } from "@/hooks/useSystemModules";
 import { useTranslation } from "@/hooks/useTranslation";
 
 import {
-  BarChart3,
   Users,
   Building2,
   Settings,
-  Megaphone,
   Bell,
   Sun,
   Moon,
@@ -27,10 +25,9 @@ import {
   RefreshCw,
   Briefcase,
   FolderKanban,
-  Inbox,
   CalendarCheck,
-  CalendarDays,
-  FormInput,
+  Copy,
+  Check,
 } from "lucide-react";
 import {
   Collapsible,
@@ -61,6 +58,7 @@ import { GSLockup, GSSymbol } from '@/components/ui/GrowthSalesLogo';
 import { PerformanceMonitor } from "@/components/debug/PerformanceMonitor";
 import { toast } from "sonner";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useMyBookingRuleSet } from "@/hooks/useMyBookingRuleSet";
 import { MfaGraceBanner } from "@/components/layout/MfaGraceBanner";
 import { useMFA } from "@/hooks/useMFA";
 import { useSettings } from "@/hooks/useSettings";
@@ -72,65 +70,35 @@ interface SidebarItem {
   path: string;
   module?: "disparos" | "reunioes" | "clientes" | "negocios" | "dashboard" | "conversas" | "lp" | "agendamentos" | "agentes-ia";
   requireGestor?: boolean;
+  /** Quando true, item só aparece para super_adm (nem gestor tem acesso) */
+  requireSuperAdmin?: boolean;
   /** When true, item is only shown to users with isComercial=true */
   requireComercial?: boolean;
   isComingSoon?: boolean;
   groupLabel?: string;
 }
 
-// Fixed menu items (BI PRO™, CRM PRO™, OMNI PRO™ always visible)
+// Fixed menu items (CRM PRO™ always visible)
+// BI PRO™ e OMNI PRO™ ocultos por enquanto a pedido do usuário — reativar
+// removendo este comentário e devolvendo os itens ao array.
 const fixedSidebarItems: SidebarItem[] = [
   {
-    title: "BI PRO™",
-    icon: BarChart3,
-    path: "/bipro",
-    module: "dashboard" as const,
-    groupLabel: "CORE",
-    requireGestor: true,
-  },
-  {
-    title: "CRM PRO™",
+    title: "NEGÓCIOS",
     icon: FolderKanban,
     path: "/crm/kanban",
     module: "negocios" as const,
   },
-  {
-    title: "OMNI PRO™",
-    icon: Inbox,
-    path: "/omni",
-    module: "conversas" as const,
-  },
 ];
 
 // Modular items (itens condicionais baseados em módulos ativos)
+// SENDS PRO™ e FORM PRO™ ocultos por enquanto a pedido do usuário — mesmo
+// racional do fixedSidebarItems acima.
 const getModularSidebarItems = (t: (key: string) => string): SidebarItem[] => [
   {
-    title: 'SENDS PRO™',
-    icon: Megaphone,
-    path: "/send",
-    module: "disparos" as const,
-    groupLabel: "MODULES",
-    requireGestor: true,
-  },
-  {
-    title: "SCHEDULE PRO™",
+    title: "AGENDA",
     icon: CalendarCheck,
     path: "/schedule",
     module: "agendamentos" as const,
-  },
-  {
-    title: "Minha Agenda",
-    icon: CalendarDays,
-    path: "/schedule/minha-agenda",
-    module: "agendamentos" as const,
-    requireComercial: true,
-  },
-  {
-    title: "FORM PRO™",
-    icon: FormInput,
-    path: "/lp",
-    module: "lp" as const,
-    requireGestor: true,
   },
 ];
 
@@ -233,10 +201,13 @@ const DashLayout = () => {
 
   // Check if user is gestor or super admin (NOT consultor)
   const isGestorOrAdmin = user?.profile?.gestor === true || user?.profile?.super_adm === true;
+  const isSuperAdmin = user?.profile?.super_adm === true;
   const isConsultor = user?.profile?.consultor === true;
   const { isCliente, isProvisional, isComercial } = useUserPermissions();
   const { data: settings } = useSettings();
   const { isActive: isMfaActive } = useMFA();
+  const { ruleSet: myRuleSet } = useMyBookingRuleSet();
+  const [linkCopied, setLinkCopied] = useState(false);
   const [mfaBannerDismissed, setMfaBannerDismissed] = useState(
     () => sessionStorage.getItem('mfa-banner-dismissed') === '1'
   );
@@ -269,11 +240,11 @@ const DashLayout = () => {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path === '/bipro' || path.startsWith('/bipro/')) return 'BI PRO™';
-    if (path === '/crm/kanban' || path.startsWith('/crm/kanban/')) return 'CRM PRO™ - Kanban';
-    if (path === '/crm/list' || path.startsWith('/crm/list/')) return 'CRM PRO™ - Lista';
-    if (path === '/crm/clients' || path.startsWith('/crm/clients/')) return 'CRM PRO™ - Clientes';
+    if (path === '/crm/kanban' || path.startsWith('/crm/kanban/')) return 'NEGÓCIOS - KANBAN';
+    if (path === '/crm/list' || path.startsWith('/crm/list/')) return 'NEGÓCIOS - LISTA';
+    if (path === '/crm/clients' || path.startsWith('/crm/clients/')) return 'NEGÓCIOS - CLIENTES';
     if (path === '/send' || path.startsWith('/send/')) return 'SENDS PRO™';
-    if (path === '/schedule' || path.startsWith('/schedule/')) return 'SCHEDULE PRO™';
+    if (path === '/schedule' || path.startsWith('/schedule/')) return 'AGENDA';
     if (path === '/omni' || path.startsWith('/omni/')) return 'OMNI PRO™';
     if (path === '/lp' || path.startsWith('/lp/')) return 'FORM PRO™';
     if (path === '/score' || path.startsWith('/score/')) return 'SCORE PRO™';
@@ -297,7 +268,9 @@ const DashLayout = () => {
     // marked requireGestor (BI PRO™), which need the same gestor/admin check
     // as modular items below. Sem isso, BI aparecia na sidebar pra quem não
     // tem permissão nenhuma de acessar a rota.
-    activeItems.push(...fixedSidebarItems.filter(item => !item.requireGestor || isGestorOrAdmin));
+    activeItems.push(...fixedSidebarItems.filter(item =>
+      (!item.requireGestor || isGestorOrAdmin) && (!item.requireSuperAdmin || isSuperAdmin)
+    ));
 
     // Process modular items with proper filtering
     modularSidebarItems.forEach(item => {
@@ -635,6 +608,30 @@ const DashLayout = () => {
                 {/* Refresh button specifically for Negócios page */}
                 {location.pathname.startsWith('/crm/kanban/') && (
                   <RefreshNegociosButton />
+                )}
+                {/* Copy booking link button for closers on Schedule routes */}
+                {isComercial && myRuleSet?.url_id != null && location.pathname.startsWith('/schedule') && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-[30px] px-3 text-xs rounded-[4px] gap-1.5"
+                        onClick={() => {
+                          const base = `${window.location.origin}/agendar`;
+                          navigator.clipboard.writeText(`${base}/[ID_DO_LEAD]?r=${myRuleSet.url_id}`);
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 2000);
+                        }}
+                      >
+                        {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {linkCopied ? 'Copiado!' : 'Copiar link'}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs max-w-[240px]">
+                      Copia o link de agendamento — substitua [ID_DO_LEAD] pelo ID do lead
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </div>
             )}

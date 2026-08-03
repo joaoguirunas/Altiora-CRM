@@ -54,7 +54,7 @@ class PageErrorBoundary extends Component<Props, State> {
   };
 
   private handleGoHome = () => {
-    window.location.href = '/bipro';
+    window.location.href = '/crm/kanban';
   };
 
   render() {

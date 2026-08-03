@@ -13,6 +13,7 @@ import { MfaSection } from "@/components/profile/MfaSection";
 import { useForm } from "react-hook-form";
 import { useSettings, useUpdateSettings } from "@/hooks/useSettings";
 import { CalendarSyncCard } from "@/components/profile/CalendarSyncCard";
+import { HorarioDisponibilidadeCard } from "@/components/profile/HorarioDisponibilidadeCard";
 interface ProfileFormData {
   nome: string;
   email: string;
@@ -342,6 +343,9 @@ const Perfil = () => {
 
           {/* Calendário & Videoconferência */}
           <CalendarSyncCard />
+
+          {/* Disponibilidade semanal */}
+          <HorarioDisponibilidadeCard />
         </div>
       </div>
     </div>;

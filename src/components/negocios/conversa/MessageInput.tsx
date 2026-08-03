@@ -183,23 +183,16 @@ const MessageInput: React.FC<MessageInputProps> = ({
           </Button>
         </div>
       ) : !canSendData?.canSend && canSendData?.reason && (canalAtivo === 'whatsapp' || canalAtivo === 'instagram') ? (
-        <div className="space-y-3">
-          <div className="flex gap-2 opacity-50">
-            <input value="" disabled placeholder="Envio bloqueado" className="flex-1 h-9 text-[13px] rounded-[4px] border border-input bg-background px-3 cursor-not-allowed" aria-label="Envio bloqueado" />
-            <Button disabled aria-label="Enviar"><Send className="w-4 h-4" /></Button>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center justify-center gap-2 text-sm text-destructive">
-              {canSendData.isAIActive && <Bot className="w-4 h-4" />}
-              <span>{canSendData.reason}</span>
-            </div>
-            {canSendData.isAIActive && (
-              <Button variant="outline" size="sm" onClick={onDisableAI} disabled={toggleAIMutationPending} className="gap-1.5 text-xs h-7 px-3">
-                <UserCheck className="w-3.5 h-3.5" />
-                {toggleAIMutationPending ? 'Assumindo...' : 'Assumir controle (desativar IA)'}
-              </Button>
-            )}
-          </div>
+        <div className="flex items-center gap-3 rounded-[4px] border border-destructive/20 bg-destructive/5 px-3 py-2.5">
+          {canSendData.isAIActive && <Bot className="w-4 h-4 text-destructive shrink-0" />}
+          <p className="text-[12px] text-destructive leading-snug flex-1">{canSendData.reason}</p>
+          {canSendData.isAIActive && (
+            <Button variant="outline" size="sm" onClick={onDisableAI} disabled={toggleAIMutationPending}
+              className="gap-1.5 text-xs h-7 px-3 shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive">
+              <UserCheck className="w-3.5 h-3.5" />
+              {toggleAIMutationPending ? 'Assumindo...' : 'Assumir controle'}
+            </Button>
+          )}
         </div>
       ) : (
         <>

@@ -294,7 +294,7 @@ export const useEnviarMensagem = () => {
       const { data: mensagensRecentes } = await supabase
         .from('messages')
         .select('id, content, created_at, from_contact, user_id, people_id')
-        .eq('lead_id', data.lead_id)
+        .eq('leads_id', data.lead_id)
         .gte('created_at', trintaSegundosAtras.toISOString())
         .order('created_at', { ascending: false })
         .limit(20);

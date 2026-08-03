@@ -22,6 +22,9 @@ import {
   RefreshCw,
   X,
   ExternalLink,
+  History,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +65,7 @@ const STATUS_BADGE: Record<string, string> = {
   cancelado:   'text-[#EF4444] bg-[#EF4444]/10 border-[#EF4444]/20',
   compareceu:  'text-[#00D26A] bg-[#00D26A]/10 border-[#00D26A]/20',
   realizada:   'text-[#00D26A] bg-[#00D26A]/10 border-[#00D26A]/20',
+  noshow:      'text-[#F59E0B] bg-[#F59E0B]/10 border-[#F59E0B]/20',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -71,6 +75,20 @@ const STATUS_LABEL: Record<string, string> = {
   cancelado:  'Cancelado',
   compareceu: 'Realizada',
   realizada:  'Realizada',
+  noshow:     'Não compareceu',
+};
+
+/**
+ * altiora_resultado grava no-show com o mesmo status 'cancelada' de um
+ * cancelamento normal — a única diferença é altiora_compareceu === false.
+ * Sem isso, um no-show fica indistinguível de "cancelada antes de acontecer"
+ * no histórico.
+ */
+const getDisplayStatusKey = (meeting: AltioraMeeting): string => {
+  const status = (meeting.status ?? 'agendado').toLowerCase();
+  const isCancelStatus = status === 'cancelada' || status === 'cancelado';
+  if (isCancelStatus && meeting.altiora_compareceu === false) return 'noshow';
+  return status;
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -103,13 +121,13 @@ interface MeetingCardProps {
 const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, onRegistrarResultado, canSchedule }: MeetingCardProps) => {
   const startDate = new Date(meeting.start_time);
   const endDate   = new Date(meeting.end_time);
-  const status    = (meeting.status ?? 'agendado').toLowerCase();
-  const isCancelled = status === 'cancelada' || status === 'cancelado';
-  const isCompleted = status === 'compareceu' || status === 'realizada';
+  const displayStatus = getDisplayStatusKey(meeting);
+  const isCancelled = displayStatus === 'cancelada' || displayStatus === 'cancelado' || displayStatus === 'noshow';
+  const isCompleted = displayStatus === 'compareceu' || displayStatus === 'realizada';
   const isPast      = endDate < new Date();
 
-  const badgeClass  = STATUS_BADGE[status] ?? 'text-muted-foreground bg-muted border-border';
-  const statusLabel = STATUS_LABEL[status] ?? meeting.status;
+  const badgeClass  = STATUS_BADGE[displayStatus] ?? 'text-muted-foreground bg-muted border-border';
+  const statusLabel = STATUS_LABEL[displayStatus] ?? meeting.status;
 
   return (
     <div className={cn(
@@ -147,6 +165,13 @@ const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, onRegistrarResulta
             </>
           )}
         </div>
+      )}
+
+      {/* Resultado registrado (realizada / no-show) */}
+      {meeting.altiora_resultado && (
+        <p className="text-[12px] text-muted-foreground/80 italic">
+          {meeting.altiora_resultado}
+        </p>
       )}
 
       {/* Link do Meet */}
@@ -226,6 +251,8 @@ export const AltioraReunioes = ({
   const [cancelTarget, setCancelTarget] = useState<AltioraMeeting | undefined>(undefined);
   // ALTIORA-14: drawer de resultado
   const [resultadoTarget, setResultadoTarget] = useState<AltioraMeeting | undefined>(undefined);
+  // Histórico: tentativas anteriores do mesmo tipo (canceladas, no-show, etc.)
+  const [expandedHistory, setExpandedHistory] = useState<Record<AltioraMeetingType, boolean>>({ R1: false, R2: false, R3: false });
 
   const openScheduleModal = (tipo: AltioraMeetingType) => {
     setSelectedTipo(tipo);
@@ -271,13 +298,14 @@ export const AltioraReunioes = ({
       {/* Cards por tipo */}
       {TIPOS.map(tipo => {
         const config     = TIPO_CONFIG[tipo];
-        const tipoMeets  = meetings.filter(m => m.altiora_tipo === tipo);
-        const latestMeet = tipoMeets.sort(
+        const tipoMeets  = [...meetings.filter(m => m.altiora_tipo === tipo)].sort(
           (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
-        )[0];
+        );
+        const [latestMeet, ...historyMeets] = tipoMeets;
         const hasScheduled = tipoMeets.some(
           m => m.status !== 'cancelada' && m.status !== 'cancelado',
         );
+        const historyOpen = expandedHistory[tipo];
 
         return (
           <div key={tipo} className="space-y-2">
@@ -329,6 +357,55 @@ export const AltioraReunioes = ({
                 <p className="text-[12px] text-muted-foreground/40">
                   {tipo} ainda não agendada
                 </p>
+              </div>
+            )}
+
+            {/* Histórico: demais tentativas desse tipo (mantém o histórico completo do cliente) */}
+            {historyMeets.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setExpandedHistory(prev => ({ ...prev, [tipo]: !prev[tipo] }))}
+                  className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors py-1"
+                >
+                  <History className="w-3 h-3" />
+                  Histórico ({historyMeets.length})
+                  {historyOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+
+                {historyOpen && (
+                  <div className="space-y-1.5 pl-1">
+                    {historyMeets.map(m => {
+                      const statusKey   = getDisplayStatusKey(m);
+                      const badgeClass  = STATUS_BADGE[statusKey] ?? 'text-muted-foreground bg-muted border-border';
+                      const statusLabel = STATUS_LABEL[statusKey] ?? m.status;
+                      return (
+                        <div
+                          key={m.id}
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[3px] border border-border/40 bg-muted/20"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Calendar className="w-3 h-3 text-muted-foreground/40 flex-shrink-0" />
+                            <span className="text-[11px] text-muted-foreground truncate">
+                              {format(new Date(m.start_time), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                            {m.altiora_resultado && (
+                              <span className="text-[11px] text-muted-foreground/50 truncate">
+                                — {m.altiora_resultado}
+                              </span>
+                            )}
+                          </div>
+                          <span className={cn(
+                            'inline-flex items-center px-1.5 py-0.5 rounded-[2px] text-[10px] font-medium border leading-none flex-shrink-0',
+                            badgeClass,
+                          )}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

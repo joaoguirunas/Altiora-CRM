@@ -99,7 +99,7 @@ export const useMensagensPorPessoa = (pessoaId?: string, tenantId?: string) => {
 
       // OR filter: messages linked directly to this person, OR to any of their leads
       const orFilter = leadIds.length > 0
-        ? `people_id.eq.${effectivePessoaId},lead_id.in.(${leadIds.join(',')})`
+        ? `people_id.eq.${effectivePessoaId},leads_id.in.(${leadIds.join(',')})`
         : `people_id.eq.${effectivePessoaId}`;
 
       // Paginação automática com safety limit para prevenir memory exhaustion
@@ -140,7 +140,7 @@ export const useMensagensPorPessoa = (pessoaId?: string, tenantId?: string) => {
         if (data && data.length > 0) {
           const mapped = data.map((msg: any) => ({
             id: msg.id,
-            lead_id: msg.lead_id,
+            lead_id: msg.leads_id,
             pessoa_id: msg.people_id,
             from_message: msg.from_contact,
             message: msg.content,

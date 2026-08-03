@@ -51,7 +51,6 @@ import Score from "@/pages/Score";
 import LpPro from "@/pages/LpPro";
 import ReuniaoSingle from "@/pages/ReuniaoSingle";
 import ScheduleCalendarioConfig from "@/components/config/horarios/ScheduleCalendarioConfig";
-import MinhaAgendaCloser from "@/pages/MinhaAgendaCloser";
 import AgendamentoPublico from "@/pages/AgendamentoPublico";
 import PublicFormPage from "@/pages/PublicFormPage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
@@ -103,7 +102,7 @@ function AppContent() {
 
   // Redirect mobile users away from desktop routes → /m/*
   if (isMobile && !isPublic && !location.pathname.startsWith('/m/')) {
-    return <Navigate to="/m/bi" replace />;
+    return <Navigate to="/m/crm" replace />;
   }
 
   return (
@@ -143,7 +142,7 @@ function AppContent() {
       </Route>
 
       {/* ── Desktop routes ── */}
-      <Route path="/" element={<Navigate to="/bipro" replace />} />
+      <Route path="/" element={<Navigate to="/crm/kanban" replace />} />
       <Route path="/oauth/meta/callback" element={<MetaOAuthCallback />} />
       <Route path="/oauth/google/callback" element={<GoogleOAuthCallback />} />
       <Route path="/oauth/microsoft/callback" element={<MicrosoftOAuthCallback />} />
@@ -235,7 +234,7 @@ function AppContent() {
           </SectionErrorBoundary>
         </ProtectedRoute>
       }>
-        <Route index element={<Navigate to="/bipro" replace />} />
+        <Route index element={<Navigate to="/crm/kanban" replace />} />
         <Route path="negocios" element={
           <ModuleProtectedRoute moduleKey="negocios">
             <SectionErrorBoundary section="Negócios">
@@ -383,13 +382,6 @@ function AppContent() {
           <ModuleProtectedRoute moduleKey="agendamentos">
             <SectionErrorBoundary section="Calendário">
               <ScheduleCalendarioConfig />
-            </SectionErrorBoundary>
-          </ModuleProtectedRoute>
-        } />
-        <Route path="minha-agenda" element={
-          <ModuleProtectedRoute moduleKey="agendamentos">
-            <SectionErrorBoundary section="Minha Agenda">
-              <MinhaAgendaCloser />
             </SectionErrorBoundary>
           </ModuleProtectedRoute>
         } />

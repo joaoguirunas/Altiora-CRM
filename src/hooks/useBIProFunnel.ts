@@ -108,7 +108,7 @@ export function useBIProFunnel(options: UseBIProFunnelOptions = {}) {
       // 4. Fetch meetings (for scheduling rate)
       let meetingsQuery = supabase
         .from('meetings')
-        .select('id, lead_id, status');
+        .select('id, leads_id, status');
 
       if (dateRange) {
         meetingsQuery = meetingsQuery

@@ -33,19 +33,20 @@ export const useUsers = () => {
       const { data, error} = await supabase
         .from('settings_users')
         .select('*')
-        .eq('active', true)
-        .order('name');
-      
+        .eq('ativo', true)
+        .order('nome');
+
       if (error) throw error;
-      
-      // Add Portuguese compatibility aliases
+
+      // Map real DB columns (nome, ativo, whatsapp, super_adm) to User interface fields
       const mappedData = (data || []).map(item => ({
         ...item,
-        nome: item.name,
-        gestor: item.user_type === 'manager' || item.user_type === 'admin',
-        super_adm: item.user_type === 'admin' || item.super_admin,
-        ativo: item.active,
-        whatsapp: item.phone // Map phone to whatsapp for compatibility
+        name: item.nome,
+        nome: item.nome,
+        gestor: item.gestor || item.user_type === 'manager' || item.user_type === 'admin',
+        super_adm: item.super_adm || item.user_type === 'admin',
+        ativo: item.ativo,
+        whatsapp: item.whatsapp,
       }));
       
       return mappedData as User[];
@@ -65,14 +66,14 @@ export const useUser = (id: string) => {
       
       if (error) throw error;
       
-      // Map database fields to User type with Portuguese compatibility
       return {
         ...data,
-        nome: data.name,
-        gestor: data.user_type === 'manager' || data.user_type === 'admin',
-        super_adm: data.user_type === 'admin' || data.super_admin,
-        ativo: data.active,
-        whatsapp: data.phone // Map phone to whatsapp for compatibility
+        name: data.nome,
+        nome: data.nome,
+        gestor: data.gestor || data.user_type === 'manager' || data.user_type === 'admin',
+        super_adm: data.super_adm || data.user_type === 'admin',
+        ativo: data.ativo,
+        whatsapp: data.whatsapp,
       } as User;
     },
     enabled: !!id,

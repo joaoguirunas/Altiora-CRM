@@ -56,17 +56,17 @@ export const useDashboardLeadsEvolucao = (filters: any = {}, enabled: boolean = 
       // Query direta sem tenant
       let baseQuery = (supabase as any)
         .from('leads')
-        .select('id, value, status, created_at, leads_stages_id, user_id');
+        .select('id, value, status, created_at, leads_stages_id, users_id');
 
       // Aplicar filtros
       if (filters.pipelineId) {
         baseQuery = baseQuery
-          .select('id, value, status, created_at, leads_stages_id, user_id, leads_stages!inner(leads_pipelines_id)')
+          .select('id, value, status, created_at, leads_stages_id, users_id, leads_stages!inner(leads_pipelines_id)')
           .eq('leads_stages.leads_pipelines_id', filters.pipelineId);
       }
       if (filters.stageId) baseQuery = baseQuery.eq('leads_stages_id', filters.stageId);
       if (filters.status) baseQuery = baseQuery.eq('status', filters.status);
-      if (filters.responsavel) baseQuery = baseQuery.eq('user_id', filters.responsavel);
+      if (filters.responsavel) baseQuery = baseQuery.eq('users_id', filters.responsavel);
       if (dataInicio && dataFim) {
         baseQuery = baseQuery.gte('created_at', dataInicio).lte('created_at', dataFim);
       }
@@ -74,7 +74,7 @@ export const useDashboardLeadsEvolucao = (filters: any = {}, enabled: boolean = 
       // Filtro de score
       if (filters.scores && filters.scores.length > 0) {
         baseQuery = baseQuery
-          .select('id, value, status, created_at, leads_stages_id, user_id, clients_people!inner(score)')
+          .select('id, value, status, created_at, leads_stages_id, users_id, clients_people!inner(score)')
           .in('clients_people.score', filters.scores);
       }
 

@@ -19,9 +19,9 @@ export interface AltioraMeeting {
   lead_id: string;
   /** Component-facing alias for users_id */
   user_id?: string | null;
-  /** ISO datetime — mapped from altiora_data_hora (DB stores date+start_time separately) */
+  /** ISO datetime — from altiora_data_hora, fallback to start_time (both timestamptz) */
   start_time: string;
-  /** ISO datetime — mapped from date+end_time */
+  /** ISO datetime — timestamptz */
   end_time: string;
   status: string;
   notes?: string | null;
@@ -81,12 +81,13 @@ export const useAltioraMeetings = (leadId: string) => {
       if (error) throw error;
 
       // Map DB column names to component-facing interface
+      // start_time/end_time já são timestamptz (ISO completo) — sem concatenar com date
       return (data ?? []).map(r => ({
         ...r,
         lead_id: r.leads_id,
         user_id: r.users_id,
-        start_time: r.altiora_data_hora ?? (r.date ? `${r.date}T${r.start_time ?? '00:00:00'}` : (r.start_time ?? '')),
-        end_time: r.date && r.end_time ? `${r.date}T${r.end_time}` : (r.end_time ?? ''),
+        start_time: r.altiora_data_hora ?? r.start_time ?? '',
+        end_time: r.end_time ?? '',
         meeting_link: r.google_meet_link,
       })) as unknown as AltioraMeeting[];
     },
@@ -103,12 +104,11 @@ export const useCreateAltioraMeeting = () => {
   return useMutation({
     mutationFn: async (params: CreateAltioraMeetingParams) => {
       // 1. Inserir meeting com campos Altiora
-      // DB meetings uses: leads_id, users_id, date (date), start_time (time), end_time (time)
+      // DB meetings: leads_id, users_id, date (date, derivado de start_time),
+      // start_time/end_time (timestamptz — ISO completo, não HH:MM:SS)
       const startIso = params.startTime;
       const endIso   = params.endTime;
-      const dateStr      = startIso.includes('T') ? startIso.split('T')[0] : startIso;
-      const startTimeStr = startIso.includes('T') ? (startIso.split('T')[1]?.substring(0, 8) ?? '00:00:00') : '00:00:00';
-      const endTimeStr   = endIso.includes('T')   ? (endIso.split('T')[1]?.substring(0, 8) ?? '00:00:00')   : '00:00:00';
+      const dateStr  = startIso.includes('T') ? startIso.split('T')[0] : startIso;
 
       const { data: meeting, error: insertError } = await supabase
         .from('meetings')
@@ -116,8 +116,8 @@ export const useCreateAltioraMeeting = () => {
           leads_id:              params.leadId,
           users_id:              params.closerId,
           date:                  dateStr,
-          start_time:            startTimeStr,
-          end_time:              endTimeStr,
+          start_time:            startIso,
+          end_time:              endIso,
           notes:                 params.notes ?? null,
           google_meet_link:      params.meetingLink ?? null,
           status:                'agendado',
@@ -200,19 +200,17 @@ export const useUpdateAltioraMeeting = () => {
 
   return useMutation({
     mutationFn: async (params: UpdateAltioraMeetingParams & { leadId: string; tipo: AltioraMeetingType }) => {
-      // 1. Atualizar meeting — split ISO into date + time components
+      // 1. Atualizar meeting — start_time/end_time são timestamptz (ISO completo)
       const startIso = params.startTime;
       const endIso   = params.endTime;
-      const dateStr      = startIso.includes('T') ? startIso.split('T')[0] : startIso;
-      const startTimeStr = startIso.includes('T') ? (startIso.split('T')[1]?.substring(0, 8) ?? '00:00:00') : '00:00:00';
-      const endTimeStr   = endIso.includes('T')   ? (endIso.split('T')[1]?.substring(0, 8) ?? '00:00:00')   : '00:00:00';
+      const dateStr  = startIso.includes('T') ? startIso.split('T')[0] : startIso;
 
       const { error: updateError } = await supabase
         .from('meetings')
         .update({
           date:                    dateStr,
-          start_time:              startTimeStr,
-          end_time:                endTimeStr,
+          start_time:              startIso,
+          end_time:                endIso,
           notes:                   params.notes ?? null,
           altiora_duracao_minutos: params.duracaoMinutos,
           altiora_data_hora:       startIso,
@@ -403,12 +401,11 @@ export const useCheckAltioraConflict = () => {
       }
 
       const { data: conflicts } = await query;
-      // Filter client-side for end overlap (DB stores end_time as time, not timestamptz)
-      const startTimeStr = startTime.includes('T') ? startTime.split('T')[1]?.substring(0, 8) : startTime;
-      const filtered = (conflicts ?? []).filter(c => !c.end_time || c.end_time > (startTimeStr ?? ''));
+      // Filter client-side for end overlap — end_time is timestamptz, comparable to the ISO startTime directly
+      const filtered = (conflicts ?? []).filter(c => !c.end_time || c.end_time > startTime);
       const conflictingSlots = filtered.map(c => ({
-        start: c.altiora_data_hora ?? (c.date ? `${c.date}T${c.start_time ?? ''}` : c.start_time ?? ''),
-        end:   c.date && c.end_time ? `${c.date}T${c.end_time}` : (c.end_time ?? ''),
+        start: c.altiora_data_hora ?? c.start_time ?? '',
+        end:   c.end_time ?? '',
       }));
 
       return {

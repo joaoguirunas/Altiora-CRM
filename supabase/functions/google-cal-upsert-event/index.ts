@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, location, notes, meeting_link, status, title, google_event_id,
-        user_id, people_id,
+        users_id, people_id,
         leads (
           id, title,
           clients_people ( id, name, email )
@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, skipped: true, reason: 'meeting_not_found' });
     }
 
-    const consultorId = meeting.user_id;
+    const consultorId = meeting.users_id;
     if (!consultorId) {
       return json({ success: true, skipped: true, reason: 'no_consultant' });
     }
@@ -135,8 +135,14 @@ Deno.serve(async (req: Request) => {
     const clientName = personViaLead?.name ?? personDirect?.name ?? 'Cliente';
     const clientEmail = personViaLead?.email ?? personDirect?.email ?? null;
 
+    // Sufixo [ref:<meeting_id>] no título do evento — ferramentas de gravação de call
+    // (ex: Elephan.ai) que capturam o título do evento do Google Calendar como
+    // metadado da transcrição permitem casar a call de volta a esta reunião sem
+    // depender de e-mail do consultor ou de janela de tempo (ver elephan-inbound).
+    const refSuffix = ` [ref:${meeting_id}]`;
+
     const eventPayload: Record<string, unknown> = {
-      summary: `Reunião — ${clientName}`,
+      summary: `Reunião — ${clientName}${refSuffix}`,
       description: meeting.notes
         ? `${meeting.notes}\n\nAgendado via app.`
         : 'Agendado via app.',
@@ -228,16 +234,25 @@ Deno.serve(async (req: Request) => {
       // Only the primary connection's event id is tracked; delete there.
       // Secondary copies cannot be targeted without a per-connection event map.
       const accessToken = await tokenFor(primary);
+      let deleted = false;
       if (accessToken) {
         const calendarId = primary.google_calendar_id || 'primary';
         const baseUrl = `${CALENDAR_EVENTS_URL}/${encodeURIComponent(calendarId)}/events`;
+        // sendUpdates=all → Google e-mails every attendee that the event was cancelled.
         const deleteRes = await fetch(`${baseUrl}/${googleEventId}?sendUpdates=all`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!deleteRes.ok && deleteRes.status !== 404) {
           console.warn('Delete event failed:', deleteRes.status);
+        } else {
+          deleted = true;
         }
+      }
+      // Clear the tracked event id so a future reactivation (status back to
+      // 'agendado') recreates the event instead of patching a deleted one.
+      if (deleted) {
+        await supabase.from('meetings').update({ google_event_id: null }).eq('id', meeting_id);
       }
       return json({ success: true, action: 'deleted' });
     }

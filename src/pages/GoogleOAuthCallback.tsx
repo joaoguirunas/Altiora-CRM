@@ -23,14 +23,14 @@ export default function GoogleOAuthCallback() {
     if (error) {
       setStatus('error');
       setMessage('Autorização negada pelo usuário.');
-      setTimeout(() => navigate('/bipro'), 3000);
+      setTimeout(() => navigate('/crm/kanban'), 3000);
       return;
     }
 
     if (!code) {
       setStatus('error');
       setMessage('Código de autorização não encontrado.');
-      setTimeout(() => navigate('/bipro'), 3000);
+      setTimeout(() => navigate('/crm/kanban'), 3000);
       return;
     }
 
@@ -46,7 +46,7 @@ export default function GoogleOAuthCallback() {
     if (!isCalendarFlow && !isAdsFlow) {
       setStatus('error');
       setMessage('Falha de segurança na autenticação. Tente novamente.');
-      setTimeout(() => navigate('/bipro'), 3000);
+      setTimeout(() => navigate('/crm/kanban'), 3000);
       return;
     }
 

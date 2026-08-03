@@ -189,11 +189,11 @@ export function useBIProCRM(options: UseBIProCRMOptions = {}) {
        
       let leadsQ = supabase
         .from('leads')
-        .select('id, value, status, created_at, updated_at, won_at, user_id, utm_source, utm_medium, utm_campaign, fbclid, gclid, leads_stages_id, leads_stages(id, name, order_index, color, leads_pipelines_id)');
+        .select('id, value, status, created_at, updated_at, won_at, users_id, utm_source, utm_medium, utm_campaign, fbclid, gclid, leads_stages_id, leads_stages(id, name, order_index, color, leads_pipelines_id)');
 
       if (scoreFilter && scoreFilter.length > 0) {
         leadsQ = leadsQ
-          .select('id, value, status, created_at, updated_at, won_at, user_id, utm_source, utm_medium, utm_campaign, fbclid, gclid, leads_stages_id, leads_stages(id, name, order_index, color, leads_pipelines_id), clients_people!inner(score)')
+          .select('id, value, status, created_at, updated_at, won_at, users_id, utm_source, utm_medium, utm_campaign, fbclid, gclid, leads_stages_id, leads_stages(id, name, order_index, color, leads_pipelines_id), clients_people!inner(score)')
           .in('clients_people.score', scoreFilter);
       }
       if (dateFilter) {
@@ -219,12 +219,12 @@ export function useBIProCRM(options: UseBIProCRMOptions = {}) {
        
       let meetingsQ = supabase
         .from('meetings')
-        .select('id, lead_id, user_id, status');
+        .select('id, leads_id, users_id, status');
       if (dateFilter) {
         meetingsQ = meetingsQ.gte('created_at', dateFilter.from).lte('created_at', dateFilter.to);
       }
 
-      const usersQ = supabase.from('settings_users').select('id, name');
+      const usersQ = supabase.from('settings_users').select('id, nome');
 
       // Previous period leads (for delta computation) — minimal fields only
        

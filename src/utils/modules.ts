@@ -15,11 +15,11 @@ export interface ModuleDefinition {
 
 export const ALL_MODULES: readonly ModuleDefinition[] = [
   { key: 'dashboard',    name: 'BI PRO™' },
-  { key: 'negocios',     name: 'CRM PRO™' },
+  { key: 'negocios',     name: 'Negócios' },
   { key: 'clientes',     name: 'CRM Pessoas™' },
   { key: 'conversas',    name: 'OMNI PRO™' },
   { key: 'disparos',     name: 'SENDS PRO™' },
-  { key: 'agendamentos', name: 'SCHEDULE PRO™' },
+  { key: 'agendamentos', name: 'Agenda' },
   { key: 'lp',           name: 'FORM PRO™' },
   { key: 'agentes-ia',   name: 'AI AGENTS™' },
   { key: 'score',        name: 'SCORE PRO™' },

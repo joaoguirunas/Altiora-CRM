@@ -43,7 +43,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   // Redirecionamento automático para usuários autenticados na página de login (exceto recovery)
   useEffect(() => {
     if (user && window.location.pathname === '/login' && !isPasswordRecovery) {
-      navigate('/bipro', { replace: true });
+      navigate('/crm/kanban', { replace: true });
     }
   }, [user, isPasswordRecovery, navigate]);
 

@@ -85,7 +85,7 @@ export const ModulesDebug = () => {
             { key: "conversas", name: "OMNI PRO™" },
             { key: "call", name: "CALL PRO™" },
             { key: "disparos", name: "SENDS PRO™" },
-            { key: "agendamentos", name: "SCHEDULE PRO™" },
+            { key: "agendamentos", name: "Agenda" },
             { key: "score", name: "SCORE PRO™" },
             { key: "agentes-ia", name: "AI AGENTS PRO™" },
             { key: "lp", name: "LP PRO™" },

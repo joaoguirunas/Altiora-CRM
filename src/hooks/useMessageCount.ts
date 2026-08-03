@@ -12,13 +12,13 @@ export const useMessageCountByLead = (leadIds: string[]) => {
       // Batch query
       const { data, error } = await supabase
         .from('messages')
-        .select('lead_id')
-        .in('lead_id', leadIds);
-      
+        .select('leads_id')
+        .in('leads_id', leadIds);
+
       if (error) throw error;
-      
-      (data || []).forEach((msg: any) => {
-        counts[msg.lead_id] = (counts[msg.lead_id] || 0) + 1;
+
+      (data || []).forEach((msg: { leads_id: string }) => {
+        counts[msg.leads_id] = (counts[msg.leads_id] || 0) + 1;
       });
       
       return counts;

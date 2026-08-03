@@ -19,8 +19,9 @@ import { useNegocios } from '@/hooks/useNegocios';
 import { useConsultorDisponibilidade } from '@/hooks/useConsultorDisponibilidade';
 import { useCriarAgendamento } from '@/hooks/useAgendamentos';
 import { useAuth } from '@/hooks/useAuth';
+import { isAltioraPipeline } from '@/utils/pipelineLabels';
 
-type MeetingType = 'discovery' | 'demo' | 'closing' | 'consulting' | 'mentoring' | 'qbr' | 'followup' | 'other';
+type MeetingType = 'discovery' | 'demo' | 'closing' | 'consulting' | 'mentoring' | 'qbr' | 'followup' | 'other' | 'R1' | 'R2' | 'R3';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ interface SelectedLead {
   id: string;
   clientName: string;
   value?: number;
+  /** Negócio pertence ao pipeline Altiora — troca o tipo de reunião pra R1/R2/R3 */
+  isAltiora?: boolean;
 }
 
 interface SelectedConsultor {
@@ -76,6 +79,14 @@ const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'other',      label: 'Outro' },
 ];
 
+// Pipeline Altiora usa a própria nomenclatura de reunião (R1/R2/R3) em vez
+// da genérica — ver AltioraAgendarReuniaoModal.tsx (TIPO_LABELS).
+const ALTIORA_MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
+  { value: 'R1', label: 'R1 — Reunião de Diagnóstico' },
+  { value: 'R2', label: 'R2 — Apresentação de Proposta' },
+  { value: 'R3', label: 'R3 — Fechamento' },
+];
+
 const DURATION_OPTIONS = [
   { value: 30, label: '30min' },
   { value: 60, label: '1h' },
@@ -106,7 +117,11 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const isUserType = user?.profile?.user_type === 'user';
+  // Closer (comercial/closer) e user padrão: auto-atribuem a si mesmos, pulam step 2
+  const isUserType =
+    user?.profile?.user_type === 'user' ||
+    user?.profile?.user_type === 'comercial' ||
+    user?.profile?.user_type === 'closer';
 
   useEffect(() => {
     if (open) {
@@ -136,12 +151,16 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('settings_users')
-        .select('id, name, email')
-        .eq('active', true)
+        .select('id, nome, email')
+        .eq('ativo', true)
         .is('deleted_at', null)
-        .order('name');
+        .order('nome');
       if (error) throw error;
-      return (data || []) as Array<{ id: string; name: string; email: string | null }>;
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.nome,
+        email: item.email as string | null,
+      })) as Array<{ id: string; name: string; email: string | null }>;
     },
     enabled: open,
     staleTime: 5 * 60 * 1000,
@@ -392,15 +411,25 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
             const email = negocio.person?.email || negocio.pessoa?.email || '';
             const value = negocio.value || negocio.valor;
             const isSelected = state.selectedLead?.id === negocio.id;
+            const isAltiora = isAltioraPipeline(negocio.pipeline?.name ?? negocio.pipeline?.nome ?? '');
             return (
               <button
                 key={negocio.id}
                 type="button"
                 onClick={() =>
-                  setState((prev) => ({
-                    ...prev,
-                    selectedLead: { id: negocio.id, clientName, value },
-                  }))
+                  setState((prev) => {
+                    const wasAltiora = ['R1', 'R2', 'R3'].includes(prev.meetingType);
+                    // Altiora usa R1/R2/R3 — troca o default ao trocar de negócio, só quando
+                    // o tipo atual não faz sentido pro pipeline recém-selecionado.
+                    const meetingType = isAltiora
+                      ? (wasAltiora ? prev.meetingType : 'R1')
+                      : (wasAltiora ? 'discovery' : prev.meetingType);
+                    return {
+                      ...prev,
+                      selectedLead: { id: negocio.id, clientName, value, isAltiora },
+                      meetingType,
+                    };
+                  })
                 }
                 className={cn(
                   'w-full text-left px-3 py-2.5 rounded-[4px] border transition-colors',
@@ -645,81 +674,62 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
               <div className="text-center py-8">
                 <p className="text-sm text-muted-foreground">Carregando horários disponíveis...</p>
               </div>
-            ) : slotsForSelectedDate.length === 0 ? (
-              <div className="space-y-2 p-3 bg-muted rounded-[4px] border border-border">
-                {!isUserType && (
-                  <p className="text-xs text-muted-foreground text-center">Sem horários na agenda — insira manualmente:</p>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-[10px] text-muted-foreground">{isUserType ? 'Horário de início' : 'Início'}</Label>
-                    <input
-                      type="time"
-                      className="w-full h-8 text-xs border border-border rounded-[4px] bg-background px-2 mt-0.5"
-                      onChange={(e) => {
-                        const start = e.target.value;
-                        if (!start) return;
-                        setState((prev) => ({
-                          ...prev,
-                          selectedTimeSlot: {
-                            start,
-                            end: prev.selectedTimeSlot?.end ?? '',
-                          },
-                        }));
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[10px] text-muted-foreground">{isUserType ? 'Horário de fim' : 'Fim'}</Label>
-                    <input
-                      type="time"
-                      className="w-full h-8 text-xs border border-border rounded-[4px] bg-background px-2 mt-0.5"
-                      onChange={(e) => {
-                        const end = e.target.value;
-                        if (!end) return;
-                        setState((prev) => ({
-                          ...prev,
-                          selectedTimeSlot: {
-                            start: prev.selectedTimeSlot?.start ?? '',
-                            end,
-                          },
-                        }));
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
             ) : (
-              (['manha', 'tarde', 'noite'] as const).map((period) => {
-                const slots = slotsByPeriod[period];
-                if (!slots.length) return null;
+              (() => {
+                // Use calendar slots when available; otherwise generate slots from 08:00–20:00
+                const displaySlots: Array<{ start: string; end: string }> = slotsForSelectedDate.length > 0
+                  ? slotsForSelectedDate
+                  : (() => {
+                      const step = state.selectedDuration <= 30 ? 30 : 60;
+                      const gen: Array<{ start: string; end: string }> = [];
+                      for (let m = 8 * 60; m + state.selectedDuration <= 20 * 60; m += step) {
+                        const sh = Math.floor(m / 60), sm = m % 60;
+                        const em = m + state.selectedDuration;
+                        const eh = Math.floor(em / 60), emm = em % 60;
+                        gen.push({
+                          start: `${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`,
+                          end:   `${String(eh).padStart(2,'0')}:${String(emm).padStart(2,'0')}`,
+                        });
+                      }
+                      return gen;
+                    })();
+
+                const toH = (t: string) => parseInt(t.split(':')[0]);
+                const periods = [
+                  { key: 'manha', label: 'Manhã', slots: displaySlots.filter(s => toH(s.start) < 12) },
+                  { key: 'tarde', label: 'Tarde', slots: displaySlots.filter(s => toH(s.start) >= 12 && toH(s.start) < 18) },
+                  { key: 'noite', label: 'Noite', slots: displaySlots.filter(s => toH(s.start) >= 18) },
+                ];
+
                 return (
-                  <div key={period}>
-                    <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                      {periodLabels[period]}
-                    </p>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {slots.map((slot, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() =>
-                            setState((prev) => ({ ...prev, selectedTimeSlot: slot }))
-                          }
-                          className={cn(
-                            'py-2 text-xs rounded-[4px] border font-medium text-center transition-colors',
-                            state.selectedTimeSlot?.start === slot.start
-                              ? 'bg-primary text-primary-foreground border-primary'
-                              : 'bg-card border-border hover:bg-muted text-foreground',
-                          )}
-                        >
-                          {slot.start.slice(0, 5)}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="space-y-3">
+                    {periods.map(({ key, label, slots }) =>
+                      slots.length === 0 ? null : (
+                        <div key={key}>
+                          <p className="text-xs font-medium text-muted-foreground mb-1.5">{label}</p>
+                          <div className="grid grid-cols-5 gap-1.5">
+                            {slots.map((slot, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setState((prev) => ({ ...prev, selectedTimeSlot: slot }))}
+                                className={cn(
+                                  'py-2 text-xs rounded-[4px] border font-medium text-center transition-colors',
+                                  state.selectedTimeSlot?.start === slot.start
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-card border-border hover:bg-muted text-foreground',
+                                )}
+                              >
+                                {slot.start.slice(0, 5)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    )}
                   </div>
                 );
-              })
+              })()
             )}
           </div>
         )}
@@ -744,7 +754,7 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
               <SelectValue placeholder="Selecionar tipo..." />
             </SelectTrigger>
             <SelectContent className="rounded-[4px]">
-              {MEETING_TYPE_OPTIONS.map(opt => (
+              {(state.selectedLead?.isAltiora ? ALTIORA_MEETING_TYPE_OPTIONS : MEETING_TYPE_OPTIONS).map(opt => (
                 <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
               ))}
             </SelectContent>

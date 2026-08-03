@@ -140,6 +140,7 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 ## Agentes
 - [[agents/architect/sends-backlog-triage]] — triagem do backlog SENDS PRO (2026-05-01): 16 stories inventariadas, top-3 iteração fix-sends-module (Zaelor)
 - [[agents/data-engineer/schema]] — schema completo (~713 migrations, 60+ tabelas, ERD Mermaid)
+- [[agents/data-engineer/schema-gap-report]] — **SD-01/SD-02 DONE** (2026-07-26): gap report meetings (7 colunas faltantes) + migration 20260726210000 aplicada; gaps de código catalogados (score/income/moment dropados intencionalmente, user_id/name rename bugs)
 - [[agents/data-engineer/altiora-schema]] — **schema Altiora V1** (2026-07-25): pipeline 13 etapas, 3 novas tabelas (r1_data/finvity/contratacao), campos referral em leads + campos R1/R2/R3 em meetings, 7 migrations aplicadas
 - [[agents/data-engineer/migration-status]] — último timestamp aplicado, próximo disponível, estado das migrations ativas
 - [[agents/data-engineer/migrations-log]] — log cronológico de migrations aplicadas pelo Bythak (com causa raiz, estratégia, rollback)

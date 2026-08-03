@@ -11,7 +11,9 @@
  *  2. Verificar deduplicação via Message-ID → altiora_email_queue
  *  3. Extrair dados do cliente (nome, e-mail, telefone) do subject/body
  *  4. Detectar Closer nos campos To/CC (ALTIORA-07 — AC1)
- *  5. Criar lead em `leads` (pipeline Altiora, etapa "Novo referral")
+ *  5. Criar/atualizar lead via upsertPerson()/createLead() (crm-mapper.ts — mesmo
+ *     dedup por pessoa+pipeline usado por lp-submit/meta-inbound/webhook-inbound),
+ *     pipeline Altiora, etapa "Novo referral" ou "Encaminhado ao comercial"
  *  6. Registrar em `altiora_email_queue`
  *  7. Registrar interação em `altiora_lead_interactions`
  *  8. Notificar Gestor Comercial via `altiora_notifications`
@@ -29,6 +31,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { upsertPerson, createLead } from '../_shared/crm-mapper.ts';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -63,7 +66,7 @@ interface ExtractedClient {
 
 interface ProcessResult {
   ok: boolean;
-  action: 'created' | 'pending_validation' | 'rejected' | 'duplicate';
+  action: 'created' | 'updated' | 'pending_validation' | 'rejected' | 'duplicate';
   lead_id?: string;
   closer_id?: string;
   reason?: string;
@@ -115,8 +118,10 @@ function extractClientData(subject: string, body: string): ExtractedClient {
   const text = `${subject}\n${body}`;
 
   // Nome: padrões "Nome: X", "Cliente: X", "Referral: X", "Indicado: X"
+  // Continuação usa [ \t] (não \s) para não atravessar a quebra de linha e
+  // "vazar" para o rótulo do campo seguinte (ex: "Nome: Ana Silva\nE-mail: ...").
   const namePatterns = [
-    /(?:nome|cliente|referral|indicado|lead)[:\s]+([A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+)+)/im,
+    /(?:nome|cliente|referral|indicado|lead)[:\s]+([A-ZÀ-Ü][a-zà-ü]+(?:[ \t]+[A-ZÀ-Ü][a-zà-ü]+)+)/im,
     /Referral:\s*([^\n|]+?)(?:\s*\||\n|$)/im,
   ];
   for (const pattern of namePatterns) {
@@ -177,15 +182,20 @@ async function parseEmailPayload(req: Request): Promise<EmailPayload | null> {
     // SendGrid Inbound Parse / Mailgun form post
     const form = await req.formData();
     const get = (key: string) => form.get(key)?.toString() ?? '';
+    // Mailgun manda Message-Id/From/To/Cc como campos próprios; SendGrid manda
+    // um bloco "headers" com o e-mail crú (por isso o fallback via regex).
+    const from = get('from') || get('From') || get('sender');
     return {
-      messageId: get('headers').match(/Message-ID:\s*<?([^>\s]+)>?/i)?.[1] ?? `fallback-${Date.now()}`,
-      from: get('from'),
-      fromName: extractSenderName(get('from')),
-      to: get('to').split(',').map(s => s.trim()).filter(Boolean),
-      cc: get('cc').split(',').map(s => s.trim()).filter(Boolean),
-      subject: get('subject'),
+      messageId: get('Message-Id') || get('message-id')
+        || get('headers').match(/Message-ID:\s*<?([^>\s]+)>?/i)?.[1]
+        || `fallback-${Date.now()}`,
+      from,
+      fromName: extractSenderName(from),
+      to: (get('to') || get('To') || get('recipient')).split(',').map(s => s.trim()).filter(Boolean),
+      cc: (get('cc') || get('Cc')).split(',').map(s => s.trim()).filter(Boolean),
+      subject: get('subject') || get('Subject'),
       body: get('text') || get('body-plain') || '',
-      bodyHtml: get('html') || undefined,
+      bodyHtml: get('html') || get('body-html') || undefined,
     };
   }
 
@@ -322,82 +332,45 @@ Deno.serve(async (req: Request) => {
       data: Array<{ id: string; name: string }> | null;
     };
 
-  // ── AC1 / AC2: Criar lead ────────────────────────────────────────────────────
+  // ── AC1 / AC2: Criar ou atualizar lead (reaproveita crm-mapper.ts) ───────────
   const leadTitle = client.name
     ? `Referral Avenue — ${client.name}`
     : `Referral Avenue — ${email.subject.substring(0, 60)}`;
 
-  const leadStatus  = hasMinimumData ? 'in_progress' : 'pending_validation';
+  // Closer detectado NESTE e-mail define a etapa alvo (UC12: gestor "encaminha"
+  // respondendo com o Closer em cópia). Só vira atribuição de fato mais abaixo,
+  // se o lead ainda não tiver um Closer responsável.
   const targetStage = detectedCloserId ? stageEnc : stageNovo;
 
-  // Upsert person se houver e-mail ou nome do cliente
-  let peopleId: string | null = null;
-  if (client.email || client.name) {
-    try {
-      const personData: Record<string, unknown> = { status: 'active' };
-      if (client.name)  personData.name      = client.name;
-      if (client.email) personData.email     = client.email;
-      if (client.phone) personData.whatsapp  = client.phone;
+  // upsertPerson() dedup por e-mail e depois por whatsapp (a lógica manual
+  // anterior só deduplicava por e-mail).
+  const personId = await upsertPerson(
+    supabase,
+    {
+      nome:     client.name ?? undefined,
+      email:    client.email ?? undefined,
+      whatsapp: client.phone ?? undefined,
+    },
+    'avenue_email',
+  );
 
-      if (client.email) {
-        // Tentar encontrar pessoa existente por e-mail
-        const { data: existingPerson } = await supabase
-          .from('clients_people')
-          .select('id')
-          .eq('email', client.email)
-          .maybeSingle();
+  // createLead() deduplica por people_id + pipeline (mesmo comportamento de
+  // lp-submit/meta-inbound/webhook-inbound): se já existe um lead dessa pessoa
+  // no pipeline Altiora, atualiza-o (título preservado) em vez de duplicar.
+  const { leadId, isExisting } = personId
+    ? await createLead(supabase, {
+        personId,
+        companyId: null,
+        pipelineId,
+        configuredStageId: targetStage,
+        personName: leadTitle,
+        formName: 'Email Referral',
+        source: 'avenue_email',
+      })
+    : { leadId: null, isExisting: false };
 
-        if (existingPerson) {
-          peopleId = existingPerson.id;
-        } else {
-          const { data: newPerson } = await supabase
-            .from('clients_people')
-            .insert(personData)
-            .select('id')
-            .single();
-          if (newPerson) peopleId = newPerson.id;
-        }
-      } else if (client.name) {
-        const { data: newPerson } = await supabase
-          .from('clients_people')
-          .insert(personData)
-          .select('id')
-          .single();
-        if (newPerson) peopleId = newPerson.id;
-      }
-    } catch (err) {
-      console.error('altiora-email-referral-inbound: person upsert error (non-fatal):', (err as Error).message);
-    }
-  }
-
-  // Criar lead
-  const leadInsert: Record<string, unknown> = {
-    title:                  leadTitle,
-    leads_pipelines_id:     pipelineId,
-    leads_stages_id:        targetStage,
-    status:                 leadStatus,
-    altiora_origem:         'avenue_email',
-    altiora_email_handoff_id: email.messageId,
-    altiora_data_handoff:   new Date().toISOString(),
-  };
-
-  if (peopleId) leadInsert.people_id = peopleId;
-
-  // AC1/ALTIORA-07: Closer detectado automaticamente
-  if (detectedCloserId) {
-    leadInsert.altiora_closer_id          = detectedCloserId;
-    leadInsert.altiora_origem_atribuicao  = 'email_auto';
-    leadInsert.altiora_data_atribuicao    = new Date().toISOString();
-  }
-
-  const { data: newLead, error: leadError } = await supabase
-    .from('leads')
-    .insert(leadInsert)
-    .select('id')
-    .single();
-
-  if (leadError || !newLead) {
-    console.error('altiora-email-referral-inbound: lead INSERT error:', leadError?.message);
+  if (!leadId) {
+    console.error('altiora-email-referral-inbound: createLead() não retornou leadId');
     // Registrar na fila como pendente mas não bloquear
     await supabase.from('altiora_email_queue').insert({
       message_id:   email.messageId,
@@ -410,12 +383,41 @@ Deno.serve(async (req: Request) => {
       client_name:  client.name,
       client_email: client.email,
       client_phone: client.phone,
-      reason:       `Erro ao criar lead: ${leadError?.message ?? 'desconhecido'}`,
+      reason:       'Erro ao criar lead — dados insuficientes ou falha no upsert de pessoa',
     });
     return json({ ok: false, error: 'Internal error — lead não criado' }, 500);
   }
 
-  const leadId = newLead.id;
+  // ── Campos Altiora (fora do escopo genérico do crm-mapper) ───────────────────
+  const altioraUpdate: Record<string, unknown> = {
+    altiora_email_handoff_id: email.messageId,
+    altiora_data_handoff:     new Date().toISOString(),
+  };
+  // Origem e status de pendência só fazem sentido na criação (UC10) — não
+  // sobrescreve um lead que já avançou no funil por causa de um e-mail duplicado.
+  if (!isExisting) {
+    altioraUpdate.altiora_origem = 'avenue_email';
+    if (!hasMinimumData) altioraUpdate.status = 'pending_validation';
+  }
+
+  // AC1/ALTIORA-07: só assume o Closer detectado se o lead ainda não tiver um
+  // responsável — preserva atribuição manual/reatribuição já feita (UC13).
+  if (detectedCloserId) {
+    const { data: currentLead } = await supabase
+      .from('leads')
+      .select('altiora_closer_id')
+      .eq('id', leadId)
+      .maybeSingle();
+    if (!currentLead?.altiora_closer_id) {
+      altioraUpdate.altiora_closer_id         = detectedCloserId;
+      altioraUpdate.altiora_origem_atribuicao = 'email_auto';
+      altioraUpdate.altiora_data_atribuicao   = new Date().toISOString();
+    } else {
+      detectedCloserId = null; // já tinha responsável — não notificar atribuição
+    }
+  }
+
+  await supabase.from('leads').update(altioraUpdate).eq('id', leadId);
 
   // ── Registrar na fila ────────────────────────────────────────────────────────
   const queueStatus = hasMinimumData ? 'processed' : 'pending_validation';
@@ -500,7 +502,7 @@ Deno.serve(async (req: Request) => {
 
   const result: ProcessResult = {
     ok:         true,
-    action:     queueStatus === 'pending_validation' ? 'pending_validation' : 'created',
+    action:     queueStatus === 'pending_validation' ? 'pending_validation' : (isExisting ? 'updated' : 'created'),
     lead_id:    leadId,
     ...(detectedCloserId ? { closer_id: detectedCloserId } : {}),
   };

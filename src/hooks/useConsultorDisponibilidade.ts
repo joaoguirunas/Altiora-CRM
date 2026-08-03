@@ -58,7 +58,7 @@ export const useConsultorDisponibilidade = ({
       const { data: existingMeetings, error } = await supabase
         .from('meetings')
         .select('start_time, end_time')
-        .eq('user_id', consultorId)
+        .eq('users_id', consultorId)
         .gte('start_time', startOfDay)
         .lte('start_time', endOfDay)
         .in('status', ['agendado', 'compareceu']);

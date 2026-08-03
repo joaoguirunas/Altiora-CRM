@@ -114,7 +114,7 @@ export function useBIProKPIs(options: UseBIProKPIsOptions = {}) {
       const [leadsResult, prevLeadsResult, meetingsResult, adSpendResult] = await Promise.all([
         buildLeadsQuery(periodDates.current),
         periodDates.previous ? buildLeadsQuery(periodDates.previous) : Promise.resolve({ data: null }),
-        supabase.from('meetings').select('id, lead_id, status'),
+        supabase.from('meetings').select('id, leads_id, status'),
         includeAds
           ? (() => {
                

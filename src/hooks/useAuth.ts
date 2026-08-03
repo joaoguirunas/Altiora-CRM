@@ -172,7 +172,7 @@ export const useAuthLogic = (): AuthContextType => {
 
       const { data: profileData, error: profileError } = await supabase
         .from('settings_users')
-        .select('id, nome, email, whatsapp, user_type, ativo, super_adm, gestor, agente, created_at, updated_at')
+        .select('id, nome, email, whatsapp, user_type, ativo, super_adm, gestor, agente, avatar_url, theme, created_at, updated_at')
         .eq('auth_user_id', authUser.id)
         .eq('ativo', true)
         .maybeSingle();
@@ -191,7 +191,7 @@ export const useAuthLogic = (): AuthContextType => {
         nome: profileData.nome,
         email: profileData.email,
         whatsapp: profileData.whatsapp || null,
-        avatar_url: null,
+        avatar_url: (profileData as any).avatar_url || null,
         gestor: profileData.gestor === true || profileData.user_type === 'manager' || profileData.user_type === 'admin',
         consultor: false,
         ativo: profileData.ativo,

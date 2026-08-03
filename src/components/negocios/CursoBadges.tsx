@@ -9,11 +9,13 @@ interface CursoBadgesProps {
   cursos?: Curso[] | null;
   /** How many chips to show before collapsing the rest into a "+N". */
   max?: number;
+  /** Renderiza os chips totalmente arredondados (formato do redesign do card de pipeline). */
+  pill?: boolean;
 }
 
 // Base chip shape shared by every product color — only the color classes vary.
 const CHIP_BASE =
-  'inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-[2px] border leading-none';
+  'inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 border leading-none';
 
 // Fixed palette, one entry per product (deterministic by product_id hash so the
 // same product always gets the same color across kanban/detail/config screens).
@@ -41,18 +43,19 @@ export function productColor(productId: string): { chip: string; dot: string } {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-export default function CursoBadges({ cursos, max = 2 }: CursoBadgesProps) {
+export default function CursoBadges({ cursos, max = 2, pill = false }: CursoBadgesProps) {
   if (!cursos || cursos.length === 0) return null;
 
   const visible = cursos.slice(0, max);
   const overflow = cursos.slice(max);
+  const shape = pill ? 'rounded-full' : 'rounded-[2px]';
 
   return (
     <>
       {visible.map((c) => (
         <span
           key={c.product_id}
-          className={`${CHIP_BASE} ${productColor(c.product_id).chip} max-w-[130px]`}
+          className={`${CHIP_BASE} ${shape} ${productColor(c.product_id).chip} max-w-[130px]`}
           title={c.product_name}
         >
           <GraduationCap className="h-2.5 w-2.5 shrink-0" strokeWidth={1.5} />
@@ -61,7 +64,7 @@ export default function CursoBadges({ cursos, max = 2 }: CursoBadgesProps) {
       ))}
       {overflow.length > 0 && (
         <span
-          className={`${CHIP_BASE} text-muted-foreground bg-muted border-border`}
+          className={`${CHIP_BASE} ${shape} text-muted-foreground bg-muted border-border`}
           title={overflow.map((c) => c.product_name).join(', ')}
         >
           +{overflow.length}

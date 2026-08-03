@@ -41,6 +41,9 @@ verify_jwt = false # Public LP form submission endpoint — no user JWT availabl
 [functions.meta-inbound]
 verify_jwt = false # Meta webhook (Instagram DMs/comments) — no JWT from Meta
 
+[functions.elephan-inbound]
+verify_jwt = false # Webhook da Elephan.ai — validado por secret estático (ELEPHAN_WEBHOOK_SECRET), não JWT
+
 [functions.booking-availability]
 verify_jwt = false # Public /agendar page (anonymous lead) — same access as get_booking_session RPC
 

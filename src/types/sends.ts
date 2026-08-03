@@ -174,7 +174,7 @@ export interface WebhookLog {
 export const WEBHOOK_EVENT_TYPES: { value: WebhookEventType; label: string; description: string; module?: string }[] = [
   { value: 'conversa',   label: 'Conversa',     description: 'Disparado ao enviar texto, imagem, áudio ou arquivo pela interface', module: 'OMNI PRO™' },
   { value: 'disparo',    label: 'Disparo',       description: 'Quando um disparo de campanha é executado', module: 'SENDS PRO™' },
-  { value: 'lead_etapa', label: 'Etapa do Lead', description: 'Quando um lead é criado ou muda de etapa no pipeline', module: 'CRM PRO™' },
+  { value: 'lead_etapa', label: 'Etapa do Lead', description: 'Quando um lead é criado ou muda de etapa no pipeline', module: 'Negócios' },
   { value: 'followup',   label: 'Follow-up',     description: 'Disparado pelo motor de follow-ups automáticos', module: 'Follow-ups PRO™' },
 ];
 

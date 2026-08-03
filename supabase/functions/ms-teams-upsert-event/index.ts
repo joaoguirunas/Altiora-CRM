@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, location, notes, meeting_link,
-        status, title, ms_meeting_id, user_id,
+        status, title, ms_meeting_id, users_id,
         leads (id, title, clients_people (id, name, email))
       `)
       .eq('id', meeting_id)
@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, skipped: true, reason: 'meeting_not_found' });
     }
 
-    if (!meeting.user_id) {
+    if (!meeting.users_id) {
       return json({ success: true, skipped: true, reason: 'no_consultor' });
     }
 
@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
     const { data: connection } = await supabase
       .from('user_calendar_connections')
       .select('provider, ms_access_token, ms_refresh_token, ms_token_expires_at')
-      .eq('user_id', meeting.user_id)
+      .eq('user_id', meeting.users_id)
       .eq('is_active', true)
       .maybeSingle() as { data: CalendarConnection | null };
 
@@ -127,7 +127,7 @@ Deno.serve(async (req: Request) => {
             ms_token_expires_at: newExpiry,
             ...(refreshData.refresh_token ? { ms_refresh_token: refreshData.refresh_token } : {}),
           })
-          .eq('user_id', meeting.user_id);
+          .eq('user_id', meeting.users_id);
       } else {
         console.error('MS token refresh failed:', refreshData);
         return json({ success: true, skipped: true, reason: 'token_refresh_failed' });
@@ -150,6 +150,9 @@ Deno.serve(async (req: Request) => {
       if (!delRes.ok && delRes.status !== 404) {
         const errBody = await delRes.text();
         console.error('MS delete error:', delRes.status, errBody);
+      } else {
+        // Clear the tracked id so a future reactivation recreates the meeting.
+        await supabase.from('meetings').update({ ms_meeting_id: null }).eq('id', meeting_id);
       }
       return json({ success: true, action: 'deleted' });
     }
@@ -160,7 +163,9 @@ Deno.serve(async (req: Request) => {
     const clientEmail = (meeting.leads as { clients_people?: { email?: string } } | null)
       ?.clients_people?.email ?? '';
 
-    const subject = meeting.title || (clientName ? `Reunião — ${clientName}` : 'Reunião');
+    // Sufixo [ref:<meeting_id>] — ver comentário equivalente em google-cal-upsert-event
+    const refSuffix = ` [ref:${meeting_id}]`;
+    const subject = (meeting.title || (clientName ? `Reunião — ${clientName}` : 'Reunião')) + refSuffix;
     const body    = [
       meeting.notes || '',
       '',

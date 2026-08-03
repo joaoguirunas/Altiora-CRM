@@ -290,6 +290,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     wide: true,
   },
   {
+    id: 'elephan-pendencias',
+    group: 'geral',
+    titleKey: 'Pendências Elephan',
+    icon: AlertCircle,
+    paths: ['/settings/general/elephan-pendencias'],
+    Component: lazy(() => import('@/components/config/ElephanPendenciasConfig')),
+    wide: true,
+  },
+  {
     id: 'design-system',
     group: 'geral',
     titleKey: 'Design System',
@@ -340,9 +349,9 @@ export const SECTION_BY_PATH = new Map(
 );
 
 export const NAV_GROUPS: { key: SettingsGroup; label: string }[] = [
-  { key: 'crmPro',      label: 'CRM PRO™' },
+  { key: 'crmPro',      label: 'Negócios' },
   { key: 'omniPro',     label: 'OMNI PRO™' },
-  { key: 'schedulePro', label: 'SCHEDULE PRO™' },
+  { key: 'schedulePro', label: 'Agenda' },
   { key: 'geral',       label: 'Geral' },
 ];
 

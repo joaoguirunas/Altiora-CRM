@@ -445,7 +445,7 @@ export async function createLead(
     };
   },
 ): Promise<{ leadId: string | null; isExisting: boolean }> {
-  const { personId, companyId, pipelineId, configuredStageId, personName, formName, utm, forceCreateLead } = opts;
+  const { personId, companyId, pipelineId, configuredStageId, personName, utm, forceCreateLead } = opts;
 
   // Resolve initial stage
   let firstStageId: string | null = configuredStageId ?? null;
@@ -461,8 +461,6 @@ export async function createLead(
     if (firstStage) firstStageId = firstStage.id;
   }
 
-  const description = `Origem: ${opts.source} — ${formName}`;
-
   if (pipelineId) {
     // Check for existing lead in this pipeline (unless forceCreateLead is set)
     const existingLead = forceCreateLead
@@ -476,7 +474,6 @@ export async function createLead(
 
     if (existingLead) {
       const updatePayload: Record<string, unknown> = {
-        description,
         status: 'in_progress',
         utm_source: utm?.source ?? null,
         utm_medium: utm?.medium ?? null,
@@ -499,7 +496,6 @@ export async function createLead(
         leads_stages_id: firstStageId,
         company_id: companyId || null,
         status: 'in_progress',
-        description,
         utm_source: utm?.source ?? null,
         utm_medium: utm?.medium ?? null,
         utm_campaign: utm?.campaign ?? null,
@@ -544,7 +540,6 @@ export async function createLead(
       leads_stages_id: fallbackStageId,
       company_id: companyId || null,
       status: 'in_progress',
-      description,
       utm_source: utm?.source ?? null,
       utm_medium: utm?.medium ?? null,
       utm_campaign: utm?.campaign ?? null,
