@@ -78,12 +78,14 @@ interface SidebarItem {
   groupLabel?: string;
 }
 
-// Fixed menu items (CRM PRO™ always visible)
-// BI PRO™ e OMNI PRO™ ocultos por enquanto a pedido do usuário — reativar
-// removendo este comentário e devolvendo os itens ao array.
+// Fixed menu items (PIPELINE always visible)
+// BI PRO™ e CONVERSAS (ex-OMNI PRO™) ocultos por enquanto a pedido do
+// usuário — reativar devolvendo os itens comentados abaixo ao array.
+//   { title: "BI PRO™", icon: BarChart3, path: "/bipro", module: "dashboard" as const, groupLabel: "CORE", requireGestor: true },
+//   { title: "CONVERSAS", icon: Inbox, path: "/omni", module: "conversas" as const, requireSuperAdmin: true },
 const fixedSidebarItems: SidebarItem[] = [
   {
-    title: "NEGÓCIOS",
+    title: "PIPELINE",
     icon: FolderKanban,
     path: "/crm/kanban",
     module: "negocios" as const,
@@ -91,8 +93,10 @@ const fixedSidebarItems: SidebarItem[] = [
 ];
 
 // Modular items (itens condicionais baseados em módulos ativos)
-// SENDS PRO™ e FORM PRO™ ocultos por enquanto a pedido do usuário — mesmo
-// racional do fixedSidebarItems acima.
+// DISPAROS (ex-SENDS PRO™) e FORMULÁRIOS (ex-FORM PRO™) ocultos por
+// enquanto — mesmo racional do fixedSidebarItems acima.
+//   { title: 'DISPAROS', icon: Megaphone, path: "/send", module: "disparos" as const, groupLabel: "MODULES", requireGestor: true },
+//   { title: "FORMULÁRIOS", icon: FormInput, path: "/lp", module: "lp" as const, requireGestor: true },
 const getModularSidebarItems = (t: (key: string) => string): SidebarItem[] => [
   {
     title: "AGENDA",
@@ -240,13 +244,13 @@ const DashLayout = () => {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path === '/bipro' || path.startsWith('/bipro/')) return 'BI PRO™';
-    if (path === '/crm/kanban' || path.startsWith('/crm/kanban/')) return 'NEGÓCIOS - KANBAN';
-    if (path === '/crm/list' || path.startsWith('/crm/list/')) return 'NEGÓCIOS - LISTA';
-    if (path === '/crm/clients' || path.startsWith('/crm/clients/')) return 'NEGÓCIOS - CLIENTES';
-    if (path === '/send' || path.startsWith('/send/')) return 'SENDS PRO™';
+    if (path === '/crm/kanban' || path.startsWith('/crm/kanban/')) return 'PIPELINE - KANBAN';
+    if (path === '/crm/list' || path.startsWith('/crm/list/')) return 'PIPELINE - LISTA';
+    if (path === '/crm/clients' || path.startsWith('/crm/clients/')) return 'PIPELINE - CLIENTES';
+    if (path === '/send' || path.startsWith('/send/')) return 'DISPAROS';
     if (path === '/schedule' || path.startsWith('/schedule/')) return 'AGENDA';
-    if (path === '/omni' || path.startsWith('/omni/')) return 'OMNI PRO™';
-    if (path === '/lp' || path.startsWith('/lp/')) return 'FORM PRO™';
+    if (path === '/omni' || path.startsWith('/omni/')) return 'CONVERSAS';
+    if (path === '/lp' || path.startsWith('/lp/')) return 'FORMULÁRIOS';
     if (path === '/score' || path.startsWith('/score/')) return 'SCORE PRO™';
     if (path === '/settings/crm/aiagents' || path.startsWith('/settings/crm/aiagents/')) return 'AI AGENTS PRO™';
     if (path === '/settings' || path.startsWith('/settings/')) return t('sidebar.settings');

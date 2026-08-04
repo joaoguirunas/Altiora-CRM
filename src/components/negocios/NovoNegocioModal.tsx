@@ -38,6 +38,7 @@ import { usePessoas as usePessoasReal } from "@/hooks/usePessoasReal";
 import { useCriarPessoa } from "@/hooks/useCriarPessoa";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useCompanies, useCreateCompany } from "@/hooks/useCompanies";
+import { isAltioraPipeline } from "@/utils/pipelineLabels";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown, Building2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -95,9 +96,11 @@ const NovoNegocioModal = ({ open, onOpenChange, stageId, entityLabel = "Negócio
   const { data: pessoas = [] } = usePessoasReal();
   const { data: empresas = [] } = useCompanies();
   const { pipelines: allPipelines = [], stages = [] } = usePipelines();
-  
-  // Filter only active pipelines for selection
-  const pipelines = allPipelines.filter(p => p.active || p.ativo);
+
+  // Filter only active pipelines for selection — pipeline Altiora fica de fora:
+  // referrals Altiora têm campos próprios (origem, data do handoff) que só
+  // existem no fluxo dedicado "Novo Referral Manual" (NovoReferralModal).
+  const pipelines = allPipelines.filter(p => (p.active || p.ativo) && !isAltioraPipeline(p.name ?? p.nome ?? ''));
 
   // Set pipeline based on stageId when modal opens
   useEffect(() => {

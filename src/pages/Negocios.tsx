@@ -390,9 +390,10 @@ const Negocios = () => {
         </div>
       )}
 
-      {/* ALTIORA-06 AC4: Modal diferente para pipeline Altiora + Gestor/Admin */}
+      {/* ALTIORA-06 AC4: pipeline Altiora sempre usa o modal dedicado de referral,
+          independente do cargo — closer e gestor/admin veem a mesma tela. */}
       {viewMode !== 'clientes' && (
-        isAltioraPipeline(selectedPipeline?.name ?? '') && isManager ? (
+        isAltioraPipeline(selectedPipeline?.name ?? '') ? (
           <NovoReferralModal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
