@@ -397,7 +397,7 @@ const Negocios = () => {
           <NovoReferralModal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            currentUserId={user?.id}
+            currentUserId={user?.profile?.id}
           />
         ) : (
           <NovoNegocioModal
