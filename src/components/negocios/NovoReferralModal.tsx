@@ -182,7 +182,7 @@ const NovoReferralModal = ({ isOpen, onClose, currentUserId }: NovoReferralModal
         title: string;
         altiora_origem: string;
         altiora_data_handoff: string | null;
-        user_id: string | null;
+        users_id: string | null;
         metadata?: Record<string, string>;
       };
       const leadPayload: LeadInsert = {
@@ -198,7 +198,7 @@ const NovoReferralModal = ({ isOpen, onClose, currentUserId }: NovoReferralModal
           ? new Date(dataHandoff).toISOString()
           : null,
         // AC3: registra usuário criador
-        user_id: currentUserId ?? null,
+        users_id: currentUserId ?? null,
       };
 
       // Metadados de deduplicação quando criado com justificativa
