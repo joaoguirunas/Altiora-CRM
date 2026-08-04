@@ -233,7 +233,13 @@ const NovoReferralModal = ({ isOpen, onClose, currentUserId }: NovoReferralModal
       navigate(`/crm/kanban/${leadCriado.id}`);
     } catch (error) {
       console.error('Erro ao criar referral:', error);
-      const msg = error instanceof Error ? error.message : 'Erro ao criar referral. Tente novamente.';
+      // Erros do Supabase (PostgrestError) não são instâncias de Error — têm
+      // .message como propriedade simples. Sem isso, a causa real ficava
+      // escondida atrás de um texto genérico.
+      const msg =
+        (error as { message?: string })?.message ||
+        (error instanceof Error ? error.message : null) ||
+        'Erro ao criar referral. Tente novamente.';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
