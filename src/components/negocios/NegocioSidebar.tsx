@@ -215,39 +215,10 @@ const NegocioSidebar = ({
    * aba Referral — o time consulta esses campos pelos dois caminhos, e manter
    * duas cópias do JSX sairia caro de manter.
    */
-  const renderDadosReferral = () => (
+  /** Bloco "Responsável" (Closer) — isolado para poder aparecer logo abaixo do
+   *  Status de Atendimento na aba Cliente, e na posição original na aba Referral. */
+  const renderResponsavel = () => (
     <>
-
-                {/* Origem do referral — read-only após criação (AC1) */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
-                    {/* ALTIORA-22 AC4: botão de correção para Admin */}
-                    {isAdmin && (
-                      <button
-                        onClick={() => setShowCorrigirModal(true)}
-                        className="text-[11px] text-muted-foreground/40 hover:text-amber-400/80 transition-colors"
-                      >
-                        Corrigir dados
-                      </button>
-                    )}
-                  </div>
-                  <div className="border border-border rounded-[2px] overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-                      <span className="text-[12px] text-muted-foreground/60">Canal</span>
-                      <span className="text-[12px] font-medium text-foreground/80">
-                        {origemLabel(negocio.altiora_origem)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-[12px] text-muted-foreground/60">Data handoff</span>
-                      <span className="text-[12px] font-medium text-foreground/80">
-                        {negocio.altiora_data_handoff ? formatDate(negocio.altiora_data_handoff) : '—'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Responsável — AltioraCloserSelect (AC1 + AC2 ALTIORA-08) */}
                 <div className="space-y-2">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Responsável</p>
@@ -284,6 +255,43 @@ const NegocioSidebar = ({
                     )}
                   </div>
                 </div>
+    </>
+  );
+
+  const renderDadosReferral = ({ comResponsavel = true } = {}) => (
+    <>
+
+                {/* Origem do referral — read-only após criação (AC1) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
+                    {/* ALTIORA-22 AC4: botão de correção para Admin */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setShowCorrigirModal(true)}
+                        className="text-[11px] text-muted-foreground/40 hover:text-amber-400/80 transition-colors"
+                      >
+                        Corrigir dados
+                      </button>
+                    )}
+                  </div>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                      <span className="text-[12px] text-muted-foreground/60">Canal</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {origemLabel(negocio.altiora_origem)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-[12px] text-muted-foreground/60">Data handoff</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {negocio.altiora_data_handoff ? formatDate(negocio.altiora_data_handoff) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {comResponsavel && renderResponsavel()}
 
                 {/* Etapa atual (AC1) */}
                 <div className="space-y-2">
@@ -425,6 +433,11 @@ const NegocioSidebar = ({
               {negocio.pessoa && (
                 <StatusAtendimento pessoa={negocio.pessoa} />
               )}
+
+              {/* Closer logo abaixo do status: é a primeira coisa que o time
+                  procura ao abrir a ficha. Os demais dados do referral ficam
+                  no fim da aba, via renderDadosReferral. */}
+              {isAltiora && renderResponsavel()}
 
               {/* Produto Kiwify */}
               {negocio.pessoa?.cursos?.length > 0 && (
@@ -612,8 +625,9 @@ const NegocioSidebar = ({
               )}
 
               {/* Dados do referral também aqui: é a aba que o time abre primeiro.
-                  Mesmo conteúdo da aba Referral, via renderDadosReferral(). */}
-              {isAltiora && renderDadosReferral()}
+                  Mesmo conteúdo da aba Referral, menos o Responsável — esse já
+                  foi renderizado lá em cima, logo abaixo do status. */}
+              {isAltiora && renderDadosReferral({ comResponsavel: false })}
             </TabsContent>
 
             {/* ────────── LEAD TAB ────────── */}
