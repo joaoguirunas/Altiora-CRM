@@ -5,11 +5,14 @@ interface NavigationContextType {
   showBackButton: boolean;
   leadName?: string;
   pipelineName?: string;
+  /** Nome do Closer responsável pelo lead — exibido no header junto ao nome (ALTIORA). */
+  closerName?: string;
   onBack?: () => void;
   setNavigationState: (state: {
     showBackButton: boolean;
     leadName?: string;
     pipelineName?: string;
+    closerName?: string;
     onBack?: () => void;
   }) => void;
   clearNavigationState: () => void;
@@ -30,6 +33,7 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     showBackButton: false,
     leadName: undefined as string | undefined,
     pipelineName: undefined as string | undefined,
+    closerName: undefined as string | undefined,
     onBack: undefined as (() => void) | undefined,
   });
 
@@ -37,12 +41,14 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
     showBackButton: boolean;
     leadName?: string;
     pipelineName?: string;
+    closerName?: string;
     onBack?: () => void;
   }) => {
     setNavigationStateInternal({
       showBackButton: state.showBackButton,
       leadName: state.leadName,
       pipelineName: state.pipelineName,
+      closerName: state.closerName,
       onBack: state.onBack,
     });
   }, []);
@@ -52,6 +58,7 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
       showBackButton: false,
       leadName: undefined,
       pipelineName: undefined,
+      closerName: undefined,
       onBack: undefined,
     });
   }, []);

@@ -16,6 +16,8 @@ import { useMessageCountByLead } from "@/hooks/useMessageCount";
 import { useLatestMeetingByLead } from "@/hooks/useLatestMeetingByLead";
 import { useUsers } from "@/hooks/useUsersNew";
 import CursoBadges from "./CursoBadges";
+import { AltioraCloserQuickAssign } from "./AltioraCloserQuickAssign";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +64,8 @@ const StageColumn = ({
   const [displayedItems, setDisplayedItems] = useState(10);
   const [showLostModal, setShowLostModal] = useState<string | null>(null);
   const updateNegocio = useUpdateNegocio();
+  // Vincular Closer direto no card: Admin / Gestor Comercial (isManager = admin OU manager)
+  const { isManager } = useUserPermissions();
 
   // AC1 (ALTIORA-03): resolver nome do Closer a partir do altiora_closer_id
   // useUsers usa React Query — o cache é compartilhado, sem N requests por coluna
@@ -220,6 +224,11 @@ const StageColumn = ({
                               <p className="text-[13px] font-semibold text-foreground truncate leading-tight">
                                 {negocio.pessoa?.name || 'Sem nome'}
                               </p>
+                              {isAltiora && negocio.altiora_closer_id && (
+                                <p className="text-[10px] text-cyan-700 dark:text-cyan-300 truncate leading-tight mt-0.5">
+                                  {closerById[negocio.altiora_closer_id]?.name ?? 'Closer'}
+                                </p>
+                              )}
                               {negocio.empresa?.trade_name && (
                                 <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                   <Building2 className="h-3 w-3 flex-shrink-0" strokeWidth={1.5} />
@@ -342,9 +351,25 @@ const StageColumn = ({
                                 TODO ALTIORA-03: exibir next_action_description + next_action_due_at
                                 quando migration 20260725XXX_altiora_next_action.sql for aplicada */}
 
-                            {/* AC1: Closer responsável — badge com foto no canto inferior direito */}
+                            {/* AC1: Closer responsável — badge com foto no canto inferior direito.
+                                Gestor/Admin em referral ativo: badge vira botão de vínculo/alteração. */}
                             <div className="flex justify-end pt-0.5">
-                              {negocio.altiora_closer_id ? (() => {
+                              {isManager && negocio.status === 'in_progress' ? (
+                                <AltioraCloserQuickAssign
+                                  leadId={negocio.id}
+                                  currentCloserId={negocio.altiora_closer_id}
+                                  currentCloserName={
+                                    negocio.altiora_closer_id
+                                      ? closerById[negocio.altiora_closer_id]?.name
+                                      : null
+                                  }
+                                  currentCloserAvatarUrl={
+                                    negocio.altiora_closer_id
+                                      ? closerById[negocio.altiora_closer_id]?.avatarUrl
+                                      : null
+                                  }
+                                />
+                              ) : negocio.altiora_closer_id ? (() => {
                                 const closer = closerById[negocio.altiora_closer_id];
                                 const initials = (closer?.name ?? '?')
                                   .split(' ')

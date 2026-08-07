@@ -87,6 +87,9 @@ MOC raiz. Todo arquivo novo em `docs/smart-memory/` deve ser referenciado aqui.
 **BI PRO / Voice:**
 - [[decisions/ADR-BI-VOICE-01-gemini-live-architecture]] — Gemini Live + browser-direct + cost isolation per tenant + beta flag
 
+**Altiora CRM:**
+- [[decisions/ADR-ALTIORA-01-reunioes-multiplos-colaboradores]] — **2026-08-07** colaboradores extra em reunião via tabela `meeting_collaborators` (não substitui `leads.altiora_closer_id`); Super Admin pode escolher livremente o organizador (`meetings.users_id`); escopo só Google Calendar (Teams/Zoom fora); execução ALTIORA-26→29
+
 **Release Pipeline:**
 - [[decisions/ADR-REL-01-release-pipeline]] — versioned releases + ADM dispatch + drift detection + baseline squashing (épico RELEASE-PIPELINE-V1)
 

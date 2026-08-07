@@ -179,7 +179,7 @@ const DashLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { showBackButton, leadName, pipelineName, onBack, clearNavigationState } = useNavigation();
+  const { showBackButton, leadName, pipelineName, closerName, onBack, clearNavigationState } = useNavigation();
   
   const currentTenantId = 'single-tenant';
   const currentTenant = { id: 'single-tenant', name: 'Sistema', value: 'single-tenant' };
@@ -598,6 +598,15 @@ const DashLayout = () => {
                   <>
                     <span className="text-muted-foreground/40">·</span>
                     <span className="text-muted-foreground">{pipelineName}</span>
+                  </>
+                )}
+                {closerName && (
+                  <>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="inline-flex items-center gap-1 text-cyan-700 dark:text-cyan-300">
+                      <User className="w-3 h-3" strokeWidth={1.5} />
+                      {closerName}
+                    </span>
                   </>
                 )}
               </div>

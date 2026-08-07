@@ -55,6 +55,7 @@ import RegistrarContatoModal, { type ContatoFormData } from "@/components/negoci
 import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
 import { useRegistrarContato, useSalvarProximaAcao } from "@/hooks/useAltioraContatos";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useAltioraClosers } from "@/hooks/useAltioraClosers";
 
 const NegocioSingle = () => {
   const { id } = useParams<{ id: string }>();
@@ -64,6 +65,7 @@ const NegocioSingle = () => {
   const { setNavigationState, clearNavigationState } = useNavigation();
 
   const { data: negocio, isLoading, error, isError } = useNegocio(id || "");
+  const { data: altioraClosers = [] } = useAltioraClosers();
   const { pipelines, stages } = usePipelines();
   const { times } = useTimesWithMethods();
   const { usuarios } = useUsuarios();
@@ -138,14 +140,16 @@ const NegocioSingle = () => {
     if (negocio) {
       const displayName = negocio.pessoa?.name || 'Cliente';
       document.title = `${displayName} — GrowthSales CRM`;
+      const closerId = (negocio as { altiora_closer_id?: string | null }).altiora_closer_id;
       setNavigationState({
         showBackButton: true,
         leadName: displayName,
         pipelineName: pipelines.find(p => p.id === negocio.pipeline_id)?.nome || 'Vendas',
+        closerName: closerId ? altioraClosers.find(c => c.id === closerId)?.name : undefined,
         onBack: () => navigate(-1)
       });
     }
-  }, [negocio, pipelines, navigate, setNavigationState]);
+  }, [negocio, pipelines, altioraClosers, navigate, setNavigationState]);
 
   useEffect(() => {
     return () => { clearNavigationState(); };

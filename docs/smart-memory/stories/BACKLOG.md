@@ -120,6 +120,17 @@ Sequência obrigatória: ALTIORA-01 → ALTIORA-02 → (ALTIORA-03 ‖ ALTIORA-0
 | [[backlog/ALTIORA-24-indicadores-operacionais]] | Indicadores operacionais do funil Altiora (UC09) | L | backlog | dev-dev-alpha |
 | [[backlog/ALTIORA-25-alertas-referrals-parados]] | Alertas — referrals parados ou sem próxima ação (UC15) | M | backlog | dev-dev-alpha |
 
+### Grupo G — Exceção: colaboradores adicionais em reunião (2026-08-07)
+
+ADR: [[../decisions/ADR-ALTIORA-01-reunioes-multiplos-colaboradores]]. Origem: pedido do dono do produto — reunião "a quatro mãos" (ex: Rafael + André) precisa de 2+ responsáveis sem mudar o modelo de 1 Closer dono do lead (`leads.altiora_closer_id` intacto). **Revisado 2026-08-07 (mesmo dia):** escopo reduzido a Google Calendar (MS Teams/Zoom fora); Super Admin ganhou poder de escolher livremente o organizador (`meetings.users_id`), não só o Closer do lead. Sequência: ALTIORA-26 → ALTIORA-27 → ALTIORA-28 → ALTIORA-29 (28 e 29 podem rodar em paralelo após 26).
+
+| Story | Título | Complexidade | Status | Agente sugerido |
+|---|---|---|---|---|
+| [[backlog/ALTIORA-26-db-meeting-collaborators]] | DB — tabela meeting_collaborators (colaboradores extra em reunião) | S | active | dev-data-engineer |
+| [[backlog/ALTIORA-27-modal-multi-colaboradores]] | Modal de agendamento — organizador livre (Super Admin) e colaboradores adicionais | M | active | dev-dev-alpha |
+| [[backlog/ALTIORA-28-edge-functions-colaboradores]] | google-cal-upsert-event — convidar colaboradores adicionais (só Google Calendar) | S | active | dev-dev-beta |
+| [[backlog/ALTIORA-29-invite-multi-colaboradores]] | Convite ao cliente cita colaboradores adicionais (2+ responsáveis, via Google) | S | active | dev-dev-beta |
+
 ---
 
 ## 🧪 CENTRAL DE TESTES v2 — Port do simulador evoluído do ironberg (2026-07-03)
