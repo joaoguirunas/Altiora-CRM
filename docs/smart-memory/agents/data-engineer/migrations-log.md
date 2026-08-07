@@ -7,6 +7,23 @@ tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
 ---
 
+## 20260807240000 — fix_merge_persons_step8_remove_sends (2026-08-07)
+
+**Objetivo:** Corrigir uma decisão errada da migration anterior (`20260807230000`), que apontou o passo 8 de `merge_persons` para `sends_people` supondo ser a renomeação de `sends_contacts`. O dono do produto esclareceu que essa suposição estava INVERTIDA:
+
+- `sends_contacts` era a tabela VIVA de verdade — usada pelo frontend (`useSendContacts.ts`, `useSendMutations.ts`, `useSendContactMutations.ts`, `useResetSendStats.ts`, `TabelaContatos.tsx`) e por 4 edge functions (`send-dispatch-worker`, `send-status-callback`, `sends-import-contacts`, `atende-simples-webhook`). Foi **removida intencionalmente pelo dono do produto** ("não tem mais necessidade") — decisão de produto, não drift acidental.
+- `sends_people` é **vestigial**: criada em `20251108195513`, nunca adotada por nenhum código real (só um DELETE defensivo em `useDeletarPessoa.ts:180`). **Confirmado `SELECT count(*) FROM sends_people` = 0** e FK para `clients_people(id)` existe mas não é usada por nada. Reparentar nela não corrigiria nada de verdade.
+
+**Fix:** passo 8 removido por completo (mesmo padrão do `call_pro_calls`/`lp_form_submissions` — funcionalidade descontinuada por decisão de produto, sem tabela viva equivalente). Se `sends_contacts` for reintroduzida no futuro, este passo precisa ser recriado.
+
+**Safety Protocol:** snapshot (`backups/merge_persons-before-20260807240000.json`) → dry-run OK → apply → **smoke-test completo repetido** (simulação real via `trg_identity_auto_merge`, passo 1 ao 14, dentro de `BEGIN...ROLLBACK`): ZERO erros, duplicate marcado `status='merged'` + `merged_into_id` correto, canonical com `merge_history` atualizado — confirma novamente que a cadeia completa está limpa.
+
+**Arquivos:** `supabase/migrations/20260807240000_fix_merge_persons_step8_remove_sends.sql` + `.rollback.sql`.
+
+**Nota:** esta é a 4ª migration corretiva sequencial em `merge_persons` no mesmo dia (210000→220000→230000→240000). Todas as decisões de schema (rename vs drop vs coluna renomeada) devem ser confirmadas com o dono do produto ou com a migration de origem antes de assumir — a suposição errada do passo 8 só foi pega porque o coordenador trouxe contexto de produto que a investigação de schema sozinha não conseguia revelar (tabela vestigial vs tabela removida intencionalmente têm a mesma assinatura no information_schema).
+
+---
+
 ## 20260807230000 — fix_merge_persons_lp_sends_meeting_followup (2026-08-07)
 
 **Objetivo:** Fechar os últimos 4 gaps mapeados na auditoria completa de `merge_persons` (passo 1 a 14, feita em `20260807220000`). Origem de cada um investigada nas migrations locais (não assumida):
