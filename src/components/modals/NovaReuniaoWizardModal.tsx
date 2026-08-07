@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import {
   ArrowLeft, CalendarIcon, Check, Clock, User,
-  Shuffle, UserCheck, ChevronDown,
+  ChevronDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -25,7 +25,6 @@ type MeetingType = 'discovery' | 'demo' | 'closing' | 'consulting' | 'mentoring'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AssignmentMode = 'auto' | 'manual';
 type Step = 1 | 2 | 3;
 
 interface SelectedLead {
@@ -45,8 +44,13 @@ interface SelectedConsultor {
 interface WizardState {
   step: Step;
   selectedLead: SelectedLead | null;
-  assignmentMode: AssignmentMode | null;
-  selectedConsultor: SelectedConsultor | null; // only used in manual mode
+  /**
+   * Consultores da reunião. O PRIMEIRO é o organizador: é o dono do evento no
+   * Google Calendar (meetings.users_id) e é a agenda usada para calcular os
+   * horários livres. Os demais entram em `meeting_collaborators` e são
+   * convidados do evento — nunca donos. Ver ADR-ALTIORA-01.
+   */
+  selectedConsultores: SelectedConsultor[];
   selectedDate: Date | undefined;
   selectedDuration: number;
   selectedTimeSlot: { start: string; end: string } | null;
@@ -58,8 +62,7 @@ interface WizardState {
 const INITIAL_STATE: WizardState = {
   step: 1,
   selectedLead: null,
-  assignmentMode: null,
-  selectedConsultor: null,
+  selectedConsultores: [],
   selectedDate: undefined,
   selectedDuration: 60,
   selectedTimeSlot: null,
@@ -96,7 +99,7 @@ const DURATION_OPTIONS = [
 
 const STEP_LABELS: Record<Step, string> = {
   1: 'Negócio',
-  2: 'Distribuição',
+  2: 'Consultores',
   3: 'Agenda',
 };
 
@@ -125,15 +128,16 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
 
   useEffect(() => {
     if (open) {
+      // Closer/comercial já entra com ele mesmo pré-selecionado como organizador,
+      // mas continua vendo a etapa: pode adicionar mais consultores à reunião.
       const selfConsultor = isUserType && user?.profile
-        ? { id: user.profile.id, nome: user.profile.nome, email: user.profile.email || undefined }
-        : null;
+        ? [{ id: user.profile.id, nome: user.profile.nome, email: user.profile.email || undefined }]
+        : [];
       setState({
         ...INITIAL_STATE,
         selectedLead: initialLead ?? null,
-        step: initialLead ? (isUserType ? 3 : 2) : 1,
-        assignmentMode: isUserType ? 'manual' : null,
-        selectedConsultor: selfConsultor,
+        step: initialLead ? 2 : 1,
+        selectedConsultores: selfConsultor,
       });
       setSearchTerm('');
       setShowDetails(false);
@@ -166,27 +170,13 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Booking session slots — for auto mode (distribution rules)
-  const { data: bookingSession, isLoading: isLoadingAutoSlots } = useQuery({
-    queryKey: ['booking-session-slots', state.selectedLead?.id, state.selectedDuration],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc('get_booking_session', {
-        p_lead_id:     state.selectedLead!.id,
-        p_rule_set_id: null,
-        p_duration:    state.selectedDuration,
-        p_days_ahead:  14,
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data as { person: { id: string; name: string; email: string | null }; slots: Array<{ date: string; start_time: string; end_time: string }> };
-    },
-    enabled: !!state.selectedLead?.id && state.assignmentMode === 'auto' && state.step === 3,
-    staleTime: 2 * 60 * 1000,
-  });
-
-  // Time slots for manual mode — specific consultant + date
+  // Horários livres: sempre a agenda do ORGANIZADOR (primeiro consultor), que é
+  // quem vai ser dono do evento no Google Calendar. A disponibilidade dos
+  // colaboradores adicionais não é cruzada aqui — limitação conhecida e
+  // documentada no ADR-ALTIORA-01.
+  const organizador = state.selectedConsultores[0] ?? null;
   const { data: consultorSlots = [] } = useConsultorDisponibilidade({
-    consultorId: state.assignmentMode === 'manual' ? (state.selectedConsultor?.id || '') : '',
+    consultorId: organizador?.id || '',
     date: state.selectedDate ? format(state.selectedDate, 'yyyy-MM-dd') : '',
     duration: state.selectedDuration,
   });
@@ -205,40 +195,19 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
     [negocios, searchTerm],
   );
 
-  // Group auto slots by date for quick lookup
-  const autoSlotsByDate = useMemo(() => {
-    const slots = bookingSession?.slots || [];
-    return slots.reduce(
-      (acc, slot) => {
-        if (!acc[slot.date]) acc[slot.date] = [];
-        acc[slot.date].push({ start: slot.start_time, end: slot.end_time });
-        return acc;
-      },
-      {} as Record<string, Array<{ start: string; end: string }>>,
-    );
-  }, [bookingSession]);
-
-  // Slots for the selected date
+  // Slots for the selected date — sempre a agenda do organizador
   const slotsForSelectedDate = useMemo(() => {
     if (!state.selectedDate) return [];
-    if (state.assignmentMode === 'auto') {
-      return autoSlotsByDate[format(state.selectedDate, 'yyyy-MM-dd')] || [];
-    }
-    // manual mode — already filtered by useConsultorDisponibilidade
     return consultorSlots
       .filter((s) => s.available)
       .map((s) => ({ start: s.start.slice(0, 5), end: s.end.slice(0, 5) }));
-  }, [state.selectedDate, state.assignmentMode, autoSlotsByDate, consultorSlots]);
+  }, [state.selectedDate, consultorSlots]);
 
   // ── Navigation ───────────────────────────────────────────────────────────────
 
   const canAdvance = (): boolean => {
     if (state.step === 1) return !!state.selectedLead;
-    if (state.step === 2) {
-      if (state.assignmentMode === 'auto') return true;
-      if (state.assignmentMode === 'manual') return !!state.selectedConsultor;
-      return false;
-    }
+    if (state.step === 2) return state.selectedConsultores.length > 0;
     if (state.step === 3) return !!state.selectedTimeSlot?.start && !!state.selectedTimeSlot?.end;
     return false;
   };
@@ -253,25 +222,17 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
       toast.error(msgs[state.step]);
       return;
     }
-    if (isUserType && state.step === 1) {
-      setState((prev) => ({ ...prev, step: 3 }));
-    } else {
-      setState((prev) => ({ ...prev, step: (prev.step + 1) as Step }));
-    }
+    setState((prev) => ({ ...prev, step: (prev.step + 1) as Step }));
   };
 
   const handleBack = () => {
-    if (isUserType && state.step === 3) {
-      setState((prev) => ({ ...prev, step: 1 }));
-    } else {
-      setState((prev) => ({ ...prev, step: (prev.step - 1) as Step }));
-    }
+    setState((prev) => ({ ...prev, step: (prev.step - 1) as Step }));
   };
 
   const handleClose = () => onOpenChange(false);
 
   const handleConfirm = async () => {
-    if (!state.selectedLead || !state.assignmentMode || !state.selectedDate || !state.selectedTimeSlot) {
+    if (!state.selectedLead || !state.selectedDate || !state.selectedTimeSlot) {
       toast.error('Dados incompletos');
       return;
     }
@@ -279,70 +240,61 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
     const dateStr = format(state.selectedDate, 'yyyy-MM-dd');
     const normalizeTime = (t: string) => (t.length === 5 ? `${t}:00` : t);
 
+    const [organizadorSel, ...colaboradores] = state.selectedConsultores;
+    if (!organizadorSel) { toast.error('Selecione ao menos um consultor'); return; }
+
     try {
-      if (state.assignmentMode === 'auto') {
-        // Auto: use book_meeting RPC — picks consultant via distribution rules
-        const startISO = new Date(`${dateStr}T${normalizeTime(state.selectedTimeSlot.start)}`).toISOString();
-        const endISO   = new Date(`${dateStr}T${normalizeTime(state.selectedTimeSlot.end)}`).toISOString();
+      const meetingPayload = {
+        lead_id:    state.selectedLead.id,
+        user_id:    organizadorSel.id,
+        title:      `Reunião — ${state.selectedLead.clientName}`,
+        date:       dateStr,
+        start_time: normalizeTime(state.selectedTimeSlot.start),
+        end_time:   normalizeTime(state.selectedTimeSlot.end),
+        location:   state.location || undefined,
+        notes:      state.notes || undefined,
+        status:     'agendado',
+      };
+      // meeting_type is not in the typed interface but the hook inserts into meetings table which supports it
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (meetingPayload as any).meeting_type = state.meetingType || undefined;
+      const result = await criarAgendamento.mutateAsync(meetingPayload);
 
-        const { data, error: rpcErr } = await (supabase as any).rpc('book_meeting', {
-          p_lead_id:     state.selectedLead.id,
-          p_start_time:  startISO,
-          p_end_time:    endISO,
-          p_rule_set_id: null,
-          p_duration:    state.selectedDuration,
-          p_notes:       state.notes || null,
-        });
+      // Consultores adicionais → meeting_collaborators. Precisa ser DEPOIS do
+      // create (o id só existe aqui) e, por isso, o evento do Google Calendar
+      // já foi criado sem eles pelo useCriarAgendamento — daí o 'update' logo
+      // abaixo, que reenvia o convite já com os colaboradores em attendees.
+      const meetingId = (result as { meeting?: { id?: string } } | undefined)?.meeting?.id;
+      if (meetingId && colaboradores.length > 0) {
+        // meeting_collaborators não está nos tipos gerados — mesmo padrão de
+        // cast usado em useAltioraMeetings/NovoReferralModal.
+        const db = supabase as unknown as { from: (t: string) => any };
+        const { error: collabErr } = await db.from('meeting_collaborators').insert(
+          colaboradores.map((c) => ({
+            meeting_id: meetingId,
+            user_id:    c.id,
+            role:       'co_host',
+          })),
+        );
 
-        if (rpcErr) throw new Error(rpcErr.message);
-        if (data?.error) throw new Error(data.error);
-
-        const meetingId: string = data.meeting_id;
-
-        // Persist meeting_type
-        if (state.meetingType) {
-          supabase.from('meetings').update({ meeting_type: state.meetingType }).eq('id', meetingId).catch(() => {});
+        if (collabErr) {
+          // A reunião já existe e é válida — não derrubar tudo por causa dos
+          // colaboradores. Avisa para o usuário poder ajustar depois.
+          console.warn('[collaborators] insert error:', collabErr);
+          toast.warning('Reunião criada, mas não foi possível adicionar os consultores extras.');
+        } else {
+          const { error: gcalErr } = await supabase.functions.invoke('google-cal-upsert-event', {
+            body: { meeting_id: meetingId, action: 'update' },
+          });
+          if (gcalErr) {
+            console.warn('[gcal] update com colaboradores falhou:', gcalErr);
+            toast.warning('Consultores extras salvos, mas o convite do Google Calendar não foi atualizado.');
+          }
+          queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
         }
-
-        queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
-        toast.success('Reunião agendada com sucesso!');
-
-        // Fire-and-forget GCal sync via google-cal-upsert-event (same path as manual mode)
-        supabase.functions
-          .invoke('google-cal-upsert-event', { body: { meeting_id: meetingId, action: 'create' } })
-          .then(({ data: gcalData, error: gcalErr }) => {
-            if (gcalErr) console.warn('[gcal] upsert error:', gcalErr);
-            else {
-              const d = gcalData as { skipped?: boolean; reason?: string; success?: boolean } | null;
-              if (d?.success) queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
-              else if (d?.skipped) console.info('[gcal] skipped:', d.reason);
-            }
-          })
-          .catch((err) => console.warn('[gcal] upsert exception:', err));
-
-        handleClose();
-      } else {
-        // Manual: insert directly with explicit consultant
-        if (!state.selectedConsultor) { toast.error('Selecione um consultor'); return; }
-
-        const meetingPayload = {
-          lead_id:    state.selectedLead.id,
-          user_id:    state.selectedConsultor.id,
-          title:      `Reunião — ${state.selectedLead.clientName}`,
-          date:       dateStr,
-          start_time: normalizeTime(state.selectedTimeSlot.start),
-          end_time:   normalizeTime(state.selectedTimeSlot.end),
-          location:   state.location || undefined,
-          notes:      state.notes || undefined,
-          status:     'agendado',
-        };
-        // meeting_type is not in the typed interface but the hook inserts into meetings table which supports it
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (meetingPayload as any).meeting_type = state.meetingType || undefined;
-        await criarAgendamento.mutateAsync(meetingPayload);
-
-        handleClose();
       }
+
+      handleClose();
     } catch (e: any) {
       toast.error(e.message || 'Erro ao confirmar reunião');
     }
@@ -351,8 +303,8 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
   // ── Step indicator ────────────────────────────────────────────────────────────
 
   const renderStepIndicator = () => {
-    const visibleSteps = isUserType ? ([1, 3] as Step[]) : ([1, 2, 3] as Step[]);
-    const stepNumbers: Record<number, number> = isUserType ? { 1: 1, 3: 2 } : { 1: 1, 2: 2, 3: 3 };
+    const visibleSteps = [1, 2, 3] as Step[];
+    const stepNumbers: Record<number, number> = { 1: 1, 2: 2, 3: 3 };
 
     return (
       <div className="flex items-center gap-1 mb-5">
@@ -469,110 +421,69 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
   // ── Step 2 — Distribuição ─────────────────────────────────────────────────────
 
   const renderStep2 = () => {
-    const MODES: {
-      key: AssignmentMode;
-      icon: React.ElementType;
-      label: string;
-      desc: string;
-    }[] = [
-      {
-        key: 'auto',
-        icon: Shuffle,
-        label: 'Distribuição automática',
-        desc: 'Consultor atribuído pela regra de distribuição configurada',
-      },
-      {
-        key: 'manual',
-        icon: UserCheck,
-        label: 'Escolher consultor',
-        desc: 'Selecione o consultor manualmente',
-      },
-    ];
+    const toggleConsultor = (c: { id: string; name: string; email: string | null }) =>
+      setState((prev) => {
+        const jaSelecionado = prev.selectedConsultores.some((sc) => sc.id === c.id);
+        const selectedConsultores = jaSelecionado
+          ? prev.selectedConsultores.filter((sc) => sc.id !== c.id)
+          : [...prev.selectedConsultores, { id: c.id, nome: c.name, email: c.email || undefined }];
+        // Trocar o organizador (posição 0) muda a agenda usada para os horários
+        // livres — o slot já escolhido pode não valer mais.
+        const organizadorMudou = (prev.selectedConsultores[0]?.id ?? null) !== (selectedConsultores[0]?.id ?? null);
+        return organizadorMudou
+          ? { ...prev, selectedConsultores, selectedTimeSlot: null }
+          : { ...prev, selectedConsultores };
+      });
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          {MODES.map(({ key, icon: Icon, label, desc }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() =>
-                setState((prev) => ({
-                  ...prev,
-                  assignmentMode: key,
-                  selectedConsultor: key === 'auto' ? null : prev.selectedConsultor,
-                }))
-              }
-              className={cn(
-                'p-4 rounded-[4px] border text-left transition-colors',
-                state.assignmentMode === key
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border bg-card hover:bg-muted',
-              )}
-            >
-              <Icon
-                className={cn(
-                  'w-5 h-5 mb-2.5',
-                  state.assignmentMode === key ? 'text-primary' : 'text-muted-foreground',
-                )}
-              />
-              <p className="text-sm font-semibold leading-tight">{label}</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-snug">{desc}</p>
-            </button>
-          ))}
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Selecione um ou mais consultores. O primeiro é o organizador: a reunião
+          entra na agenda dele e os horários livres são os dele.
+        </p>
 
-        {/* Manual: consultant list */}
-        {state.assignmentMode === 'manual' && (
-          <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-0.5">
-            {consultores.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Nenhum consultor ativo encontrado
-              </p>
-            ) : (
-              consultores.map((c) => {
-                const isSelected = state.selectedConsultor?.id === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() =>
-                      setState((prev) => ({
-                        ...prev,
-                        selectedConsultor: { id: c.id, nome: c.name, email: c.email || undefined },
-                      }))
-                    }
-                    className={cn(
-                      'w-full text-left px-3 py-2.5 rounded-[4px] border flex items-center gap-3 transition-colors',
-                      isSelected
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border bg-card hover:bg-muted',
+        <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-0.5">
+          {consultores.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              Nenhum consultor ativo encontrado
+            </p>
+          ) : (
+            consultores.map((c) => {
+              const index = state.selectedConsultores.findIndex((sc) => sc.id === c.id);
+              const isSelected = index >= 0;
+              const isOrganizador = index === 0;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => toggleConsultor(c)}
+                  className={cn(
+                    'w-full text-left px-3 py-2.5 rounded-[4px] border flex items-center gap-3 transition-colors',
+                    isSelected
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border bg-card hover:bg-muted',
+                  )}
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.name}</p>
+                    {c.email && (
+                      <p className="text-xs text-muted-foreground truncate">{c.email}</p>
                     )}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{c.name}</p>
-                      {c.email && (
-                        <p className="text-xs text-muted-foreground truncate">{c.email}</p>
-                      )}
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {/* Auto: confirmation chip */}
-        {state.assignmentMode === 'auto' && (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-[4px] border border-primary/30 bg-primary/5 text-xs text-primary">
-            <Shuffle className="w-3.5 h-3.5 shrink-0" />
-            <span>O consultor será atribuído automaticamente na confirmação</span>
-          </div>
-        )}
+                  </div>
+                  {isOrganizador && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary shrink-0">
+                      Organizador
+                    </span>
+                  )}
+                  {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     );
   };
@@ -580,8 +491,7 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
   // ── Step 3 — Agenda ───────────────────────────────────────────────────────────
 
   const renderStep3 = () => {
-    const isAuto = state.assignmentMode === 'auto';
-    const isLoadingSlots = isAuto ? isLoadingAutoSlots : false;
+    const isLoadingSlots = false;
 
     const slotsByPeriod = {
       manha: slotsForSelectedDate.filter((s) => {
@@ -820,7 +730,7 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
         </div>
 
         {/* Compact context bar */}
-        {(state.selectedLead || state.selectedConsultor) && (
+        {(state.selectedLead || state.selectedConsultores.length > 0) && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground bg-muted border border-border rounded-[4px] px-3 py-2 mt-1">
             {state.selectedLead && (
               <span>
@@ -828,15 +738,12 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
                 {state.selectedLead.clientName}
               </span>
             )}
-            {state.assignmentMode === 'auto' && (
+            {state.selectedConsultores.length > 0 && (
               <span>
-                <strong className="text-foreground font-medium">Atribuição:</strong> Automática
-              </span>
-            )}
-            {state.selectedConsultor && (
-              <span>
-                <strong className="text-foreground font-medium">Consultor:</strong>{' '}
-                {state.selectedConsultor.nome}
+                <strong className="text-foreground font-medium">
+                  {state.selectedConsultores.length > 1 ? 'Consultores:' : 'Consultor:'}
+                </strong>{' '}
+                {state.selectedConsultores.map((c) => c.nome).join(', ')}
               </span>
             )}
             {state.selectedDate && (
@@ -860,7 +767,7 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
             Cancelar
           </Button>
           <div className="flex gap-2">
-            {state.step > 1 && !(initialLead && (state.step === 2 || (isUserType && state.step === 3))) && (
+            {state.step > 1 && !(initialLead && state.step === 2) && (
               <Button variant="outline" size="sm" onClick={handleBack} className="text-xs h-8">
                 <ArrowLeft className="w-3.5 h-3.5 mr-1" />
                 Voltar
