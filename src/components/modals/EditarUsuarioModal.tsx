@@ -263,6 +263,11 @@ const EditarUsuarioModal = ({
               onChange={(value) => setFormData({ ...formData, whatsapp: value })}
               placeholder="11999990000"
             />
+            {/* Sem isso, buildAltioraInvite omite a linha de contato do convite. */}
+            <p className="text-[11px] text-muted-foreground/60 mt-1">
+              Aparece no convite de reunião enviado ao cliente. Se ficar vazio, a
+              linha de contato por WhatsApp não é incluída.
+            </p>
           </div>
 
           <div>

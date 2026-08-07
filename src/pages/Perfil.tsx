@@ -213,6 +213,11 @@ const Perfil = () => {
           <div>
             <Label htmlFor="whatsapp" className="pl-1">WhatsApp</Label>
             <Input id="whatsapp" placeholder="+55 11 99999-0000" {...registerProfile('whatsapp')} disabled={isLoading} />
+            {/* Sem isso, buildAltioraInvite omite a linha de contato do convite. */}
+            <p className="text-[11px] text-muted-foreground/60 mt-1 pl-1">
+              Usado no convite de reunião: “Em caso de imprevisto, entre em contato pelo WhatsApp”.
+              Se ficar vazio, essa linha não aparece para o cliente.
+            </p>
           </div>
 
           {user.profile?.user_type === 'user' && (
