@@ -7,6 +7,55 @@ tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
 ---
 
+## 20260807230000 — fix_merge_persons_lp_sends_meeting_followup (2026-08-07)
+
+**Objetivo:** Fechar os últimos 4 gaps mapeados na auditoria completa de `merge_persons` (passo 1 a 14, feita em `20260807220000`). Origem de cada um investigada nas migrations locais (não assumida):
+
+| Passo | Objeto antigo | Causa | Resolução |
+|---|---|---|---|
+| 6 | `lp_submissions` | RENOMEADA → `form_pro_submissions` em `20260310000000_form_pro_drop_lp_pages-ok.sql:40` (header da própria migration classifica como "CRM-facing, UTM/ip/lead_id") | `UPDATE form_pro_submissions SET people_id=...` — mesma coluna, só a tabela mudou de nome |
+| 7 | `lp_form_submissions` | DROP intencional na mesma migration (`:29`), classificada como "Page tracking (session_id/visitor_id) — NOT the CRM table" | Passo removido — nunca foi ligada a pessoa/contato, sem equivalente |
+| 8 | `sends_contacts` | Tabela não existe mais (`to_regclass` = NULL); `sends_people` (criada em `20251108195513`, ANTES de `sends_contacts` em `20251110183840`) tem schema equivalente (`send_id, people_id, lead_id, status, sent_at, delivered_at, read_at, ...`) e é a tabela usada de fato hoje (inclusive por `get_insights_context` BLOCK 6) | `UPDATE sends_people SET people_id=...` |
+| 10 | `meeting_followup_queue` | Bug de nomenclatura (não tabela ausente) — coluna real é `person_id`, não `people_id` | `UPDATE meeting_followup_queue SET person_id=...` |
+
+**Achado separado reportado ao coordenador (NÃO corrigido — fora de escopo, decisão de frontend/produto):** 6 arquivos ainda fazem `.from('sends_contacts')` — tabela confirmada inexistente: `src/hooks/useSendContacts.ts`, `useSendMutations.ts`, `useResetSendStats.ts`, `useSendContactMutations.ts`, `useDeletarPessoa.ts`, `src/components/disparos/TabelaContatos.tsx`. A tela de contatos de Disparos provavelmente está quebrada em produção pelo mesmo drift — `sends_people` é a equivalente real.
+
+**Safety Protocol:** snapshot (`backups/merge_persons-before-20260807230000.json`) → dry-run (`BEGIN; <migration>; ROLLBACK;`) OK → apply → **smoke-test obrigatório: simulação completa do trigger real (`trg_identity_auto_merge` → `merge_persons`), passo 1 ao 14, dentro de `BEGIN...ROLLBACK` nunca commitado**. Resultado: ZERO erros — merge completou integralmente. Confirmado via estado final dos registros sintéticos: duplicate (`status='merged'`, `merged_into_id`=canonical — prova que o passo 14 executou) e canonical (`merge_history` com 1 entrada do evento — prova que o passo 13 executou). Toda a cadeia do passo 1 ao 14 está limpa.
+
+**Arquivos:** `supabase/migrations/20260807230000_fix_merge_persons_lp_sends_meeting_followup.sql` + `.rollback.sql` (restaura ao estado pós-220000, com os 4 gaps de volta — só usar em emergência).
+
+**Status final:** `merge_persons()` totalmente saneado. A cadeia real (`trg_identity_auto_merge` → dedupe de identidade em `clients_people` → merge automático) que bloqueava a criação de referrals/leads/contatos com identidade duplicada está desbloqueada de ponta a ponta.
+
+---
+
+## 20260807220000 — fix_merge_persons_companies_updated_at (2026-08-07)
+
+**Objetivo:** Corrigir o achado colateral da migration anterior (`20260807210000`): `merge_persons` passo 5 (company associations) referenciava `clients_people_companies.updated_at`, coluna que nunca existiu nessa tabela (`id, people_id, company_id, role, is_primary, created_at` — confirmado via `information_schema.columns`). Autorizado pelo coordenador por ser o MESMO fluxo que bloqueia o usuário (criar referral manual → dedupe → merge_persons); corrigir só o passo 4 sem o passo 5 não desbloqueava nada na prática.
+
+**Auditoria completa solicitada pelo coordenador (antes de qualquer novo fix):** simulação do `merge_persons` do passo 1 ao 14 via função de diagnóstico temporária (`pg_temp`, nunca commitada) que captura erro por passo em vez de abortar. Trigger `trg_identity_auto_merge` desabilitada durante o teste para evitar falso positivo por recursão (UPDATE de campos de identidade no passo 13 re-dispara o trigger quando chamado fora do contexto real de trigger — em produção isso é bloqueado corretamente pelo guard `pg_trigger_depth() > 1`, confirmado depois isolando o teste).
+
+**Resultado da auditoria (5 gaps reais, fora do já corrigido em 210000):**
+
+| Passo | Objeto | Erro | Status |
+|---|---|---|---|
+| 5 | `clients_people_companies` | `column "updated_at" does not exist` | **Corrigido nesta migration** |
+| 6 | `lp_submissions` | `relation does not exist` | Reportado, NÃO corrigido — aguardando autorização |
+| 7 | `lp_form_submissions` | `relation does not exist` | Reportado, NÃO corrigido — aguardando autorização |
+| 8 | `sends_contacts` | `relation does not exist` | Reportado, NÃO corrigido — aguardando autorização |
+| 10 | `meeting_followup_queue` | `column "people_id" does not exist` (coluna real é `person_id`) | Reportado, NÃO corrigido — aguardando autorização |
+
+Passos 1 (messages), 2 (leads), 3 (meetings), 9 (followup_queue), 11 (message_buffer), 12 (ai_agents_execution_log), 13 (merge de campos de identidade), 14 (marcar duplicate como merged) confirmados limpos — sem gaps.
+
+**Mudança aplicada:** removido `updated_at` da lista de colunas do `INSERT`/`SELECT` do passo 5, mantendo `created_at` (real). Resto da function intocado.
+
+**Safety Protocol:** snapshot (`backups/merge_persons-before-20260807220000.json`) → dry-run (`BEGIN; <migration>; ROLLBACK;`) OK → apply → smoke-test real via trigger (INSERT de 2 `clients_people` sintéticas com mesmo whatsapp, dentro de `BEGIN...ROLLBACK` nunca commitado): o passo 5 executou sem erro e a cadeia avançou naturalmente até travar no passo 6 (`lp_submissions` — gap já conhecido e não autorizado ainda), confirmando o fix na prática via o caminho real de disparo (não só a função de diagnóstico isolada).
+
+**Arquivos:** `supabase/migrations/20260807220000_fix_merge_persons_companies_updated_at.sql` + `.rollback.sql` (restaura para o estado pós-210000, com o bug do passo 5 de volta — só usar em emergência).
+
+**Pendência aberta:** merge completo (passos 6, 7, 8, 10) ainda falha em produção — aguardando decisão do coordenador sobre dropar os 3 blocos de tabelas inexistentes (lp_submissions/lp_form_submissions/sends_contacts, prováveis módulos descontinuados como Call Pro) e corrigir o nome de coluna em meeting_followup_queue (people_id→person_id).
+
+---
+
 ## 20260807210000 — fix_merge_persons_drop_call_pro_leftover (2026-08-07)
 
 **Objetivo:** Segunda ocorrência do drift de `call_pro_calls` (dropada em `20260609000000_drop_coach_pro_and_call_pro.sql`), desta vez em `merge_persons()` — function ATIVA, chamada automaticamente pela trigger `trg_identity_auto_merge` (`AFTER INSERT OR UPDATE OF email/document/whatsapp/instagram_user_id/instagram_handle ON clients_people`) sempre que `find_duplicate_person()` acha colisão de identidade com um registro já existente. Erro reportado pelo usuário: `relation "public.call_pro_calls" does not exist`, intermitente (só dispara quando há duplicata real de whatsapp/email/document/instagram).
