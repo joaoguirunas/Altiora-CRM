@@ -2,9 +2,35 @@
 title: Migrations Log
 type: task-log
 agent: dev-data-engineer
-updated: 2026-07-26
+updated: 2026-08-07
 tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
+---
+
+## 20260807210000 — fix_merge_persons_drop_call_pro_leftover (2026-08-07)
+
+**Objetivo:** Segunda ocorrência do drift de `call_pro_calls` (dropada em `20260609000000_drop_coach_pro_and_call_pro.sql`), desta vez em `merge_persons()` — function ATIVA, chamada automaticamente pela trigger `trg_identity_auto_merge` (`AFTER INSERT OR UPDATE OF email/document/whatsapp/instagram_user_id/instagram_handle ON clients_people`) sempre que `find_duplicate_person()` acha colisão de identidade com um registro já existente. Erro reportado pelo usuário: `relation "public.call_pro_calls" does not exist`, intermitente (só dispara quando há duplicata real de whatsapp/email/document/instagram).
+
+**Varredura completa** (`information_schema.routines.routine_definition ILIKE '%call_pro_calls%'`; views/triggers/policies/publications = 0 hits): 2 functions vivas com referência — `merge_persons` (ativa, no fluxo) e `get_call_stats` (órfã, dashboard Call Pro™ descontinuado — confirmado pelo coordenador que não é chamada por nada no frontend, só aparece em `types.ts` gerado por introspecção).
+
+**Mudanças:**
+1. `merge_persons(uuid, uuid)`: removido o bloco "4. Calls" (`UPDATE public.call_pro_calls SET person_id=... WHERE person_id=...` + `GET DIAGNOSTICS v_call_count`) e `'calls_moved', v_call_count` do `merge_history`/retorno. Resto da function (messages, leads, meetings, clients_people_companies, lp_submissions, lp_form_submissions, sends_contacts, followup_queue, meeting_followup_queue, message_buffer, ai_agents_execution_log, merge de campos de identidade) intocado.
+2. `get_call_stats(timestamptz, timestamptz)`: `DROP FUNCTION IF EXISTS` — órfã, confirmada sem chamadores.
+
+**Safety Protocol:** snapshot (`pg_get_functiondef` de ambas salvo em `backups/merge_persons-before-20260807210000.json` e `backups/get_call_stats-before-20260807210000.json`) → dry-run (`BEGIN; <migration>; ROLLBACK;` via `db query --linked --file`) OK → apply real → smoke-test.
+
+**Smoke-test:**
+- `pg_get_functiondef('merge_persons')` confirma zero referência executável a `call_pro_calls` (só sobra a string dentro de um comentário SQL explicando a remoção — falso positivo esperado em scans futuros por `ILIKE`).
+- `to_regprocedure('get_call_stats(timestamptz,timestamptz)')` → `NULL` (function não existe mais).
+- **Simulação real da cadeia de trigger** (dentro de `BEGIN...ROLLBACK`, dados sintéticos com prefixo `00000000-0000-4000-8000-...`, nunca commitados): INSERT de duas `clients_people` com mesmo whatsapp disparou `trg_identity_auto_merge` → `merge_persons` automaticamente. O erro de `call_pro_calls` NÃO ocorreu mais — a execução avançou até um bug diferente e pré-existente (ver "Achado colateral" abaixo), confirmando que o bloco removido de fato era o ponto de falha e que o restante da function até ali está sintaticamente correto.
+- Bônus: `COMMENT ON FUNCTION merge_persons` atualizado para descrever a remoção sem repetir o nome literal da tabela morta (evita falso-positivo em auditorias futuras via `ILIKE`).
+
+**Achado colateral (NÃO corrigido — fora do escopo autorizado desta migration):** `merge_persons` passo 5 (company associations) faz `INSERT INTO clients_people_companies (..., updated_at) SELECT ..., updated_at FROM clients_people_companies ...` mas `clients_people_companies` **não tem coluna `updated_at`** (confirmado via `information_schema.columns`: só tem `id, people_id, company_id, role, is_primary, created_at`). Isso quebra QUALQUER merge real que chegue ao passo 5 — independente do bug de `call_pro_calls`. Reportado ao coordenador para decisão sobre nova migration corretiva.
+
+**Arquivos:** `supabase/migrations/20260807210000_fix_merge_persons_drop_call_pro_leftover.sql` + `supabase/migrations/20260807210000_fix_merge_persons_drop_call_pro_leftover.rollback.sql` (restaura ambas functions ao estado anterior — reintroduz o bug original, só usar em emergência).
+
+**Pendência aberta:** bug de `clients_people_companies.updated_at` inexistente em `merge_persons` passo 5 — aguardando autorização do coordenador para nova migration.
+
 ---
 
 ## 2026-07-26 — Meeting Flow Complete Fix (channel blocker)
