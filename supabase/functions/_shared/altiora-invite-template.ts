@@ -77,12 +77,34 @@ export interface BuildInviteInput {
   notes?: string | null;
   /** Link da call, quando o provedor não o injeta sozinho na descrição. */
   meetingLink?: string | null;
+  /**
+   * Colaboradores adicionais da reunião (`meeting_collaborators`), além do
+   * organizador (`consultorNome`). Opcional e retrocompatível: ausente/vazio
+   * ⇒ assinatura idêntica à de hoje (só `consultorNome`). Usado hoje apenas
+   * por `google-cal-upsert-event` (ver ALTIORA-28/29 e ADR-ALTIORA-01) — MS
+   * Teams e Zoom seguem chamando `buildAltioraInvite` sem este parâmetro.
+   * Sem telefone/WhatsApp por colaborador de propósito (ver ADR-ALTIORA-01):
+   * o convite cita nomes, não vira uma lista de contatos.
+   */
+  colaboradores?: Array<{ nome: string | null }>;
 }
 
 export interface InviteContent {
   /** Título SEM o sufixo [ref:<meeting_id>] — quem chama anexa o sufixo. */
   title: string;
   description: string;
+}
+
+/**
+ * Junta nomes em português com vírgula entre os intermediários e "e" antes
+ * do último (ex: "Rafael, André e Bruna"). Devolve string vazia para lista
+ * vazia — quem chama decide o fallback nesse caso.
+ */
+function joinNamesNaturally(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} e ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
 }
 
 export function buildAltioraInvite(input: BuildInviteInput): InviteContent {
@@ -95,6 +117,7 @@ export function buildAltioraInvite(input: BuildInviteInput): InviteContent {
     consultorTelefone,
     notes,
     meetingLink,
+    colaboradores,
   } = input;
 
   const copy = COPY[tipo];
@@ -115,8 +138,17 @@ export function buildAltioraInvite(input: BuildInviteInput): InviteContent {
     paragraphs.push(`Em caso de imprevisto, entre em contato pelo WhatsApp: ${telefone}.`);
   }
 
+  // Organizador sempre citado primeiro; colaboradores adicionais (se houver)
+  // são citados na sequência, de forma natural ("e" antes do último). Sem
+  // colaboradores, o resultado é idêntico ao comportamento legado (só o
+  // organizador, ou o fallback genérico quando nem isso existe).
   const assinatura = (consultorNome ?? '').trim();
-  paragraphs.push(assinatura ? `${assinatura} — Altiora Advisory Group` : 'Altiora Advisory Group');
+  const colaboradorNomes = (colaboradores ?? [])
+    .map((c) => (c?.nome ?? '').trim())
+    .filter(Boolean);
+  const nomesAssinatura = [assinatura, ...colaboradorNomes].filter(Boolean);
+  const textoAssinatura = joinNamesNaturally(nomesAssinatura);
+  paragraphs.push(textoAssinatura ? `${textoAssinatura} — Altiora Advisory Group` : 'Altiora Advisory Group');
 
   if (notes?.trim()) paragraphs.push(notes.trim());
   if (meetingLink?.trim()) paragraphs.push(`Link: ${meetingLink.trim()}`);

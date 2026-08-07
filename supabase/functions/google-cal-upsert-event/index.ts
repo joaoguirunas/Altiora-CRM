@@ -117,6 +117,51 @@ Deno.serve(async (req: Request) => {
       return json({ success: true, skipped: true, reason: 'no_consultant' });
     }
 
+    // === Fetch additional collaborators (ALTIORA-28/29) ===
+    // meeting_collaborators nunca substitui o organizador (meeting.users_id,
+    // dono do token OAuth) — são convidados extra em attendees[], nunca donos
+    // alternativos do evento. Falha aqui não pode bloquear create/update do
+    // evento (graceful degradation, mesmo padrão do resto desta function).
+    let collaboratorRows: Array<{ user_id: string }> = [];
+    try {
+      const { data: collabData, error: collabError } = await supabase
+        .from('meeting_collaborators')
+        .select('user_id')
+        .eq('meeting_id', meeting_id);
+      if (collabError) {
+        console.warn('[GCal] Failed to fetch meeting_collaborators:', collabError.message);
+      } else {
+        collaboratorRows = collabData ?? [];
+      }
+    } catch (err) {
+      console.warn('[GCal] Unexpected error fetching meeting_collaborators:', String(err));
+    }
+
+    let collaboratorUsers: Array<{ id: string; nome: string | null; email: string | null }> = [];
+    if (collaboratorRows.length > 0) {
+      const { data: collabUsersData, error: collabUsersError } = await supabase
+        .from('settings_users')
+        .select('id, nome, email')
+        .in('id', collaboratorRows.map((c) => c.user_id));
+      if (collabUsersError) {
+        console.warn('[GCal] Failed to resolve collaborator settings_users:', collabUsersError.message);
+      } else {
+        collaboratorUsers = collabUsersData ?? [];
+      }
+    }
+
+    // Colaboradores sem e-mail válido não bloqueiam o evento — apenas são
+    // ignorados no attendees[] (AC2 da ALTIORA-28), com warning para debug.
+    const collaboratorAttendees: Array<{ email: string }> = [];
+    for (const cu of collaboratorUsers) {
+      const email = (cu.email ?? '').trim();
+      if (!email) {
+        console.warn(`[GCal] Collaborator ${cu.id} has no valid email in settings_users — skipping attendee`);
+        continue;
+      }
+      collaboratorAttendees.push({ email });
+    }
+
     // === Fetch ALL google connections for consultant that sync bookings ===
     // Ordered by created_at so the oldest row is the PRIMARY (owns meetings.google_event_id).
     const { data: connections } = await supabase
@@ -171,6 +216,7 @@ Deno.serve(async (req: Request) => {
         consultorNome: consultor?.nome,
         consultorTelefone: consultor?.whatsapp,
         notes: meeting.notes,
+        colaboradores: collaboratorUsers.map((cu) => ({ nome: cu.nome })),
       });
       summary = invite.title;
       description = invite.description;
@@ -301,6 +347,17 @@ Deno.serve(async (req: Request) => {
       const primaryBase = `${CALENDAR_EVENTS_URL}/${encodeURIComponent(primaryCalId)}/events`;
       const primaryAttendees: Array<{ email: string }> = [{ email: primary.google_email }];
       if (clientEmail) primaryAttendees.push({ email: clientEmail });
+      // Colaboradores adicionais (ALTIORA-28) — convidados extra, nunca donos
+      // do evento. Dedup por e-mail para não repetir organizador/cliente caso
+      // um colaborador coincida com um deles (edge case raro, mas inofensivo
+      // de proteger).
+      const seenAttendeeEmails = new Set(primaryAttendees.map((a) => a.email.toLowerCase()));
+      for (const ca of collaboratorAttendees) {
+        const key = ca.email.toLowerCase();
+        if (seenAttendeeEmails.has(key)) continue;
+        seenAttendeeEmails.add(key);
+        primaryAttendees.push(ca);
+      }
 
       const created = await createEvent(primaryToken, primaryBase, primaryAttendees);
       if (!created) {
@@ -341,6 +398,17 @@ Deno.serve(async (req: Request) => {
       const primaryBase = `${CALENDAR_EVENTS_URL}/${encodeURIComponent(primaryCalId)}/events`;
       const primaryAttendees: Array<{ email: string }> = [{ email: primary.google_email }];
       if (clientEmail) primaryAttendees.push({ email: clientEmail });
+      // Colaboradores adicionais (ALTIORA-28) — convidados extra, nunca donos
+      // do evento. Dedup por e-mail para não repetir organizador/cliente caso
+      // um colaborador coincida com um deles (edge case raro, mas inofensivo
+      // de proteger).
+      const seenAttendeeEmails = new Set(primaryAttendees.map((a) => a.email.toLowerCase()));
+      for (const ca of collaboratorAttendees) {
+        const key = ca.email.toLowerCase();
+        if (seenAttendeeEmails.has(key)) continue;
+        seenAttendeeEmails.add(key);
+        primaryAttendees.push(ca);
+      }
 
       const googleEventId = meeting.google_event_id;
       if (!googleEventId) {

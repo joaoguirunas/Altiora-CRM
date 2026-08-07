@@ -23,10 +23,10 @@ related: ["[[ALTIORA-28-edge-functions-colaboradores]]", "[[../../decisions/ADR-
 Quando uma reunião tem colaboradores adicionais, o convite enviado ao cliente via Google Calendar deve citar todos de forma natural, sem virar um texto burocrático de lista.
 
 ## Acceptance Criteria
-- [ ] AC1: `buildAltioraInvite` (`_shared/altiora-invite-template.ts`) ganha parâmetro opcional `colaboradores?: Array<{ nome: string | null }>`. Quando vazio/ausente, comportamento é idêntico ao atual (retrocompatível — não quebra reuniões sem colaborador, nem o uso do template por `ms-teams-upsert-event`/`zoom-upsert-event`, que seguem chamando sem esse parâmetro).
-- [ ] AC2: Assinatura do convite passa de `"{consultorNome} — Altiora Advisory Group"` para `"{consultorNome} e {colaborador1} — Altiora Advisory Group"` (2 pessoas) ou `"{consultorNome}, {colaborador1} e {colaborador2} — Altiora Advisory Group"` (3+), sempre citando o organizador primeiro.
-- [ ] AC3: Apenas `google-cal-upsert-event` passa a resolver `meeting_collaborators` → nomes via `settings_users.nome` e repassar para `buildAltioraInvite` — mesma query já adicionada em ALTIORA-28, sem nova chamada ao banco. `ms-teams-upsert-event` e `zoom-upsert-event` não são tocadas nesta story.
-- [ ] AC4: Teste unitário/manual documentado: convite com 0, 1 e 2 colaboradores gera assinatura gramaticalmente correta em português ("e" antes do último, vírgula entre os demais).
+- [x] AC1: `buildAltioraInvite` (`_shared/altiora-invite-template.ts`) ganha parâmetro opcional `colaboradores?: Array<{ nome: string | null }>`. Quando vazio/ausente, comportamento é idêntico ao atual (retrocompatível — não quebra reuniões sem colaborador, nem o uso do template por `ms-teams-upsert-event`/`zoom-upsert-event`, que seguem chamando sem esse parâmetro).
+- [x] AC2: Assinatura do convite passa de `"{consultorNome} — Altiora Advisory Group"` para `"{consultorNome} e {colaborador1} — Altiora Advisory Group"` (2 pessoas) ou `"{consultorNome}, {colaborador1} e {colaborador2} — Altiora Advisory Group"` (3+), sempre citando o organizador primeiro.
+- [x] AC3: Apenas `google-cal-upsert-event` passa a resolver `meeting_collaborators` → nomes via `settings_users.nome` e repassar para `buildAltioraInvite` — mesma query já adicionada em ALTIORA-28, sem nova chamada ao banco. `ms-teams-upsert-event` e `zoom-upsert-event` não são tocadas nesta story.
+- [x] AC4: Teste unitário/manual documentado: convite com 0, 1 e 2 colaboradores gera assinatura gramaticalmente correta em português ("e" antes do último, vírgula entre os demais).
 
 ## Escopo
 
@@ -45,13 +45,25 @@ Quando uma reunião tem colaboradores adicionais, o convite enviado ao cliente v
 ## Dev Agent Record
 | Campo | Valor |
 |---|---|
-| Agente | — |
-| Iniciado | — |
-| Concluído | — |
-| Branch | — |
+| Agente | Rex (dev-dev-beta) |
+| Iniciado | 2026-08-07 |
+| Concluído | 2026-08-07 |
+| Branch | worktree-agent-aa3280e6ebb522cc3 |
+
+Testes manuais/unitários (AC4) — `supabase/functions/_shared/altiora-invite-template.test.ts`, `deno test`:
+- 0 colaboradores (undefined e array vazio) → assinatura idêntica ao legado (`"{consultorNome} — Altiora Advisory Group"`).
+- 1 colaborador → `"{consultorNome} e {colaborador} — Altiora Advisory Group"`.
+- 2 colaboradores → `"{consultorNome}, {colaborador1} e {colaborador2} — Altiora Advisory Group"`.
+- Colaborador com nome vazio/null é ignorado sem quebrar a assinatura.
+- Sem `consultorNome` mas com colaboradores → assinatura só com os colaboradores.
+- Nem `consultorNome` nem colaboradores → fallback genérico `"Altiora Advisory Group"`.
+- Títulos R1/R2/R3 confirmados intactos (Wealth Planning Discovery/Presentation, IUL Implementation).
+- 9/9 testes passaram (`deno test --allow-env supabase/functions/_shared/altiora-invite-template.test.ts`).
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `supabase/functions/_shared/altiora-invite-template.ts` (modificado — parâmetro `colaboradores`, helper `joinNamesNaturally`)
+- `supabase/functions/_shared/altiora-invite-template.test.ts` (novo — cobertura AC4)
+- `supabase/functions/google-cal-upsert-event/index.ts` (modificado — repassa `colaboradores` resolvidos em ALTIORA-28, ver story irmã)
 
 ## QA Results
 <!-- QA preenche ao revisar -->

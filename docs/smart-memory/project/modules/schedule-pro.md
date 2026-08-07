@@ -93,7 +93,7 @@ Todos em `src/hooks/`, padrão TanStack Query v5:
 | `google-cal-pull-event` | true | Puxa evento específico por `google_event_id` |
 | `google-cal-sync-events` | true | Importa eventos Google Cal → `meetings` (source='google') para um usuário |
 | `google-cal-sync-to-db` | true | Sync em batch de todos os eventos do período para o DB |
-| `google-cal-upsert-event` | true | Cria ou atualiza evento no Google Calendar de um usuário |
+| `google-cal-upsert-event` | true | Cria ou atualiza evento no Google Calendar de um usuário; convida colaboradores extra de `meeting_collaborators` como attendees (ALTIORA-28), sem alterar o organizador |
 | `ms-teams-connect` | true | OAuth flow Microsoft Teams; salva tokens em `user_calendar_connections` |
 | `ms-teams-upsert-event` | true | Cria ou atualiza evento no Teams (via Microsoft Graph API) |
 | `zoom-connect` | true | OAuth flow Zoom; salva tokens zoom_* em `user_calendar_connections` |
