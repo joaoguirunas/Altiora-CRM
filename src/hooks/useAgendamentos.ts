@@ -72,7 +72,22 @@ export const useCriarAgendamento = () => {
       // template de convite do playbook em google-cal-upsert-event. Antes o
       // meeting_type vinha por cast e nem chegava ao insert, então todo convite
       // saía com o texto genérico.
-      const isAltioraTipo = data.meeting_type === 'R1' || data.meeting_type === 'R2' || data.meeting_type === 'R3';
+      //
+      // R1/R2/R3 NÃO podem ir para meeting_type: o CHECK meetings_meeting_type_check
+      // só aceita discovery|demo|closing|consulting|mentoring|qbr|followup|other.
+      // Guardamos o equivalente genérico ali (para relatórios que agrupam por
+      // meeting_type continuarem funcionando) e o valor Altiora em altiora_tipo.
+      const ALTIORA_PARA_MEETING_TYPE: Record<string, string> = {
+        R1: 'discovery', // R1 — Reunião de Diagnóstico
+        R2: 'demo',      // R2 — Apresentação de Proposta
+        R3: 'closing',   // R3 — Fechamento
+      };
+      const altioraTipo = data.meeting_type && ALTIORA_PARA_MEETING_TYPE[data.meeting_type]
+        ? data.meeting_type
+        : null;
+      const meetingType = altioraTipo
+        ? ALTIORA_PARA_MEETING_TYPE[altioraTipo]
+        : data.meeting_type || null;
 
       const { data: meeting, error } = await supabase
         .from('meetings')
@@ -85,8 +100,8 @@ export const useCriarAgendamento = () => {
           end_time: endTimestamp,
           location: data.location || null,
           notes: data.notes || null,
-          meeting_type: data.meeting_type || null,
-          altiora_tipo: isAltioraTipo ? data.meeting_type : null,
+          meeting_type: meetingType,
+          altiora_tipo: altioraTipo,
           google_meet_link: data.google_meet_link || null,
           status: data.status || 'agendado',
           title: data.title || 'Reunião',
