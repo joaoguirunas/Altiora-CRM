@@ -9,6 +9,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildAltioraInvite, isAltioraMeetingType } from '../_shared/altiora-invite-template.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -83,7 +84,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, title, notes, zoom_meeting_id,
-        user_id,
+        user_id, altiora_tipo,
         leads ( id, clients_people ( id, name, email ) ),
         clients_people ( id, name, email )
       `)
@@ -162,13 +163,38 @@ Deno.serve(async (req: Request) => {
     // Sufixo [ref:<meeting_id>] — ver comentário equivalente em google-cal-upsert-event
     const refSuffix = ` [ref:${meeting_id}]`;
 
+    let topic  = (meeting.title as string) || `Reunião — ${clientName}`;
+    let agenda = (meeting.notes as string) || 'Agendado via Growth Sales.';
+
+    // Fluxo Altiora (R1/R2/R3) — templates do playbook comercial. Ver
+    // _shared/altiora-invite-template.ts.
+    if (isAltioraMeetingType(meeting.altiora_tipo)) {
+      const { data: consultor } = await supabase
+        .from('settings_users')
+        .select('nome, whatsapp')
+        .eq('id', consultorId)
+        .maybeSingle();
+
+      const invite = buildAltioraInvite({
+        tipo: meeting.altiora_tipo,
+        clientName,
+        provider: 'Zoom',
+        durationMinutes: durationMin,
+        consultorNome: consultor?.nome as string | null,
+        consultorTelefone: consultor?.whatsapp as string | null,
+        notes: meeting.notes as string | null,
+      });
+      topic  = invite.title;
+      agenda = invite.description;
+    }
+
     const zoomPayload = {
-      topic:    ((meeting.title as string) || `Reunião — ${clientName}`) + refSuffix,
+      topic:    topic + refSuffix,
       type:     2, // scheduled
       start_time: startDt.toISOString(),
       duration:   durationMin,
       timezone:   'America/Sao_Paulo',
-      agenda:     meeting.notes || 'Agendado via Growth Sales.',
+      agenda,
       settings: {
         host_video:      true,
         participant_video: true,

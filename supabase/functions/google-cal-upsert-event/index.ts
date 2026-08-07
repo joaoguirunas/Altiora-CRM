@@ -20,6 +20,8 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildAltioraInvite, isAltioraMeetingType } from '../_shared/altiora-invite-template.ts';
+import { bearerToken, isServiceRoleToken } from '../_shared/service-role-auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,15 +42,16 @@ Deno.serve(async (req: Request) => {
   try {
     // === AUTH ===
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    const token = bearerToken(authHeader);
+    if (!token) {
       return json({ success: false, error: 'Unauthorized' }, 401);
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const isServiceRole = token === supabaseServiceKey;
-    if (!isServiceRole) {
+    // Aceita as duas gerações de chave service-role (sb_secret_… vinda de outra
+    // edge function, e JWT legado vindo do pg_cron). Ver _shared/service-role-auth.ts.
+    if (!isServiceRoleToken(token)) {
       const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
-        global: { headers: { Authorization: authHeader } },
+        global: { headers: { Authorization: `Bearer ${token}` } },
       });
       const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
       if (authError || !user) {
@@ -93,6 +96,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, location, notes, meeting_link, status, title, google_event_id,
+        altiora_tipo,
         users_id, people_id,
         leads (
           id, title,
@@ -141,11 +145,40 @@ Deno.serve(async (req: Request) => {
     // depender de e-mail do consultor ou de janela de tempo (ver elephan-inbound).
     const refSuffix = ` [ref:${meeting_id}]`;
 
+    // Reuniões do fluxo Altiora (altiora_tipo = R1/R2/R3) usam os templates de
+    // convite do playbook comercial; as demais mantêm o texto genérico legado.
+    let summary = `Reunião — ${clientName}`;
+    let description = meeting.notes
+      ? `${meeting.notes}\n\nAgendado via app.`
+      : 'Agendado via app.';
+
+    if (isAltioraMeetingType(meeting.altiora_tipo)) {
+      const { data: consultor } = await supabase
+        .from('settings_users')
+        .select('nome, whatsapp')
+        .eq('id', consultorId)
+        .maybeSingle();
+
+      const durationMinutes = meeting.start_time && meeting.end_time
+        ? (new Date(meeting.end_time).getTime() - new Date(meeting.start_time).getTime()) / 60_000
+        : null;
+
+      const invite = buildAltioraInvite({
+        tipo: meeting.altiora_tipo,
+        clientName,
+        provider: 'Google Meet',
+        durationMinutes,
+        consultorNome: consultor?.nome,
+        consultorTelefone: consultor?.whatsapp,
+        notes: meeting.notes,
+      });
+      summary = invite.title;
+      description = invite.description;
+    }
+
     const eventPayload: Record<string, unknown> = {
-      summary: `Reunião — ${clientName}${refSuffix}`,
-      description: meeting.notes
-        ? `${meeting.notes}\n\nAgendado via app.`
-        : 'Agendado via app.',
+      summary: `${summary}${refSuffix}`,
+      description,
       start: { dateTime: meeting.start_time, timeZone: 'America/Sao_Paulo' },
       end: { dateTime: meeting.end_time, timeZone: 'America/Sao_Paulo' },
     };

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createLogger } from '../_shared/logger.ts';
+import { isServiceRoleToken } from '../_shared/service-role-auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -629,13 +630,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace('Bearer ', '').trim();
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    // Accept service role key (pg_cron / sends-dispatch-batch path) or user JWT
-    const isServiceRole = token === serviceRoleKey;
-
-    if (!isServiceRole) {
+    // Aceita credencial service-role (pg_cron / sends-dispatch-batch) em qualquer
+    // das duas gerações de chave, ou JWT de usuário. Ver _shared/service-role-auth.ts.
+    if (!isServiceRoleToken(token)) {
       const supabaseAuth = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',

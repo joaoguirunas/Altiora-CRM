@@ -19,15 +19,17 @@
  * kiwify-process-event (KFY-1.5). This function only detects the gap and enqueues.
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+// URL completa em vez do bare specifier de functions/deno.json: o bundler do
+// `supabase functions deploy` não resolve o import map e falha ao empacotar.
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createLogger } from '../_shared/logger.ts';
 import {
   createKiwifyClientForConnection,
   type KiwifyConnectionRow,
   type KiwifySale,
 } from '../_shared/kiwify-client.ts';
+import { isServiceRoleToken } from '../_shared/service-role-auth.ts';
 import {
-  isServiceRoleJwt,
   reconciliationWindow,
   saleStatusToTrigger,
   synthesizeEventPayload,
@@ -67,9 +69,11 @@ Deno.serve(async (req: Request) => {
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-  // ── Auth: require a service_role JWT (gateway-validated) ──────────────────────
+  // ── Auth: exige credencial service-role, em qualquer das duas gerações de
+  // chave (sb_secret_… de outra edge function, ou JWT legado do pg_cron).
+  // Ver _shared/service-role-auth.ts.
   const bearer = (req.headers.get('authorization') ?? '').replace('Bearer ', '').trim();
-  if (!isServiceRoleJwt(bearer)) {
+  if (!isServiceRoleToken(bearer)) {
     log.warn('unauthorized');
     return json({ ok: false, error: 'Unauthorized' }, 401);
   }

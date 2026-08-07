@@ -28,6 +28,7 @@
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { isServiceRoleToken } from '../_shared/service-role-auth.ts';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -65,10 +66,12 @@ async function resolveAuth(
 
   if (!auth.startsWith('Bearer ')) return null;
 
-  const token = auth.slice(7);
+  const token = auth.slice(7).trim();
+  if (!token) return null;
 
-  // Service role fast-path
-  if (token === SUPABASE_KEY) {
+  // Service role fast-path — aceita as duas gerações de chave service-role.
+  // Ver _shared/service-role-auth.ts.
+  if (isServiceRoleToken(token)) {
     return { userId: null, isServiceRole: true };
   }
 

@@ -13,6 +13,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildAltioraInvite, isAltioraMeetingType } from '../_shared/altiora-invite-template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +60,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, location, notes, meeting_link,
-        status, title, ms_meeting_id, users_id,
+        status, title, ms_meeting_id, users_id, altiora_tipo,
         leads (id, title, clients_people (id, name, email))
       `)
       .eq('id', meeting_id)
@@ -165,12 +166,38 @@ Deno.serve(async (req: Request) => {
 
     // Sufixo [ref:<meeting_id>] — ver comentário equivalente em google-cal-upsert-event
     const refSuffix = ` [ref:${meeting_id}]`;
-    const subject = (meeting.title || (clientName ? `Reunião — ${clientName}` : 'Reunião')) + refSuffix;
-    const body    = [
+    let subject = (meeting.title || (clientName ? `Reunião — ${clientName}` : 'Reunião')) + refSuffix;
+    let body    = [
       meeting.notes || '',
       '',
       'Agendado via app.',
     ].filter(Boolean).join('\n');
+
+    // Fluxo Altiora (R1/R2/R3) — templates do playbook comercial. Ver
+    // _shared/altiora-invite-template.ts.
+    if (isAltioraMeetingType(meeting.altiora_tipo)) {
+      const { data: consultor } = await supabase
+        .from('settings_users')
+        .select('nome, whatsapp')
+        .eq('id', meeting.users_id)
+        .maybeSingle();
+
+      const durationMinutes = meeting.start_time && meeting.end_time
+        ? (new Date(meeting.end_time as string).getTime() - new Date(meeting.start_time as string).getTime()) / 60_000
+        : null;
+
+      const invite = buildAltioraInvite({
+        tipo: meeting.altiora_tipo as 'R1' | 'R2' | 'R3',
+        clientName,
+        provider: 'Microsoft Teams',
+        durationMinutes,
+        consultorNome: consultor?.nome as string | null,
+        consultorTelefone: consultor?.whatsapp as string | null,
+        notes: meeting.notes as string | null,
+      });
+      subject = invite.title + refSuffix;
+      body = invite.description;
+    }
 
     const payload = {
       subject,

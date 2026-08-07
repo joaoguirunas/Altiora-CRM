@@ -24,13 +24,13 @@
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createLogger } from '../_shared/logger.ts';
+import { isServiceRoleToken } from '../_shared/service-role-auth.ts';
 import {
   AGENT_RETRY_MINUTES,
   BUSY_RETRY_MINUTES,
   buildAgentDirectMessage,
   computeRetry,
   decideDispatch,
-  isServiceRoleJwt,
   resolveContent,
   type CallbackConfigRow,
   type CallbackRow,
@@ -64,9 +64,11 @@ Deno.serve(async (req: Request) => {
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-  // ── Auth: exige JWT com role=service_role (rotation-proof) ──────────────────
+  // ── Auth: exige credencial service-role, em qualquer das duas gerações de
+  // chave (sb_secret_… de outra edge function, ou JWT legado do pg_cron).
+  // Ver _shared/service-role-auth.ts.
   const bearer = (req.headers.get('authorization') ?? '').replace('Bearer ', '').trim();
-  if (!isServiceRoleJwt(bearer)) {
+  if (!isServiceRoleToken(bearer)) {
     log.warn('unauthorized');
     return json({ ok: false, error: 'Unauthorized' }, 401);
   }
