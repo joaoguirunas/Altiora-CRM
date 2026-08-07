@@ -1,24 +1,12 @@
 {
-  "version": "4.74",
+  "version": "4.75",
   "major": 4,
-  "minor": 74,
-  "created_at": "2026-08-03T17:29:06.000Z",
-  "git_sha": "4090259",
+  "minor": 75,
+  "created_at": "2026-08-07T20:11:57.000Z",
+  "git_sha": "38312f4",
   "migrations": [
-    "supabase/migrations/20260726200000_meetings_missing_columns.sql",
-    "supabase/migrations/20260726210000_schema_drift_fix.sql",
-    "supabase/migrations/20260726220000_meetings_time_to_timestamptz.sql",
-    "supabase/migrations/20260726230000_meetings_fix_users_fk.sql",
-    "supabase/migrations/20260726240000_meeting_flow_complete_fix.sql",
-    "supabase/migrations/20260726250000_fix_schedule_automation_trigger.sql",
-    "supabase/migrations/20260726260000_full_schema_drift_fix.sql",
-    "supabase/migrations/20260726270000_create_missing_tables.sql",
-    "supabase/migrations/20260726280000_create_settings_schedules.sql",
-    "supabase/migrations/20260726290000_fix_auto_link_score_matrix_trigger.sql",
-    "supabase/migrations/20260726300000_fix_dispatch_novo_lead_webhooks_trigger.sql",
-    "supabase/migrations/20260803093300_elephan_unmatched_events.sql",
-    "supabase/migrations/20260803095000_altiora_loss_reasons_categorized.sql"
+    "supabase/migrations/20260807200000_fix_insights_context_drop_call_pro.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "feat: integração Elephan.ai, redesign do card de pipeline, motivos de perda por etapa e ajustes de navegação Altiora|fix: correct active→ativo in settings_users queries across edge functions"
+  "changelog": "fix: get_insights_context — 4 gaps de schema drift acumulados|fix: auth service-role rotation-proof nas edge functions + invite R1/R2/R3 no Google Calendar|fix: título dos invites R1/R2/R3 e Closer visível perto do nome do lead|fix: adiciona HorarioDisponibilidadeCard.tsx — build de produção quebrado desde ontem|fix: exibir a mensagem real de erro ao criar referral|fix: currentUserId do Novo Referral usava auth.users.id em vez de settings_users.id|fix: referral Altiora sempre usa o modal dedicado + renomeia seções da navegação|fix: coluna users_id (não user_id) no insert de leads do Novo Referral Manual"
 }
