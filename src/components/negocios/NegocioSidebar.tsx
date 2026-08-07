@@ -209,6 +209,174 @@ const NegocioSidebar = ({
     ...(isAltiora ? [{ value: 'historico', icon: History, label: 'Histórico' }] : []),
   ];
 
+  /**
+   * Blocos de dados do referral (origem, responsável, etapa, financeiro,
+   * próxima ação, encerramento). Renderizados TANTO na aba Cliente quanto na
+   * aba Referral — o time consulta esses campos pelos dois caminhos, e manter
+   * duas cópias do JSX sairia caro de manter.
+   */
+  const renderDadosReferral = () => (
+    <>
+
+                {/* Origem do referral — read-only após criação (AC1) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
+                    {/* ALTIORA-22 AC4: botão de correção para Admin */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => setShowCorrigirModal(true)}
+                        className="text-[11px] text-muted-foreground/40 hover:text-amber-400/80 transition-colors"
+                      >
+                        Corrigir dados
+                      </button>
+                    )}
+                  </div>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                      <span className="text-[12px] text-muted-foreground/60">Canal</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {origemLabel(negocio.altiora_origem)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-[12px] text-muted-foreground/60">Data handoff</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {negocio.altiora_data_handoff ? formatDate(negocio.altiora_data_handoff) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Responsável — AltioraCloserSelect (AC1 + AC2 ALTIORA-08) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Responsável</p>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-border">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] text-muted-foreground/60">Closer</span>
+                      </div>
+                      {/* canEdit: apenas Gestor/Admin; Closer vê em leitura (AC2) */}
+                      <AltioraCloserSelect
+                        leadId={negocio.id}
+                        currentCloserId={negocio.altiora_closer_id}
+                        canEdit={isManager && !isReadOnly}
+                      />
+                      {/* ALTIORA-22: botão "Alterar responsável" para Gestor/Admin */}
+                      {isManager && !isReadOnly && negocio.altiora_closer_id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowReatribuirModal(true)}
+                          className="h-5 px-1.5 text-[10px] gap-1 rounded-[2px] text-muted-foreground/60 hover:text-foreground mt-1"
+                        >
+                          Alterar responsável
+                        </Button>
+                      )}
+                    </div>
+                    {negocio.altiora_data_atribuicao && (
+                      <div className="flex items-center justify-between px-4 py-2.5">
+                        <span className="text-[12px] text-muted-foreground/60">Atribuído em</span>
+                        <span className="text-[12px] font-medium text-foreground/80">
+                          {formatDate(negocio.altiora_data_atribuicao)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Etapa atual (AC1) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Etapa Atual</p>
+                  <div className="border border-border rounded-[2px] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                      <span className="text-[12px] text-muted-foreground/60">Etapa</span>
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {currentStage?.nome || currentStage?.name || '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-[12px] text-muted-foreground/60">Desde</span>
+                      {/* TODO ALTIORA-08: usar stage_entered_at quando migration aplicada */}
+                      <span className="text-[12px] font-medium text-foreground/80">
+                        {formatDate(negocio.updated_at)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Valor do prêmio — apenas Manager/Admin (AC2 ALTIORA-08) */}
+                {isManager && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Financeiro</p>
+                    <div className="border border-border rounded-[2px] overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-[13px] text-muted-foreground/70">Prêmio estimado</span>
+                        {isReadOnly ? (
+                          <span className="text-[13px] font-medium text-foreground">{formatCurrency(negocio.value)}</span>
+                        ) : (
+                          isEditingValue ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleValueSave(); if (e.key === 'Escape') setIsEditingValue(false); }}
+                                className="h-7 w-28 text-[13px]"
+                                autoFocus
+                              />
+                              <Button variant="ghost" size="sm" className="h-[30px] w-[30px] p-0 rounded-[4px]" onClick={handleValueSave}>
+                                <Check className="w-3.5 h-3.5" strokeWidth={1.5} />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-[30px] w-[30px] p-0 rounded-[4px]" onClick={() => setIsEditingValue(false)}>
+                                <X className="w-3.5 h-3.5" strokeWidth={1.5} />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setIsEditingValue(true)} className="flex items-center gap-1.5 group">
+                              <span className="text-[13px] font-medium text-foreground">{formatCurrency(negocio.value)}</span>
+                              <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" strokeWidth={1.5} />
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Próxima ação — TODO quando migration next_action_* for aplicada (AC1) */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Próxima Ação</p>
+                  <div className="border border-border rounded-[2px] p-3">
+                    {/* TODO ALTIORA-08: exibir next_action_type, next_action_description, next_action_due_at quando migration aplicada */}
+                    <p className="text-[12px] text-muted-foreground/40 italic">
+                      Defina a próxima ação no botão "Próx. Ação" na ficha principal.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Retomada (apenas quando perdido + Manager) */}
+                {negocio.status === 'lost' && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Encerramento</p>
+                    <div className="border border-border rounded-[2px] overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5">
+                        <span className="text-[12px] text-muted-foreground/60">Possibilidade de retomada</span>
+                        <span className={cn(
+                          "text-[11px] font-medium px-1.5 py-0.5 rounded-[2px] border leading-none",
+                          negocio.altiora_possibilidade_retomada
+                            ? "text-emerald-600 bg-emerald-500/10 border-emerald-200/30"
+                            : "text-muted-foreground/50 bg-muted border-border"
+                        )}>
+                          {negocio.altiora_possibilidade_retomada ? 'Sim' : 'Não'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+    </>
+  );
+
   return (
     <div className="w-[320px] border-r border-border bg-card flex flex-col h-full flex-none">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
@@ -442,6 +610,10 @@ const NegocioSidebar = ({
                   </div>
                 </div>
               )}
+
+              {/* Dados do referral também aqui: é a aba que o time abre primeiro.
+                  Mesmo conteúdo da aba Referral, via renderDadosReferral(). */}
+              {isAltiora && renderDadosReferral()}
             </TabsContent>
 
             {/* ────────── LEAD TAB ────────── */}
@@ -859,164 +1031,7 @@ const NegocioSidebar = ({
             {/* ────────── REFERRAL TAB (ALTIORA-08) ────────── */}
             {isAltiora && (
               <TabsContent value="referral" className="mt-0 space-y-5">
-
-                {/* Origem do referral — read-only após criação (AC1) */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Origem</p>
-                    {/* ALTIORA-22 AC4: botão de correção para Admin */}
-                    {isAdmin && (
-                      <button
-                        onClick={() => setShowCorrigirModal(true)}
-                        className="text-[11px] text-muted-foreground/40 hover:text-amber-400/80 transition-colors"
-                      >
-                        Corrigir dados
-                      </button>
-                    )}
-                  </div>
-                  <div className="border border-border rounded-[2px] overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-                      <span className="text-[12px] text-muted-foreground/60">Canal</span>
-                      <span className="text-[12px] font-medium text-foreground/80">
-                        {origemLabel(negocio.altiora_origem)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-[12px] text-muted-foreground/60">Data handoff</span>
-                      <span className="text-[12px] font-medium text-foreground/80">
-                        {negocio.altiora_data_handoff ? formatDate(negocio.altiora_data_handoff) : '—'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Responsável — AltioraCloserSelect (AC1 + AC2 ALTIORA-08) */}
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Responsável</p>
-                  <div className="border border-border rounded-[2px] overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-border">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[12px] text-muted-foreground/60">Closer</span>
-                      </div>
-                      {/* canEdit: apenas Gestor/Admin; Closer vê em leitura (AC2) */}
-                      <AltioraCloserSelect
-                        leadId={negocio.id}
-                        currentCloserId={negocio.altiora_closer_id}
-                        canEdit={isManager && !isReadOnly}
-                      />
-                      {/* ALTIORA-22: botão "Alterar responsável" para Gestor/Admin */}
-                      {isManager && !isReadOnly && negocio.altiora_closer_id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowReatribuirModal(true)}
-                          className="h-5 px-1.5 text-[10px] gap-1 rounded-[2px] text-muted-foreground/60 hover:text-foreground mt-1"
-                        >
-                          Alterar responsável
-                        </Button>
-                      )}
-                    </div>
-                    {negocio.altiora_data_atribuicao && (
-                      <div className="flex items-center justify-between px-4 py-2.5">
-                        <span className="text-[12px] text-muted-foreground/60">Atribuído em</span>
-                        <span className="text-[12px] font-medium text-foreground/80">
-                          {formatDate(negocio.altiora_data_atribuicao)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Etapa atual (AC1) */}
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Etapa Atual</p>
-                  <div className="border border-border rounded-[2px] overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-                      <span className="text-[12px] text-muted-foreground/60">Etapa</span>
-                      <span className="text-[12px] font-medium text-foreground/80">
-                        {currentStage?.nome || currentStage?.name || '—'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-[12px] text-muted-foreground/60">Desde</span>
-                      {/* TODO ALTIORA-08: usar stage_entered_at quando migration aplicada */}
-                      <span className="text-[12px] font-medium text-foreground/80">
-                        {formatDate(negocio.updated_at)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Valor do prêmio — apenas Manager/Admin (AC2 ALTIORA-08) */}
-                {isManager && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Financeiro</p>
-                    <div className="border border-border rounded-[2px] overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-3">
-                        <span className="text-[13px] text-muted-foreground/70">Prêmio estimado</span>
-                        {isReadOnly ? (
-                          <span className="text-[13px] font-medium text-foreground">{formatCurrency(negocio.value)}</span>
-                        ) : (
-                          isEditingValue ? (
-                            <div className="flex items-center gap-1">
-                              <Input
-                                type="number"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleValueSave(); if (e.key === 'Escape') setIsEditingValue(false); }}
-                                className="h-7 w-28 text-[13px]"
-                                autoFocus
-                              />
-                              <Button variant="ghost" size="sm" className="h-[30px] w-[30px] p-0 rounded-[4px]" onClick={handleValueSave}>
-                                <Check className="w-3.5 h-3.5" strokeWidth={1.5} />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-[30px] w-[30px] p-0 rounded-[4px]" onClick={() => setIsEditingValue(false)}>
-                                <X className="w-3.5 h-3.5" strokeWidth={1.5} />
-                              </Button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setIsEditingValue(true)} className="flex items-center gap-1.5 group">
-                              <span className="text-[13px] font-medium text-foreground">{formatCurrency(negocio.value)}</span>
-                              <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" strokeWidth={1.5} />
-                            </button>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Próxima ação — TODO quando migration next_action_* for aplicada (AC1) */}
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Próxima Ação</p>
-                  <div className="border border-border rounded-[2px] p-3">
-                    {/* TODO ALTIORA-08: exibir next_action_type, next_action_description, next_action_due_at quando migration aplicada */}
-                    <p className="text-[12px] text-muted-foreground/40 italic">
-                      Defina a próxima ação no botão "Próx. Ação" na ficha principal.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Retomada (apenas quando perdido + Manager) */}
-                {negocio.status === 'lost' && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Encerramento</p>
-                    <div className="border border-border rounded-[2px] overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-2.5">
-                        <span className="text-[12px] text-muted-foreground/60">Possibilidade de retomada</span>
-                        <span className={cn(
-                          "text-[11px] font-medium px-1.5 py-0.5 rounded-[2px] border leading-none",
-                          negocio.altiora_possibilidade_retomada
-                            ? "text-emerald-600 bg-emerald-500/10 border-emerald-200/30"
-                            : "text-muted-foreground/50 bg-muted border-border"
-                        )}>
-                          {negocio.altiora_possibilidade_retomada ? 'Sim' : 'Não'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
+                {renderDadosReferral()}
               </TabsContent>
             )}
 
