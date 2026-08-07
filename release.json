@@ -1,12 +1,13 @@
 {
-  "version": "4.76",
+  "version": "4.77",
   "major": 4,
-  "minor": 76,
-  "created_at": "2026-08-07T20:27:15.000Z",
-  "git_sha": "1e9c933",
+  "minor": 77,
+  "created_at": "2026-08-07T20:33:27.000Z",
+  "git_sha": "3511f28",
   "migrations": [
-    "supabase/migrations/20260807210000_fix_merge_persons_drop_call_pro_leftover.sql"
+    "supabase/migrations/20260807220000_fix_merge_persons_companies_updated_at.sql",
+    "supabase/migrations/20260807230000_fix_merge_persons_lp_sends_meeting_followup.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "fix: merge_persons quebrava criação de referral (call_pro_calls dropada)"
+  "changelog": "fix: merge_persons — sanea os 4 gaps restantes (passos 5,6,7,8,10)|fix: adiciona AltioraCloserQuickAssign.tsx — build de produção quebrado"
 }
