@@ -7,6 +7,24 @@ tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
 ---
 
+## 20260807250000 — unschedule_disparos_cron_jobs (2026-08-07)
+
+**Objetivo:** Módulo Disparos aposentado de vez, confirmado pelo dono do produto (mesma decisão que removeu `sends_contacts` intencionalmente — ver `20260807240000`). Limpeza de higiene: 2 cron jobs do módulo ficaram ativos sem necessidade (`public.sends` com 0 linhas hoje, jobs são no-op, mas seguiriam rodando indefinidamente).
+
+**Jobs desagendados** (snapshot completo em `backups/cron-sends-jobs-before-20260807250000.json`):
+| jobid | jobname | schedule | command |
+|---|---|---|---|
+| 6 | `reset-stale-sending` | `*/5 * * * *` | `SELECT reset_stale_sending_messages();` |
+| 17 | `sends-dispatch-batch` | `* * * * *` | `SELECT public.trigger_sends_dispatch_batch()` |
+
+**Mudança:** `cron.unschedule()` por NOME (jobid não é estável entre ambientes/tenants), envolto em `DO $$ IF EXISTS ... THEN PERFORM cron.unschedule(...) END IF; END $$;` para idempotência (não falha se job já não existir). **Não** dropou as functions `trigger_sends_dispatch_batch()`/`reset_stale_sending_messages()` nem mexeu na tabela `sends` — reversão trivial se o dono do produto decidir religar Disparos no futuro (dropar function seria bem mais caro de reverter).
+
+**Safety Protocol:** snapshot (`backups/cron-sends-jobs-before-20260807250000.json`, com schedule e command completos das 2 linhas) → dry-run (`BEGIN; <migration>; ROLLBACK;`) OK → apply → smoke-test: `SELECT jobname FROM cron.job WHERE jobname IN (...)` → 0 rows (confirmado); `to_regprocedure` das 2 functions → ainda existem (confirmado); `public.sends` → ainda existe, 0 rows (intocada, confirmado).
+
+**Arquivos:** `supabase/migrations/20260807250000_unschedule_disparos_cron_jobs.sql` + `.rollback.sql` (recria os 2 jobs com schedule/command originais documentados acima, idempotente via `unschedule` prévio).
+
+---
+
 ## 20260807240000 — fix_merge_persons_step8_remove_sends (2026-08-07)
 
 **Objetivo:** Corrigir uma decisão errada da migration anterior (`20260807230000`), que apontou o passo 8 de `merge_persons` para `sends_people` supondo ser a renomeação de `sends_contacts`. O dono do produto esclareceu que essa suposição estava INVERTIDA:
