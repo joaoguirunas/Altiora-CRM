@@ -1,12 +1,12 @@
 {
-  "version": "4.78",
+  "version": "4.79",
   "major": 4,
-  "minor": 78,
-  "created_at": "2026-08-07T20:35:15.000Z",
-  "git_sha": "c459875",
+  "minor": 79,
+  "created_at": "2026-08-07T20:38:03.000Z",
+  "git_sha": "ea60fec",
   "migrations": [
-    "supabase/migrations/20260807240000_fix_merge_persons_step8_remove_sends.sql"
+    "supabase/migrations/20260807250000_unschedule_disparos_cron_jobs.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "fix: merge_persons passo 8 — remove reparent de sends_contacts"
+  "changelog": "chore: desagenda crons do módulo Disparos (aposentado)"
 }
