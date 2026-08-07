@@ -1,12 +1,12 @@
 {
-  "version": "4.79",
+  "version": "4.80",
   "major": 4,
-  "minor": 79,
-  "created_at": "2026-08-07T20:38:03.000Z",
-  "git_sha": "ea60fec",
+  "minor": 80,
+  "created_at": "2026-08-07T20:45:40.000Z",
+  "git_sha": "d09187c",
   "migrations": [
-    "supabase/migrations/20260807250000_unschedule_disparos_cron_jobs.sql"
+    "supabase/migrations/20260807260000_create_meeting_collaborators.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "chore: desagenda crons do módulo Disparos (aposentado)"
+  "changelog": "feat(ALTIORA-26): tabela meeting_collaborators|chore: remove módulo Disparos (aposentado)"
 }
