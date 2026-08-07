@@ -32,6 +32,7 @@ import {
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useAgendamentosSimple, AgendamentoSimple } from "@/hooks/useAgendamentosSimple";
 import { useUpdateAgendamento } from "@/hooks/useAgendamentos";
+import { useMeetingCollaboratorsByMeetings } from "@/hooks/useAltioraMeetings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUsuarios } from "@/hooks/useUsuarios";
 import { useTimesWithMethods, useUsuariosDoTenant, useUsuariosTimes } from "@/hooks/useTimes";
@@ -348,6 +349,12 @@ const Reunioes = () => {
   const totalPages = Math.ceil(sortedAgendamentos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedAgendamentos = sortedAgendamentos.slice(startIndex, startIndex + itemsPerPage);
+
+  // Consultores adicionais (meeting_collaborators) das reuniões visíveis.
+  // Buscados em lote — só da página atual, para não puxar a base inteira.
+  const collaboratorsByMeeting = useMeetingCollaboratorsByMeetings(
+    useMemo(() => paginatedAgendamentos.map(a => a.id), [paginatedAgendamentos]),
+  ).data ?? {};
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDirection(d => d === "asc" ? "desc" : "asc");
@@ -835,14 +842,37 @@ const Reunioes = () => {
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(a.data)}</TableCell>
                           <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(a.hora_inicio, a.hora_fim)}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1.5 max-w-[160px]">
-                              {(a.consultor?.nome ?? usuario?.nome) && (
-                                <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[8px] font-bold text-primary shrink-0 leading-none">
-                                  {(a.consultor?.nome ?? usuario?.nome ?? "").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                            {(() => {
+                              const organizador = a.consultor?.nome ?? usuario?.nome ?? null;
+                              const extras = (collaboratorsByMeeting[a.id] ?? [])
+                                .map(c => c.settings_users?.name)
+                                .filter((n): n is string => !!n);
+                              const iniciais = (n: string) =>
+                                n.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+                              return (
+                                <div className="flex flex-col gap-1 max-w-[200px]">
+                                  <div className="flex items-center gap-1.5">
+                                    {organizador && (
+                                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[8px] font-bold text-primary shrink-0 leading-none">
+                                        {iniciais(organizador)}
+                                      </div>
+                                    )}
+                                    <span className="truncate">{organizador ?? "—"}</span>
+                                  </div>
+                                  {/* Consultores adicionais — organizador é o primeiro, estes
+                                      são os co-hosts gravados em meeting_collaborators */}
+                                  {extras.map(nome => (
+                                    <div key={nome} className="flex items-center gap-1.5">
+                                      <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0 leading-none">
+                                        {iniciais(nome)}
+                                      </div>
+                                      <span className="truncate text-muted-foreground/80">{nome}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
-                              <span className="truncate">{a.consultor?.nome ?? usuario?.nome ?? "—"}</span>
-                            </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5">

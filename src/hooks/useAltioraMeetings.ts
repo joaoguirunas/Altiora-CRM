@@ -128,6 +128,38 @@ export const useAltioraMeetings = (leadId: string) => {
 
 // ── Hook: listar colaboradores de uma reunião (ALTIORA-27) ───────────────────
 
+/**
+ * Colaboradores de VÁRIAS reuniões de uma vez, indexados por meeting_id.
+ * Para listagens (ex.: tabela de Reuniões) — usar `useMeetingCollaborators`
+ * por linha dispararia um request por reunião.
+ */
+export const useMeetingCollaboratorsByMeetings = (meetingIds: string[]) => {
+  // Chave estável: sem ordenar, remontar a lista na mesma ordem diferente
+  // refaria a query sem necessidade.
+  const idsKey = [...meetingIds].sort().join(',');
+
+  return useQuery<Record<string, MeetingCollaborator[]>>({
+    queryKey: ['meeting-collaborators-batch', idsKey],
+    queryFn: async () => {
+      if (meetingIds.length === 0) return {};
+      const { data, error } = await sbUntyped
+        .from('meeting_collaborators')
+        .select('id, meeting_id, user_id, role, added_by, created_at, settings_users ( id, name, email )')
+        .in('meeting_id', meetingIds);
+
+      if (error) throw new Error((error as { message: string }).message);
+
+      const byMeeting: Record<string, MeetingCollaborator[]> = {};
+      for (const row of (data ?? []) as unknown as MeetingCollaborator[]) {
+        (byMeeting[row.meeting_id] ??= []).push(row);
+      }
+      return byMeeting;
+    },
+    enabled: meetingIds.length > 0,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+
 export const useMeetingCollaborators = (meetingId?: string | null) => {
   return useQuery<MeetingCollaborator[]>({
     queryKey: ['meeting-collaborators', meetingId],
