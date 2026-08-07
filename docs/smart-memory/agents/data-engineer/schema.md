@@ -262,7 +262,7 @@ Motivos de perda personalizados por tenant.
 | Coluna | Tipo | Constraints |
 |---|---|---|
 | id | uuid | PK |
-| lead_id | uuid | FK → leads |
+| leads_id | uuid | FK → leads — **⚠️ NÃO é `lead_id`** (confirmado via `information_schema.columns` em 2026-08-07; mesmo padrão de FK-naming não migrado documentado em `meetings`) |
 | channel | text | whatsapp/instagram/email/sms/telefone/tldv |
 | from_contact | text | agente_ia/follow_up/humano/cliente |
 | message | text | NOT NULL |
@@ -324,8 +324,8 @@ Agendamentos CRM legados. FKs: tenant, usuario, negocio (→ crm_leads). Campos:
 | Coluna | Tipo | Constraints |
 |---|---|---|
 | id | uuid | PK |
-| lead_id | uuid | FK → leads |
-| user_id | uuid | FK → settings_users |
+| leads_id | uuid | FK → leads — **⚠️ NÃO é `lead_id`** (ver `meetings-schema-drift` em agent-memory) |
+| users_id | uuid | FK → settings_users — **⚠️ NÃO é `user_id`** |
 | start_time / end_time | timestamptz | |
 | status | text | |
 | source | text | nullable — 'google' para imports externos |
@@ -542,7 +542,9 @@ Páginas de anúncio Meta associadas a formulários.
 Formulários de leads Meta (Lead Ads). status: active/inactive.
 
 ### `get_insights_context(p_date_from, p_date_to, p_pipeline_id)` — Function
-SECURITY DEFINER. Retorna jsonb com 7 blocos: pipelines, funnel (com leads_by_day, sales_by_day), people, messages, meetings, calls, marketing, prospect.
+SECURITY DEFINER. Retorna jsonb com 8 blocos: pipelines, funnel, people, messages, meetings, calls, marketing, prospect.
+
+**Atualizada em 2026-08-07** (`20260807200000_fix_insights_context_drop_call_pro.sql`) — corrigiu 4 gaps de schema drift acumulados desde `20260511110000`: `people.score_distribution` agora usa `clients_people.score_matrix_id → score_matrix.score_number` (coluna `score` foi removida); `messages`/`meetings` usam `leads_id`/`users_id` reais (não `lead_id`/`user_id`); `calls` devolve payload zerado fixo (`installed:false`) pois `call_pro_calls` foi dropada. `marketing.sends` devolve `total_campaigns`/`total_sent` reais mas `total_delivered`/`total_read`/`by_channel` zerados com `'data_unavailable': true` explícito — `sends.delivered_count`/`read_count`/`channel` não existem mais (ver nota em Sends PRO abaixo). Ver `migrations-log.md` para auditoria completa dos 8 blocos.
 
 ---
 
@@ -595,10 +597,16 @@ Regras de quando disparar eventos de conversão.
 ## Módulo: Sends PRO (Disparos em massa)
 
 ### `sends`
-Campanhas de disparo. canal (whatsapp/email), status (rascunho/running/completed/failed). total_contacts, sent_count, delivered_count, read_count.
+Campanhas de disparo. status (completed/running/...). Colunas confirmadas em 2026-08-07 via `information_schema.columns`: `total_contacts`, `sent_count`, `failed_count`, `type`, `stage_id`, `pipeline_id`, `webhook_id`, `whatsapp_template_id`. **`delivered_count`, `read_count` e `channel` NÃO existem mais** (drift não documentado anteriormente aqui — tracking granular migrou para `sends_people`; `type` pode ser o substituto conceitual de `channel` mas isso não está confirmado, tabela vazia em prod sem comentário SQL).
+
+### `sends_people`
+Tracking granular por destinatário de um `send` (substituto de `sends.delivered_count`/`read_count`). Colunas: `id`, `send_id` (FK), `people_id`, `lead_id`, `status`, `error_message`, `sent_at`, `delivered_at`, `read_at`, `created_at`, `updated_at`. Reconstrução de `get_insights_context` BLOCK 6 via esta tabela é pendente — ver `migrations-log.md` 20260807200000.
 
 ### `sends_contacts`
 Contatos por disparo. status_envio, enviado_em, lead_id.
+
+### `sends_webhooks`
+Webhooks configurados para disparo (id, name, webhook_url, description, active).
 
 ### `sends_import_sessions`
 Sessões de importação de contatos. status: processing/done/failed. total_rows, processed, new_people, existing_people, failed_rows.

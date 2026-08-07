@@ -193,6 +193,31 @@ As 447 falhas sao schema drift esperado: migrations de REFATORACAO sobre tabelas
 
 Log cronológico de migrations aplicadas pelo Bythak. Migrations são imutáveis após aplicadas — para corrigir, criar nova migration.
 
+## 20260807200000 — fix_insights_context_drop_call_pro (2026-08-07)
+
+**Objetivo:** `get_insights_context()` (RPC do BI Insights Chat, `src/lib/voice/biTools.ts`) quebrava com `relation "call_pro_calls" does not exist`. Investigação revelou que era apenas 1 de **5 gaps de schema drift** acumulados na function desde sua última atualização (`20260511110000`).
+
+**Auditoria completa (8 blocos vs `information_schema.columns` do banco real `dtsmbqrzyxhjjjvpjfjd`):**
+
+| Bloco | Gap | Causa | Resolução |
+|---|---|---|---|
+| 0 — Pipelines | nenhum | — | — |
+| 1 — Funnel | nenhum | — | — |
+| 2 — People | `clients_people.score` não existe | removida por `20251026025557_...-ok.sql`, substituída por `score_matrix_id → score_matrix.score_number` | `LEFT JOIN score_matrix`, troca `score`→`sm.score_number` |
+| 3 — Messages | `messages.lead_id` não existe | coluna real é `leads_id` (FK-naming nunca migrado) | `leads_id AS lead_id` no SELECT do CTE |
+| 4 — Meetings | `meetings.user_id`/`lead_id` não existem | colunas reais são `users_id`/`leads_id` (mesmo padrão do gap 3, já documentado em `meetings-schema-drift`) | aliases no SELECT da CTE + correção direta nos 2 JOINs fora da CTE |
+| 5 — Calls | `call_pro_calls` não existe | tabela dropada por `20260609000000_drop_coach_pro_and_call_pro.sql` (Call Pro™ descontinuado, irreversível) | bloco devolve payload zerado fixo (`installed:false`) em vez de reconsultar |
+| 6 — Marketing | `sends.delivered_count`/`read_count`/`channel` não existem | tracking granular migrou para `sends_people` (`send_id/status/sent_at/delivered_at/read_at`); sem coluna de canal confirmada (`sends.type` existe mas tabela vazia em prod, sem comentário — ambíguo, não assumido) | `sends.total_campaigns`/`total_sent` continuam reais (colunas existem); delivery/read/by_channel zerados + `'data_unavailable': true` explícito no objeto `sends` para o consumidor da RPC não confundir com "zero campanhas". Reconstrução via `sends_people` fica para story separada — depende do dono do produto confirmar semântica de `sends.type` |
+| 7 — Prospect | nenhum | já guardado por `EXISTS (SELECT ... FROM pg_class ...)` — `prospect_campaigns` não existe neste banco e o guard funciona corretamente | nenhuma alteração |
+
+**Safety Protocol:** snapshot (`pg_get_functiondef` da versão anterior salvo em `backups/get_insights_context-before-20260807200000.json`) → dry-run em 3 iterações (`BEGIN; <migration>; SELECT get_insights_context(); ROLLBACK;` via `supabase db query --linked --file`) até passar limpo do BLOCK 0 ao 7 → apply real via `db query --linked --file` → smoke-test: `select public.get_insights_context();` sem erro, `result->'marketing'->'sends'->'data_unavailable' = true`, `result->'calls'->'installed' = false`, `result->'people'->'score_distribution'` zerado mas confirmado como dado real (0/14 `clients_people` têm `score_matrix_id` preenchido neste ambiente), `messages.total`/`meetings.total = 0` confirmados como contagem real (tabelas vazias). Pós-apply confirmado via `pg_get_functiondef` que a function live contém as 4 correções e não tem mais `call_pro_calls`.
+
+**Arquivo:** `supabase/migrations/20260807200000_fix_insights_context_drop_call_pro.sql`. **Rollback:** restaurar a definição salva em `backups/get_insights_context-before-20260807200000.json` via `CREATE OR REPLACE FUNCTION` (não gerado como arquivo `.rollback.sql` — reverter reintroduziria os 4 bugs corrigidos, não é um rollback desejável exceto emergência).
+
+**Pendência aberta:** BLOCK 6 (`sends`) segue com dados de entrega/leitura indisponíveis (`data_unavailable: true`) até story separada reconstruir via `sends_people` + confirmação do dono do produto sobre `sends.type`.
+
+---
+
 | # | Arquivo | Data | Descrição | Rollback |
 |---|---|---|---|---|
 | 20260501130000 | `20260501130000_fix_save_agent_complete_resolve_created_by.sql` | 2026-05-01 | RPC `save_agent_complete`: resolve `created_by` defensivamente — aceita auth.users.id ou settings_users.id, faz lookup via `auth_user_id` em settings_users. Corrige FK violation 23503 em `ai_agents_history.created_by`. | disponível |
