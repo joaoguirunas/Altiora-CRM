@@ -17,6 +17,21 @@ interface CreateAgendamentoData {
   google_meet_link?: string | null;
   status?: string;
   sendConfirmation?: boolean;
+  /**
+   * Tipo da reunião. Quando é R1/R2/R3, também alimenta `meetings.altiora_tipo`
+   * — é ele que faz google-cal-upsert-event usar o template de convite Altiora
+   * (Wealth Planning Discovery/Presentation, IUL Implementation) em vez do
+   * texto genérico "Reunião — <cliente> / Agendado via app".
+   */
+  meeting_type?: string;
+  /**
+   * Consultores adicionais da reunião, além do organizador (`user_id`).
+   * Gravados em `meeting_collaborators` ANTES do evento ir para o Google
+   * Calendar, para que todos entrem no mesmo convite — se fossem gravados
+   * depois, o cliente receberia um segundo e-mail de "evento atualizado".
+   * Ver ADR-ALTIORA-01.
+   */
+  collaboratorIds?: string[];
 }
 
 interface UpdateAgendamentoData {
@@ -53,6 +68,12 @@ export const useCriarAgendamento = () => {
       const startTimestamp = new Date(`${data.date}T${data.start_time}`).toISOString();
       const endTimestamp   = new Date(`${data.date}T${data.end_time}`).toISOString();
 
+      // R1/R2/R3 ⇒ reunião do fluxo Altiora: altiora_tipo é o que dispara o
+      // template de convite do playbook em google-cal-upsert-event. Antes o
+      // meeting_type vinha por cast e nem chegava ao insert, então todo convite
+      // saía com o texto genérico.
+      const isAltioraTipo = data.meeting_type === 'R1' || data.meeting_type === 'R2' || data.meeting_type === 'R3';
+
       const { data: meeting, error } = await supabase
         .from('meetings')
         .insert({
@@ -64,6 +85,8 @@ export const useCriarAgendamento = () => {
           end_time: endTimestamp,
           location: data.location || null,
           notes: data.notes || null,
+          meeting_type: data.meeting_type || null,
+          altiora_tipo: isAltioraTipo ? data.meeting_type : null,
           google_meet_link: data.google_meet_link || null,
           status: data.status || 'agendado',
           title: data.title || 'Reunião',
@@ -72,6 +95,23 @@ export const useCriarAgendamento = () => {
         .single();
 
       if (error) throw error;
+
+      // Colaboradores ANTES do GCal: o convite sai uma vez só, já com todos em
+      // attendees. Falha aqui não derruba a reunião — o evento ainda é válido
+      // com o organizador, e o usuário é avisado pela tela.
+      if (data.collaboratorIds?.length) {
+        // meeting_collaborators não está nos tipos gerados — mesmo padrão de
+        // cast usado em useAltioraMeetings/NovoReferralModal.
+        const db = supabase as unknown as { from: (t: string) => any };
+        const { error: collabError } = await db.from('meeting_collaborators').insert(
+          data.collaboratorIds.map((userId) => ({
+            meeting_id: meeting.id,
+            user_id: userId,
+            role: 'co_host',
+          })),
+        );
+        if (collabError) console.warn('[collaborators] insert error:', collabError);
+      }
 
       // Rollback helper — deletes the meeting if GCal confirmation fails
       const rollback = async (reason: string) => {

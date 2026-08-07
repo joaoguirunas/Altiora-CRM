@@ -254,45 +254,14 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
         location:   state.location || undefined,
         notes:      state.notes || undefined,
         status:     'agendado',
+        // Gravados dentro do hook, antes do evento ir pro Google Calendar, para
+        // que organizador, cliente e colaboradores entrem no MESMO convite.
+        collaboratorIds: colaboradores.map((c) => c.id),
+        // R1/R2/R3 vira altiora_tipo no hook, que é o que faz o convite usar o
+        // template do playbook em vez do texto genérico.
+        meeting_type: state.meetingType || undefined,
       };
-      // meeting_type is not in the typed interface but the hook inserts into meetings table which supports it
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (meetingPayload as any).meeting_type = state.meetingType || undefined;
-      const result = await criarAgendamento.mutateAsync(meetingPayload);
-
-      // Consultores adicionais → meeting_collaborators. Precisa ser DEPOIS do
-      // create (o id só existe aqui) e, por isso, o evento do Google Calendar
-      // já foi criado sem eles pelo useCriarAgendamento — daí o 'update' logo
-      // abaixo, que reenvia o convite já com os colaboradores em attendees.
-      const meetingId = (result as { meeting?: { id?: string } } | undefined)?.meeting?.id;
-      if (meetingId && colaboradores.length > 0) {
-        // meeting_collaborators não está nos tipos gerados — mesmo padrão de
-        // cast usado em useAltioraMeetings/NovoReferralModal.
-        const db = supabase as unknown as { from: (t: string) => any };
-        const { error: collabErr } = await db.from('meeting_collaborators').insert(
-          colaboradores.map((c) => ({
-            meeting_id: meetingId,
-            user_id:    c.id,
-            role:       'co_host',
-          })),
-        );
-
-        if (collabErr) {
-          // A reunião já existe e é válida — não derrubar tudo por causa dos
-          // colaboradores. Avisa para o usuário poder ajustar depois.
-          console.warn('[collaborators] insert error:', collabErr);
-          toast.warning('Reunião criada, mas não foi possível adicionar os consultores extras.');
-        } else {
-          const { error: gcalErr } = await supabase.functions.invoke('google-cal-upsert-event', {
-            body: { meeting_id: meetingId, action: 'update' },
-          });
-          if (gcalErr) {
-            console.warn('[gcal] update com colaboradores falhou:', gcalErr);
-            toast.warning('Consultores extras salvos, mas o convite do Google Calendar não foi atualizado.');
-          }
-          queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
-        }
-      }
+      await criarAgendamento.mutateAsync(meetingPayload);
 
       handleClose();
     } catch (e: any) {
