@@ -18,12 +18,6 @@ verify_jwt = true
 [functions.send-invite-email]
 verify_jwt = true
 
-[functions.filter-leads-for-send]
-verify_jwt = false
-
-[functions.send-dispatch-worker]
-verify_jwt = false # JWT validation is handled in code via getClaims()
-
 
 
 [functions.dispara-webhook]
@@ -52,12 +46,6 @@ verify_jwt = false # Called from tenant frontend — JWT from control plane not 
 
 [functions.whatsapp-templates-manage]
 verify_jwt = false # Called from tenant frontend — JWT from control plane not valid for tenant project
-
-[functions.sends-import-contacts]
-verify_jwt = false # Called from frontend with user Bearer token; JWT validation handled in code
-
-[functions.sends-dispatch-batch]
-verify_jwt = false # Called by pg_cron via HTTP POST with service role key; JWT validation handled in code
 
 [functions.tiktok-oauth]
 verify_jwt = false # TikTok OAuth redirect callback — no JWT from TikTok, must be public

@@ -253,51 +253,10 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // ── Update sends_contacts status if this call came from a disparo ──────
-      const sendContactId = call.dialer_info_3;
-      if (sendContactId && sendContactId.length > 10) {
-        const isAnswered = mappedStatus === 'answered';
-        const finalStatus = isAnswered ? 'delivered' : 'failed';
-        const errorMsg = isAnswered ? null : `Chamada ${mappedStatus}`;
-
-        const { error: updateErr } = await supabase
-          .from('sends_contacts')
-          .update({
-            status: finalStatus,
-            ...(isAnswered
-              ? { delivered_at: new Date().toISOString() }
-              : { error_message: errorMsg }),
-          })
-          .eq('id', sendContactId);
-
-        if (updateErr) {
-          console.warn('[atende] failed to update sends_contacts:', updateErr.message);
-        } else {
-          console.log(`[atende] sends_contacts updated: id=${sendContactId} status=${finalStatus}`);
-
-          const { data: scRow } = await supabase
-            .from('sends_contacts')
-            .select('send_id')
-            .eq('id', sendContactId)
-            .maybeSingle();
-
-          if (scRow?.send_id) {
-            const { count } = await supabase
-              .from('sends_contacts')
-              .select('id', { count: 'exact', head: true })
-              .eq('send_id', scRow.send_id)
-              .in('status', ['pending', 'sent']);
-
-            if ((count ?? 0) === 0) {
-              await supabase
-                .from('sends')
-                .update({ status: 'completed', completed_at: new Date().toISOString() })
-                .eq('id', scRow.send_id);
-              console.log(`[atende] send ${scRow.send_id} marked completed`);
-            }
-          }
-        }
-      }
+      // NOTA: aqui existia um bloco que atualizava sends_contacts quando a
+      // chamada vinha de um disparo (via call.dialer_info_3). O módulo Disparos
+      // foi aposentado e a tabela sends_contacts removida, então nada mais
+      // popula dialer_info_3 — o bloco era código morto e foi retirado.
 
       return json({ ok: true, event, status: mappedStatus, duration, billing });
     }

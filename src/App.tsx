@@ -43,9 +43,6 @@ import AgenteSingle from "@/pages/AgenteSingle";
 import ClienteSingle from "@/pages/ClienteSingle";
 import EmpresaSingle from "@/pages/EmpresaSingle";
 import Followups from "@/pages/Followups";
-import Disparos from "@/pages/Disparos";
-import DisparoDetalhes from "@/pages/DisparoDetalhes";
-import CriarDisparo from "@/pages/CriarDisparo";
 import TimeSingle from "@/pages/TimeSingle";
 import Score from "@/pages/Score";
 import LpPro from "@/pages/LpPro";
@@ -327,37 +324,6 @@ function AppContent() {
           <ModuleProtectedRoute moduleKey="clientes">
             <SectionErrorBoundary section="Empresa Single">
               <EmpresaSingle />
-            </SectionErrorBoundary>
-          </ModuleProtectedRoute>
-        } />
-      </Route>
-
-      {/* SENDS PRO™ */}
-      <Route path="/send" element={
-        <ProtectedRoute>
-          <SectionErrorBoundary section="Layout">
-            <DashLayout />
-          </SectionErrorBoundary>
-        </ProtectedRoute>
-      }>
-        <Route index element={
-          <ModuleProtectedRoute moduleKey="disparos">
-            <SectionErrorBoundary section="Disparos">
-              <Disparos />
-            </SectionErrorBoundary>
-          </ModuleProtectedRoute>
-        } />
-        <Route path=":id" element={
-          <ModuleProtectedRoute moduleKey="disparos">
-            <SectionErrorBoundary section="Disparo Detalhes">
-              <DisparoDetalhes />
-            </SectionErrorBoundary>
-          </ModuleProtectedRoute>
-        } />
-        <Route path="novo" element={
-          <ModuleProtectedRoute moduleKey="disparos">
-            <SectionErrorBoundary section="Criar Disparo">
-              <CriarDisparo />
             </SectionErrorBoundary>
           </ModuleProtectedRoute>
         } />

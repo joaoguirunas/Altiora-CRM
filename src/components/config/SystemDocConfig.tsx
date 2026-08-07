@@ -207,25 +207,6 @@ const MODULES = [
     hooks: ["useConversas", "useConversasPaginadas", "useConversasPessoas", "useOmniChannelHealth", "useOmniChannelConfig", "useOmniDeadLetter", "useOmniMensagens"],
   },
   {
-    title: "SENDS PRO™ — Campanhas de Disparo",
-    description:
-      "Envio em massa via WhatsApp, Email e SMS com filtros visuais avançados, controle de status e analytics de entrega.",
-    features: [
-      "Criação de campanhas com filtro visual de contatos",
-      "Envio via WhatsApp (templates), Email e SMS",
-      "Tracking de status: enviado, entregue, lido, erro",
-      "Retry automático com contagem de tentativas",
-      "Analytics: taxa de entrega, leitura e bounce",
-      "Agendamento de envios programados",
-    ],
-    tables: [
-      { name: "sends", purpose: "Campanhas de disparo", key_columns: "id, name, status, channel, total_contacts, sent_count, delivered_count, read_count" },
-      { name: "sends_contacts", purpose: "Status individual de cada contato por envio", key_columns: "send_id, contact_id, status, sent_at, delivered_at, read_at, retry_count" },
-    ],
-    edgeFunctions: ["send-dispatch-worker", "send-status-callback", "filter-leads-for-send", "channel-test-send"],
-    hooks: ["useSends", "useSendContacts", "useSendMutations", "useSendContactMutations"],
-  },
-  {
     title: "SCHEDULE PRO™ — Agendamentos",
     description:
       "Sistema de reuniões com integração Google Calendar e MS Teams, distribuição automática de slots e link público de booking.",

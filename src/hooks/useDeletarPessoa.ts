@@ -156,7 +156,6 @@ export const useDeletarPessoa = () => {
       // ── 7. Limpar restantes da pessoa antes de deletá-la ──────────────────
       const finalPersonTables = [
         { table: 'clients_people_companies', col: 'people_id' },
-        { table: 'sends_contacts',           col: 'people_id' },
         { table: 'clients_people_updates',   col: 'people_id' },
       ] as const;
 
