@@ -7,6 +7,50 @@ tags: [database, migrations, log, altiora]
 related: ["[[schema]]", "[[migration-status]]", "[[altiora-schema]]"]
 ---
 
+## 20260807260000 — create_meeting_collaborators (2026-08-07, ALTIORA-26)
+
+**Objetivo:** Criar `public.meeting_collaborators` — tabela de junção para colaboradores adicionais
+(co-hosts/observadores) numa reunião Altiora (R1/R2/R3), sem alterar `meetings.users_id`
+(organizador único, dono do token OAuth) nem `leads.altiora_closer_id` (Closer dono do lead). Ver
+`docs/smart-memory/stories/backlog/ALTIORA-26-db-meeting-collaborators.md` e
+`docs/smart-memory/decisions/ADR-ALTIORA-01-reunioes-multiplos-colaboradores.md`.
+
+**Nomes de coluna confirmados contra `information_schema` antes de escrever (sem drift):**
+`meetings.id`, `meetings.users_id`, `settings_users.id`.
+
+**Conflito encontrado e resolvido (bloqueou o início da implementação):** a story (AC3) e o ADR
+pressupõem herdar a "mesma condição" das policies granulares `users_manage_own_meetings`/
+`users_read_own_meetings` (`20260716150000_meetings_rls_pipeline_access.sql`). Confirmado via
+`pg_policy`/`pg_proc` que essa migration **nunca foi aplicada** no banco real — a única policy ativa
+em `meetings` hoje é `meetings_access_policy` (`cmd=ALL`, `USING (true)`, sem `WITH CHECK`), e as
+funções que a migration do repo pressupõe (`is_admin_or_manager()`, `get_current_settings_user_id()`,
+`lead_pipeline_accessible_to_current_user()`) não existem no banco. Reportado ao Chief antes de
+escrever a migration. **Decisão do Chief:** espelhar o estado real (permissivo) em
+`meeting_collaborators`, deixando TODO explícito no comentário SQL para endurecer junto quando/se
+`meetings` for endurecida — endurecer `meetings` isoladamente é decisão de segurança maior, fora do
+escopo desta story. Detalhe completo em [[meeting-collaborators-rls-conflict]] (agent-memory) e nota
+adicionada ao ADR-ALTIORA-01.
+
+**Schema:** `id` (PK), `meeting_id` (FK→meetings, CASCADE), `user_id` (FK→settings_users, CASCADE),
+`role` (CHECK co_host/observer, default co_host), `added_by` (FK→settings_users, SET NULL),
+`created_at`. `UNIQUE (meeting_id, user_id)`. Índices em `meeting_id` e `user_id`. RLS ativa, policy
+`meeting_collaborators_access_policy` (`USING true`/`WITH CHECK true`).
+
+**Safety Protocol:** snapshot (confirmado tabela inexistente via `information_schema`) → dry-run
+(`BEGIN; ...; ROLLBACK;`) OK → apply (status 201) → smoke-test: (1) `information_schema.columns`,
+`pg_constraint`, `pg_indexes`, `pg_policies` conferem 1:1 com o desenho; (2) INSERT real dentro de
+transação descartada — meeting sintética (organizador = user real) + colaborador (user real
+diferente) + `added_by` (organizador) inserido com sucesso, `RETURNING` confirma FK/CHECK/default
+corretos; (3) INSERT com `meeting_id` inexistente rejeitado com `23503` (FK funcionando); (4)
+confirmado `meetings_count=0`/`meeting_collaborators_count=0` após os testes — nenhum dado de teste
+persistiu (cada chamada da Management API roda em conexão própria, sem `COMMIT` explícito as
+transações de teste não persistem).
+
+**Arquivos:** `supabase/migrations/20260807260000_create_meeting_collaborators.sql` + `.rollback.sql`
+(rollback é `DROP TABLE IF EXISTS` — policy/índices caem junto).
+
+---
+
 ## 20260807250000 — unschedule_disparos_cron_jobs (2026-08-07)
 
 **Objetivo:** Módulo Disparos aposentado de vez, confirmado pelo dono do produto (mesma decisão que removeu `sends_contacts` intencionalmente — ver `20260807240000`). Limpeza de higiene: 2 cron jobs do módulo ficaram ativos sem necessidade (`public.sends` com 0 linhas hoje, jobs são no-op, mas seguiriam rodando indefinidamente).

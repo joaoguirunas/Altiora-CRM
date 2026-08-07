@@ -167,3 +167,30 @@ erDiagram
    escolhe livremente (default = ele mesmo) via novo campo no modal de agendamento (`ALTIORA-27`).
 3. **Nenhuma mudança de modelo de dados adicional** foi necessária para cobrir "colaborador pode ser
    outro Super Admin" — a tabela `meeting_collaborators` da decisão original já suporta isso.
+
+## Nota de implementação (2026-08-07) — divergência entre desenho de RLS e banco real
+
+Ao implementar ALTIORA-26, o data engineer confirmou via `pg_policy`/`pg_proc` no banco real
+(`dtsmbqrzyxhjjjvpjfjd`) que a premissa de RLS deste ADR **não reflete o estado atual de produção**:
+
+- Este ADR (seção "Consequências") e a story ALTIORA-26 assumem que `meetings` tem policies
+  granulares (`users_manage_own_meetings`/`users_read_own_meetings`, de
+  `supabase/migrations/20260716150000_meetings_rls_pipeline_access.sql`) apoiadas em funções como
+  `is_admin_or_manager()`, `get_current_settings_user_id()` e
+  `lead_pipeline_accessible_to_current_user()`.
+- Essa migration **existe no repositório mas nunca foi aplicada ao banco real**. A única policy ativa
+  hoje em `public.meetings` é `meetings_access_policy` (`cmd=ALL`, `USING (true)`, sem `WITH CHECK`) —
+  ou seja, RLS ligada mas sem nenhuma restrição de posse/pipeline na prática. Nenhuma das três funções
+  acima existe no banco (`pg_proc` vazio).
+- **Decisão tomada para não travar ALTIORA-26:** `meeting_collaborators` foi criada com RLS que
+  espelha o estado real de `meetings` hoje (`USING (true)`), não o desenho granular deste ADR, com
+  TODO explícito no comentário SQL da migration (`20260807260000_create_meeting_collaborators.sql`)
+  para endurecer junto se/quando `meetings` for endurecida.
+- **Implicação para stories futuras (ALTIORA-27, 28, 29):** não assumir que `meetings` já tem
+  controle de acesso granular por pipeline/equipe/posse — hoje qualquer usuário autenticado com
+  grant na tabela pode ler/editar qualquer reunião. Se alguma dessas stories depende desse controle
+  existir de fato, é um pré-requisito não atendido, não um detalhe de implementação. Endurecer a RLS
+  de `meetings` para o desenho original é uma decisão de segurança maior (risco de quebrar acesso
+  legítimo se a policy nova tiver qualquer imprecisão) e deve ser tratada como story própria, com o
+  dono do produto ciente do impacto — não como efeito colateral de uma story de colaboradores.
+- Detalhe completo da investigação: `.claude/agent-memory/dev-data-engineer/meeting-collaborators-rls-conflict.md`.

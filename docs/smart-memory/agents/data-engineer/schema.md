@@ -2,7 +2,7 @@
 title: Schema Atual — rev-os (Supabase/Postgres)
 type: schema
 agent: dev-data-engineer
-updated: 2026-07-03
+updated: 2026-08-07
 tags: [database, schema, supabase, postgres]
 related: ["[[../../project/architecture]]", "[[migrations-log]]"]
 ---
@@ -335,7 +335,29 @@ Agendamentos CRM legados. FKs: tenant, usuario, negocio (→ crm_leads). Campos:
 | tldv_meeting_id | text | nullable, UNIQUE INDEX onde not null |
 | tenant_id | uuid | NOT NULL |
 
-**RLS:** ativo
+**RLS:** ativo, mas policy real em produção (`meetings_access_policy`, `cmd=ALL`) é `USING (true)` sem `WITH CHECK` — permissiva na prática. A migration `20260716150000_meetings_rls_pipeline_access.sql` (policies granulares `users_manage_own_meetings`/`users_read_own_meetings`) existe no repo mas **nunca foi aplicada** — confirmado via `pg_policy` em 2026-08-07 (ver ALTIORA-26 e nota em ADR-ALTIORA-01).
+
+### `meeting_collaborators` (ALTIORA-26, 2026-08-07)
+Colaboradores adicionais (co-hosts/observadores) de uma reunião, além do organizador único (`meetings.users_id`).
+
+| Coluna | Tipo | Constraints | Descrição |
+|---|---|---|---|
+| id | uuid | PK, DEFAULT gen_random_uuid() | |
+| meeting_id | uuid | NOT NULL, FK → meetings(id) ON DELETE CASCADE | |
+| user_id | uuid | NOT NULL, FK → settings_users(id) ON DELETE CASCADE | colaborador — não é organizador nem Closer dono do lead |
+| role | text | NOT NULL, DEFAULT 'co_host', CHECK IN ('co_host','observer') | |
+| added_by | uuid | FK → settings_users(id) ON DELETE SET NULL | quem adicionou |
+| created_at | timestamptz | NOT NULL, DEFAULT now() | |
+
+**UNIQUE:** `(meeting_id, user_id)` — mesmo colaborador não é adicionado 2x na mesma reunião.
+
+**Índices:** `idx_meeting_collaborators_meeting_id`, `idx_meeting_collaborators_user_id`.
+
+**RLS:** ativo — policy `meeting_collaborators_access_policy` (`cmd=ALL`, `USING (true)`, `WITH CHECK (true)`), espelhando deliberadamente o estado real de `meetings_access_policy` em `meetings` hoje (não o desenho granular do ADR-ALTIORA-01, que pressupõe policies/funções que não existem em produção). Comentário SQL na migration deixa um TODO explícito: endurecer junto quando/se `meetings` for endurecida.
+
+**NÃO altera:** `meetings.users_id` (organizador, dono do token OAuth) nem `leads.altiora_closer_id` (Closer dono do lead).
+
+**Migration:** `20260807260000_create_meeting_collaborators.sql` + `.rollback.sql`.
 
 ### `meeting_records`
 Gravações/transcrições. Campos: meeting_id (FK), transcript_text, audio_url, duration_sec, tldv_meeting_id, transcript_json, highlights text[].
