@@ -6,12 +6,28 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// `meeting_collaborators` (ALTIORA-26/27) ainda não está nos tipos gerados do
+// Supabase — mesmo padrão de cast usado em NovoReferralModal.tsx.
+const sbUntyped = supabase as unknown as SupabaseClient;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type AltioraMeetingType = 'R1' | 'R2' | 'R3';
+
+/** ALTIORA-27: colaborador adicional de uma reunião (co-host/observer). */
+export interface MeetingCollaborator {
+  id: string;
+  meeting_id: string;
+  user_id: string;
+  role: 'co_host' | 'observer';
+  added_by?: string | null;
+  created_at: string;
+  settings_users?: { id: string; name: string; email?: string } | null;
+}
 
 export interface AltioraMeeting {
   id: string;
@@ -41,6 +57,12 @@ export interface AltioraMeeting {
 export interface CreateAltioraMeetingParams {
   leadId: string;
   peopleId?: string | null;
+  /**
+   * Organizador da reunião (salvo em `meetings.users_id`, dono do token OAuth
+   * do evento no Google Calendar). Para Closer comum é sempre o Closer do
+   * lead (comportamento atual). Para Super Admin, pode ser qualquer
+   * `settings_users` ativo escolhido livremente no modal (ALTIORA-27).
+   */
   closerId: string;
   tipo: AltioraMeetingType;
   startTime: string; // ISO
@@ -49,6 +71,8 @@ export interface CreateAltioraMeetingParams {
   notes?: string;
   meetingLink?: string; // fallback manual
   clientEmail?: string; // para convite
+  /** ALTIORA-27: colaboradores adicionais (co-hosts) — settings_users.id[]. */
+  collaboratorIds?: string[];
 }
 
 export interface UpdateAltioraMeetingParams {
@@ -57,6 +81,12 @@ export interface UpdateAltioraMeetingParams {
   endTime: string;   // ISO
   duracaoMinutos: number;
   notes?: string;
+  /**
+   * ALTIORA-27: lista completa de colaboradores desejada após o
+   * reagendamento — o hook calcula o diff (insere novos, remove ausentes).
+   * `undefined` = não mexer nos colaboradores existentes.
+   */
+  collaboratorIds?: string[];
 }
 
 // ── Hook: listar reuniões Altiora de um lead ──────────────────────────────────
@@ -95,6 +125,44 @@ export const useAltioraMeetings = (leadId: string) => {
     staleTime: 2 * 60 * 1000,
   });
 };
+
+// ── Hook: listar colaboradores de uma reunião (ALTIORA-27) ───────────────────
+
+export const useMeetingCollaborators = (meetingId?: string | null) => {
+  return useQuery<MeetingCollaborator[]>({
+    queryKey: ['meeting-collaborators', meetingId],
+    queryFn: async () => {
+      if (!meetingId) return [];
+      const { data, error } = await sbUntyped
+        .from('meeting_collaborators')
+        .select('id, meeting_id, user_id, role, added_by, created_at, settings_users ( id, name, email )')
+        .eq('meeting_id', meetingId);
+
+      if (error) throw new Error((error as { message: string }).message);
+      return (data ?? []) as unknown as MeetingCollaborator[];
+    },
+    enabled: !!meetingId,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+
+// ── Helper: persistir colaboradores adicionais (insert em lote) ──────────────
+
+async function insertMeetingCollaborators(
+  meetingId: string,
+  userIds: string[],
+  addedBy?: string | null,
+): Promise<void> {
+  if (!userIds.length) return;
+  const rows = userIds.map(user_id => ({
+    meeting_id: meetingId,
+    user_id,
+    role: 'co_host' as const,
+    added_by: addedBy ?? null,
+  }));
+  const { error } = await sbUntyped.from('meeting_collaborators').insert(rows);
+  if (error) throw new Error((error as { message: string }).message);
+}
 
 // ── Hook: criar reunião Altiora ────────────────────────────────────────────────
 
@@ -135,6 +203,12 @@ export const useCreateAltioraMeeting = () => {
 
       const meetingId = meeting.id;
 
+      // 1.1 Persistir colaboradores adicionais (ALTIORA-27) — antes do sync
+      // de calendário, para que ALTIORA-28 já encontre a lista completa.
+      if (params.collaboratorIds?.length) {
+        await insertMeetingCollaborators(meetingId, params.collaboratorIds, params.closerId);
+      }
+
       // 2. Sync Google Calendar (async, não bloqueia)
       const gcalResult = await supabase.functions.invoke('google-cal-upsert-event', {
         body: { meeting_id: meetingId, action: 'create' },
@@ -171,6 +245,7 @@ export const useCreateAltioraMeeting = () => {
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['altiora-meetings', variables.leadId] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
+      queryClient.invalidateQueries({ queryKey: ['meeting-collaborators', result.meetingId] });
 
       if (result.gcalSynced) {
         toast.success(`${variables.tipo} agendada com Google Meet criado`);
@@ -219,6 +294,36 @@ export const useUpdateAltioraMeeting = () => {
 
       if (updateError) throw new Error(updateError.message);
 
+      // 1.1 Diff de colaboradores (ALTIORA-27) — insere os novos, remove os
+      // ausentes. Trocar o organizador (`users_id`) fica fora de escopo —
+      // ver AC5 da ALTIORA-27 / ADR-ALTIORA-01.
+      if (params.collaboratorIds !== undefined) {
+        const { data: existing, error: existingError } = await sbUntyped
+          .from('meeting_collaborators')
+          .select('id, user_id')
+          .eq('meeting_id', params.meetingId);
+
+        if (existingError) throw new Error((existingError as { message: string }).message);
+
+        const existingRows = (existing ?? []) as unknown as Array<{ id: string; user_id: string }>;
+        const existingUserIds = existingRows.map(r => r.user_id);
+        const desiredIds = params.collaboratorIds;
+
+        const toAdd = desiredIds.filter(id => !existingUserIds.includes(id));
+        const toRemove = existingRows.filter(r => !desiredIds.includes(r.user_id));
+
+        if (toAdd.length) {
+          await insertMeetingCollaborators(params.meetingId, toAdd);
+        }
+        if (toRemove.length) {
+          const { error: deleteError } = await sbUntyped
+            .from('meeting_collaborators')
+            .delete()
+            .in('id', toRemove.map(r => r.id));
+          if (deleteError) throw new Error((deleteError as { message: string }).message);
+        }
+      }
+
       // 2. Sync Google Calendar (PATCH do evento existente)
       const gcalResult = await supabase.functions.invoke('google-cal-upsert-event', {
         body: { meeting_id: params.meetingId, action: 'update' },
@@ -242,6 +347,7 @@ export const useUpdateAltioraMeeting = () => {
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['altiora-meetings', variables.leadId] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
+      queryClient.invalidateQueries({ queryKey: ['meeting-collaborators', variables.meetingId] });
       toast.success(`${variables.tipo} reagendada com sucesso`);
     },
     onError: (error: Error) => {

@@ -44,6 +44,7 @@ import {
   type AltioraMeeting,
   useAltioraMeetings,
   useCancelAltioraMeeting,
+  useMeetingCollaborators,
 } from '@/hooks/useAltioraMeetings';
 import { AltioraAgendarReuniaoModal } from './AltioraAgendarReuniaoModal';
 import RegistrarResultadoDrawer from './RegistrarResultadoDrawer';
@@ -122,6 +123,8 @@ const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, onRegistrarResulta
   const startDate = new Date(meeting.start_time);
   const endDate   = new Date(meeting.end_time);
   const displayStatus = getDisplayStatusKey(meeting);
+  // ALTIORA-27: colaboradores adicionais (co-hosts) da reunião
+  const { data: collaborators = [] } = useMeetingCollaborators(meeting.id);
   const isCancelled = displayStatus === 'cancelada' || displayStatus === 'cancelado' || displayStatus === 'noshow';
   const isCompleted = displayStatus === 'compareceu' || displayStatus === 'realizada';
   const isPast      = endDate < new Date();
@@ -172,6 +175,21 @@ const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, onRegistrarResulta
         <p className="text-[12px] text-muted-foreground/80 italic">
           {meeting.altiora_resultado}
         </p>
+      )}
+
+      {/* Colaboradores adicionais — ALTIORA-27 AC6 */}
+      {collaborators.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {collaborators.map(c => (
+            <Badge
+              key={c.id}
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 h-4 rounded-[2px] font-normal border-border text-muted-foreground/70"
+            >
+              {c.settings_users?.name ?? 'Colaborador'}
+            </Badge>
+          ))}
+        </div>
       )}
 
       {/* Link do Meet */}

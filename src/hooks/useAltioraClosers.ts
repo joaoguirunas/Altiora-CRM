@@ -47,6 +47,35 @@ export const useAltioraClosers = () => {
   });
 };
 
+// ── Hook: listar usuários internos ativos (ALTIORA-27) ────────────────────────
+// Mesma query de useAltioraClosers, sem o filtro `user_type='closer'` — usado
+// pelo Super Admin para escolher livremente organizador/colaboradores de uma
+// reunião (qualquer settings_users ativo, incluindo outro Super Admin).
+// Ver ADR-ALTIORA-01.
+
+export const useAltioraInternalUsers = (options?: { enabled?: boolean }) => {
+  return useQuery<AltioraCloser[]>({
+    queryKey: ['altiora-internal-users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('settings_users')
+        .select('id, name, email, fuso_horario')
+        .eq('active', true)
+        .is('deleted_at', null)
+        .order('name') as unknown as {
+          data: AltioraCloser[] | null;
+          error: { message: string } | null;
+        };
+
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+};
+
 // ── Hook: atribuir Closer ao referral ────────────────────────────────────────
 
 export const useAtribuirCloser = () => {

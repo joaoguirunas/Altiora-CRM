@@ -11,7 +11,7 @@
  * AC6: Registra interação em `altiora_lead_interactions`.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -20,6 +20,11 @@ import {
   AlertTriangle,
   Link as LinkIcon,
   Video,
+  Check,
+  ChevronDown,
+  Plus,
+  X,
+  Users,
 } from 'lucide-react';
 import {
   Dialog,
@@ -32,6 +37,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -39,16 +45,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Calendar as CalendarUI } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useAltioraClosers, useAltioraInternalUsers, type AltioraCloser } from '@/hooks/useAltioraClosers';
 import {
   type AltioraMeetingType,
   type AltioraMeeting,
   useCreateAltioraMeeting,
   useUpdateAltioraMeeting,
   useCheckAltioraConflict,
+  useMeetingCollaborators,
 } from '@/hooks/useAltioraMeetings';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -105,10 +122,32 @@ export const AltioraAgendarReuniaoModal = ({
 }: AltioraAgendarReuniaoModalProps) => {
   const isEditing = !!meetingToEdit;
 
+  // ── ALTIORA-27: Super Admin escolhe organizador livremente ────────────────
+  const { user } = useAuth();
+  const isSuperAdmin = user?.profile?.super_adm === true;
+  const currentUserId = user?.profile?.id;
+
+  const { data: closers = [] } = useAltioraClosers();
+  const { data: internalUsers = [] } = useAltioraInternalUsers({ enabled: isSuperAdmin });
+
+  // Fonte de dados do multi-select de colaboradores: Closer comum só vê
+  // outros Closers; Super Admin vê todos os usuários internos ativos.
+  const collaboratorSource: AltioraCloser[] = isSuperAdmin ? internalUsers : closers;
+
+  const { data: existingCollaborators = [] } = useMeetingCollaborators(meetingToEdit?.id);
+
   // ── Form state ────────────────────────────────────────────────────────────
   const [tipo, setTipo] = useState<AltioraMeetingType>(
     meetingToEdit?.altiora_tipo ?? tipoInicial,
   );
+  // Organizador — só editável para Super Admin criando reunião nova (AC2).
+  // Reagendamento não altera organizador (AC5); Closer comum nunca escolhe.
+  const [organizerId, setOrganizerId] = useState<string>(
+    meetingToEdit?.user_id ?? currentUserId ?? closerId,
+  );
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
+  const [showCollaborators, setShowCollaborators] = useState(false);
+  const [collaboratorsPopoverOpen, setCollaboratorsPopoverOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     meetingToEdit ? new Date(meetingToEdit.start_time) : undefined,
   );
@@ -144,8 +183,47 @@ export const AltioraAgendarReuniaoModal = ({
       setManualLink(meetingToEdit?.meeting_link ?? '');
       setForceConflict(false);
       setConflict(null);
+      // ALTIORA-27: reset organizador/colaboradores
+      setOrganizerId(meetingToEdit?.user_id ?? currentUserId ?? closerId);
+      setShowCollaborators(false);
+      setCollaboratorsPopoverOpen(false);
+      if (!meetingToEdit) {
+        setCollaboratorIds([]);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, meetingToEdit, tipoInicial]);
+
+  // Carrega colaboradores existentes ao editar (AC5)
+  useEffect(() => {
+    if (open && meetingToEdit) {
+      setCollaboratorIds(existingCollaborators.map(c => c.user_id));
+      if (existingCollaborators.length > 0) setShowCollaborators(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, meetingToEdit?.id, existingCollaborators]);
+
+  // Organizador efetivo: Closer comum e reagendamento nunca escolhem —
+  // organizador é sempre o closerId da ficha (ou o organizador já salvo).
+  const effectiveOrganizerId = isEditing
+    ? (meetingToEdit?.user_id ?? closerId)
+    : (isSuperAdmin ? organizerId : closerId);
+
+  const availableCollaborators = useMemo(
+    () => collaboratorSource.filter(u => u.id !== effectiveOrganizerId),
+    [collaboratorSource, effectiveOrganizerId],
+  );
+
+  const selectedCollaborators = useMemo(
+    () => collaboratorSource.filter(u => collaboratorIds.includes(u.id)),
+    [collaboratorSource, collaboratorIds],
+  );
+
+  const toggleCollaborator = (id: string) => {
+    setCollaboratorIds(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id],
+    );
+  };
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const createMutation = useCreateAltioraMeeting();
@@ -169,9 +247,11 @@ export const AltioraAgendarReuniaoModal = ({
     if (!computedTimes) return;
 
     // Verificar conflito (exceto se usuário forçou)
+    // ALTIORA-27: conflito é checado contra o organizador efetivo — quando
+    // Super Admin escolhe outro usuário, o conflito passa a ser dele.
     if (!forceConflict) {
       const conflictResult = await checkConflict.mutateAsync({
-        userId: closerId,
+        userId: effectiveOrganizerId,
         startTime: computedTimes.startTime,
         endTime: computedTimes.endTime,
         excludeMeetingId: meetingToEdit?.id,
@@ -193,6 +273,7 @@ export const AltioraAgendarReuniaoModal = ({
           endTime: computedTimes.endTime,
           duracaoMinutos: duracao,
           notes: notes || undefined,
+          collaboratorIds,
         },
         { onSuccess: () => onOpenChange(false) },
       );
@@ -201,7 +282,7 @@ export const AltioraAgendarReuniaoModal = ({
         {
           leadId,
           peopleId,
-          closerId,
+          closerId: effectiveOrganizerId,
           tipo,
           startTime: computedTimes.startTime,
           endTime: computedTimes.endTime,
@@ -209,6 +290,7 @@ export const AltioraAgendarReuniaoModal = ({
           notes: notes || undefined,
           meetingLink: manualLink || undefined,
           clientEmail: clientEmail ?? undefined,
+          collaboratorIds: collaboratorIds.length ? collaboratorIds : undefined,
         },
         { onSuccess: () => onOpenChange(false) },
       );
@@ -242,6 +324,40 @@ export const AltioraAgendarReuniaoModal = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Organizador — ALTIORA-27: só Super Admin escolhe, e só ao criar */}
+          {isSuperAdmin && !isEditing && (
+            <div className="space-y-1.5">
+              <Label className="text-[12px] text-muted-foreground">Organizador</Label>
+              <Select value={organizerId} onValueChange={setOrganizerId}>
+                <SelectTrigger className="h-9 text-[13px] rounded-[4px]">
+                  <SelectValue placeholder="Selecionar organizador" />
+                </SelectTrigger>
+                <SelectContent>
+                  {internalUsers.map(u => (
+                    <SelectItem key={u.id} value={u.id} className="text-[13px]">
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground/50">
+                Quem organiza a reunião (dono do evento no Google Calendar). Padrão: você mesmo.
+              </p>
+            </div>
+          )}
+
+          {isSuperAdmin && isEditing && (
+            <div className="space-y-1.5">
+              <Label className="text-[12px] text-muted-foreground">Organizador</Label>
+              <div className="text-[13px] text-foreground bg-muted/30 border border-border rounded-[4px] px-3 py-2">
+                {meetingToEdit?.settings_users?.name ?? 'Organizador atual'}
+                <span className="text-[11px] text-muted-foreground/50">
+                  {' '}— não é possível trocar o organizador ao reagendar
+                </span>
+              </div>
             </div>
           )}
 
@@ -322,6 +438,104 @@ export const AltioraAgendarReuniaoModal = ({
               </div>
             </div>
           )}
+
+          {/* Colaboradores adicionais — ALTIORA-27 (AC1/AC2/AC3): opcional/colapsado */}
+          <div className="space-y-1.5">
+            {!showCollaborators ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCollaborators(true)}
+                className="h-7 px-1.5 text-[12px] gap-1.5 text-muted-foreground hover:text-foreground rounded-[3px]"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar colaborador
+              </Button>
+            ) : (
+              <>
+                <Label className="text-[12px] text-muted-foreground flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  Colaboradores adicionais (exceção)
+                </Label>
+
+                <Popover open={collaboratorsPopoverOpen} onOpenChange={setCollaboratorsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={collaboratorsPopoverOpen}
+                      className="w-full justify-between h-9 text-[13px] font-normal rounded-[4px]"
+                    >
+                      <span className="text-muted-foreground/60 truncate">
+                        {selectedCollaborators.length > 0
+                          ? `${selectedCollaborators.length} selecionado${selectedCollaborators.length > 1 ? 's' : ''}`
+                          : 'Selecionar colega(s)'}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar..." className="h-9 text-[13px]" />
+                      <CommandList>
+                        <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {availableCollaborators.map(u => (
+                            <CommandItem
+                              key={u.id}
+                              value={u.name}
+                              onSelect={() => toggleCollaborator(u.id)}
+                              className="text-[13px] cursor-pointer"
+                            >
+                              <Check
+                                className={cn(
+                                  'mr-2 h-3.5 w-3.5',
+                                  collaboratorIds.includes(u.id) ? 'opacity-100' : 'opacity-0',
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span>{u.name}</span>
+                                {u.email && (
+                                  <span className="text-[11px] text-muted-foreground/50">{u.email}</span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {selectedCollaborators.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedCollaborators.map(u => (
+                      <Badge
+                        key={u.id}
+                        variant="outline"
+                        className="text-[11px] gap-1 pl-2 pr-1 py-0.5 rounded-[3px] font-normal"
+                      >
+                        {u.name}
+                        <button
+                          type="button"
+                          onClick={() => toggleCollaborator(u.id)}
+                          className="hover:text-destructive"
+                          aria-label={`Remover ${u.name}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[11px] text-muted-foreground/50">
+                  Colegas que também vão participar como responsáveis desta reunião (co-host no convite).
+                </p>
+              </>
+            )}
+          </div>
 
           {/* Notas */}
           <div className="space-y-1.5">

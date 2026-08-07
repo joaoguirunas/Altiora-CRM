@@ -22,12 +22,12 @@ related: ["[[ALTIORA-26-db-meeting-collaborators]]", "[[ALTIORA-28-edge-function
 Para Closer comum: manter o comportamento atual (organizador = ele mesmo/Closer do lead), com opção de adicionar 1+ colegas como colaboradores da reunião. Para Super Admin: permitir escolher livremente o organizador (default = ele mesmo) e adicionar qualquer usuário ativo (incluindo outro Super Admin) como colaborador — tudo isso sem alterar `leads.altiora_closer_id`.
 
 ## Acceptance Criteria
-- [ ] AC1 (Closer comum): comportamento idêntico ao atual — organizador é sempre `closerId` recebido via props (ficha do referral), sem campo de escolha. Modal ganha apenas o campo opcional/colapsado "Colaboradores adicionais (exceção)" — multi-select de closers ativos via `useAltioraClosers`, excluindo o próprio organizador da lista.
-- [ ] AC2 (Super Admin — `super_adm === true` via `useAuth`): modal ganha campo "Organizador" (Select, não multi-select) pré-preenchido com o próprio Super Admin, editável para qualquer `settings_users` ativo — populado por novo hook `useAltioraInternalUsers()` (todos os usuários internos ativos, sem filtro de `user_type`, diferente de `useAltioraClosers` que só traz closers). Campo "Colaboradores adicionais" também usa `useAltioraInternalUsers()` para Super Admin (permite selecionar outro Super Admin), excluindo quem já foi escolhido como organizador.
-- [ ] AC3: Campo de colaboradores é colapsado/opcional por padrão (ex: link "+ Adicionar colaborador") em ambos os perfis — reforça que é exceção, não o fluxo padrão.
-- [ ] AC4: Ao criar a reunião (`useCreateAltioraMeeting`), `closerId` passa a ser semanticamente "organizerId" no payload (o valor efetivo salvo em `meetings.users_id`) — para Closer comum é sempre o closer da ficha; para Super Admin é o valor escolhido no Select do AC2. Colaboradores selecionados são persistidos em `meeting_collaborators` (role `co_host`) logo após o insert em `meetings`, antes do sync de calendário.
-- [ ] AC5: Ao reagendar (`useUpdateAltioraMeeting`), a lista de colaboradores existente é carregada e editável (adicionar/remover) via diff (insert dos novos, delete dos removidos). Trocar o organizador de uma reunião já criada fica **fora de escopo** desta story (reagendamento não decide "quem" recomeça o evento no Google Calendar — evitar reescrever o dono do token no meio do fluxo; se necessário, cancelar e recriar).
-- [ ] AC6: Ficha do referral (seção de reuniões / `AltioraReunioes.tsx`) exibe: organizador (sempre, como hoje) + badges com nome dos colaboradores extra, quando existirem. Card do Kanban NÃO muda (organizador/colaborador de reunião não é o Closer do lead — não deve aparecer ali).
+- [x] AC1 (Closer comum): comportamento idêntico ao atual — organizador é sempre `closerId` recebido via props (ficha do referral), sem campo de escolha. Modal ganha apenas o campo opcional/colapsado "Colaboradores adicionais (exceção)" — multi-select de closers ativos via `useAltioraClosers`, excluindo o próprio organizador da lista.
+- [x] AC2 (Super Admin — `super_adm === true` via `useAuth`): modal ganha campo "Organizador" (Select, não multi-select) pré-preenchido com o próprio Super Admin, editável para qualquer `settings_users` ativo — populado por novo hook `useAltioraInternalUsers()` (todos os usuários internos ativos, sem filtro de `user_type`, diferente de `useAltioraClosers` que só traz closers). Campo "Colaboradores adicionais" também usa `useAltioraInternalUsers()` para Super Admin (permite selecionar outro Super Admin), excluindo quem já foi escolhido como organizador.
+- [x] AC3: Campo de colaboradores é colapsado/opcional por padrão (ex: link "+ Adicionar colaborador") em ambos os perfis — reforça que é exceção, não o fluxo padrão.
+- [x] AC4: Ao criar a reunião (`useCreateAltioraMeeting`), `closerId` passa a ser semanticamente "organizerId" no payload (o valor efetivo salvo em `meetings.users_id`) — para Closer comum é sempre o closer da ficha; para Super Admin é o valor escolhido no Select do AC2. Colaboradores selecionados são persistidos em `meeting_collaborators` (role `co_host`) logo após o insert em `meetings`, antes do sync de calendário.
+- [x] AC5: Ao reagendar (`useUpdateAltioraMeeting`), a lista de colaboradores existente é carregada e editável (adicionar/remover) via diff (insert dos novos, delete dos removidos). Trocar o organizador de uma reunião já criada fica **fora de escopo** desta story (reagendamento não decide "quem" recomeça o evento no Google Calendar — evitar reescrever o dono do token no meio do fluxo; se necessário, cancelar e recriar).
+- [x] AC6: Ficha do referral (seção de reuniões / `AltioraReunioes.tsx`) exibe: organizador (sempre, como hoje) + badges com nome dos colaboradores extra, quando existirem. Card do Kanban NÃO muda (organizador/colaborador de reunião não é o Closer do lead — não deve aparecer ali).
 
 ## Escopo
 
@@ -55,13 +55,21 @@ Para Closer comum: manter o comportamento atual (organizador = ele mesmo/Closer 
 ## Dev Agent Record
 | Campo | Valor |
 |---|---|
-| Agente | — |
-| Iniciado | — |
-| Concluído | — |
-| Branch | — |
+| Agente | Nova (dev-dev-alpha) |
+| Iniciado | 2026-08-07 |
+| Concluído | 2026-08-07 |
+| Branch | worktree-agent-a67f1afb972749ed5 (worktree isolado) |
 
 ## File List
-<!-- Dev preenche ao concluir -->
+- `src/hooks/useAltioraClosers.ts` — adicionado `useAltioraInternalUsers()` (todos os usuários internos ativos, sem filtro `user_type`)
+- `src/hooks/useAltioraMeetings.ts` — adicionado `MeetingCollaborator`, `useMeetingCollaborators()`; `CreateAltioraMeetingParams`/`UpdateAltioraMeetingParams` ganham `collaboratorIds?: string[]`; persistência em `meeting_collaborators` no create (insert) e update (diff insert/delete); invalidação de query de colaboradores
+- `src/components/negocios/AltioraAgendarReuniaoModal.tsx` — campo "Organizador" (Select) para Super Admin ao criar (default = ele mesmo), somente leitura ao reagendar; seção colapsada "+ Adicionar colaborador" (multi-select via Command/Popover) para ambos os perfis; conflito de agenda passa a checar o organizador efetivo
+- `src/components/negocios/AltioraReunioes.tsx` — `MeetingCard` exibe badges com nome dos colaboradores extra (via `useMeetingCollaborators`)
+
+**Notas de implementação:**
+- Cast `sbUntyped = supabase as unknown as SupabaseClient` usado para `meeting_collaborators` (ainda fora dos tipos gerados), seguindo o padrão de `NovoReferralModal.tsx`.
+- Não houve necessidade de renomear o campo `closerId` no payload — mantido por compatibilidade, documentado via JSDoc como "organizador efetivo".
+- Trocar organizador de reunião já existente permanece fora de escopo (AC5) — campo aparece somente leitura no modo reagendamento.
 
 ## QA Results
 <!-- QA preenche ao revisar -->
