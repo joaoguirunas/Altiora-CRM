@@ -184,11 +184,12 @@ Deno.serve(async (req: Request) => {
     const clientName = personViaLead?.name ?? personDirect?.name ?? 'Cliente';
     const clientEmail = personViaLead?.email ?? personDirect?.email ?? null;
 
-    // Sufixo [ref:<meeting_id>] no título do evento — ferramentas de gravação de call
-    // (ex: Elephan.ai) que capturam o título do evento do Google Calendar como
-    // metadado da transcrição permitem casar a call de volta a esta reunião sem
-    // depender de e-mail do consultor ou de janela de tempo (ver elephan-inbound).
-    const refSuffix = ` [ref:${meeting_id}]`;
+    // NOTA: até 2026-08-07 o título levava um sufixo ` [ref:<meeting_id>]` para a
+    // Elephan.ai casar a transcrição da call com esta reunião (ela captura o título
+    // do evento como metadado). Removido a pedido do dono do produto: era visível
+    // para o cliente no convite e no assunto do e-mail. elephan-inbound CONTINUA
+    // lendo esse marcador, para os eventos criados antes desta mudança; para os
+    // novos, o casamento cai no tier por consultor + janela de horário.
 
     // Reuniões do fluxo Altiora (altiora_tipo = R1/R2/R3) usam os templates de
     // convite do playbook comercial; as demais mantêm o texto genérico legado.
@@ -223,7 +224,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const eventPayload: Record<string, unknown> = {
-      summary: `${summary}${refSuffix}`,
+      summary,
       description,
       start: { dateTime: meeting.start_time, timeZone: 'America/Sao_Paulo' },
       end: { dateTime: meeting.end_time, timeZone: 'America/Sao_Paulo' },
