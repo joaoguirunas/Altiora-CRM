@@ -43,6 +43,9 @@ import AgenteSingle from "@/pages/AgenteSingle";
 import ClienteSingle from "@/pages/ClienteSingle";
 import EmpresaSingle from "@/pages/EmpresaSingle";
 import Followups from "@/pages/Followups";
+import Elephan from "@/pages/Elephan";
+import Tarefas from "@/pages/Tarefas";
+import Intranet from "@/pages/Intranet";
 import TimeSingle from "@/pages/TimeSingle";
 import Score from "@/pages/Score";
 import LpPro from "@/pages/LpPro";
@@ -556,6 +559,53 @@ function AppContent() {
           <SectionErrorBoundary section="Follow-ups">
             <Followups />
           </SectionErrorBoundary>
+        } />
+      </Route>
+
+      {/* TAREFAS */}
+      <Route path="/tarefas" element={
+        <ProtectedRoute>
+          <SectionErrorBoundary section="Layout">
+            <DashLayout />
+          </SectionErrorBoundary>
+        </ProtectedRoute>
+      }>
+        <Route index element={
+          <SectionErrorBoundary section="Tarefas">
+            <Tarefas />
+          </SectionErrorBoundary>
+        } />
+      </Route>
+
+      {/* INTRANET */}
+      <Route path="/intranet" element={
+        <ProtectedRoute>
+          <SectionErrorBoundary section="Layout">
+            <DashLayout />
+          </SectionErrorBoundary>
+        </ProtectedRoute>
+      }>
+        <Route index element={
+          <SectionErrorBoundary section="Intranet">
+            <Intranet />
+          </SectionErrorBoundary>
+        } />
+      </Route>
+
+      {/* ELEPHAN — pendências de vínculo manual, apenas super admin */}
+      <Route path="/elephan" element={
+        <ProtectedRoute>
+          <SectionErrorBoundary section="Layout">
+            <DashLayout />
+          </SectionErrorBoundary>
+        </ProtectedRoute>
+      }>
+        <Route index element={
+          <RestrictedRoute requireSuperAdmin>
+            <SectionErrorBoundary section="Elephan">
+              <Elephan />
+            </SectionErrorBoundary>
+          </RestrictedRoute>
         } />
       </Route>
 

@@ -125,6 +125,39 @@ async function fetchTranscribe(id: string, log: ReturnType<typeof createLogger>)
   }
 }
 
+/**
+ * Busca os insights (customer_need, feature_request, competitive_gap, etc.)
+ * gerados pela IA da Elephan para essa call. Best-effort: a API não tem filtro
+ * por transcribeId que funcione, então buscamos a lista paginada e filtramos
+ * aqui; qualquer falha retorna [] sem derrubar o webhook.
+ */
+async function fetchInsights(
+  transcribeId: string,
+  log: ReturnType<typeof createLogger>
+): Promise<Array<{ type: string; description: string; details?: string }>> {
+  const apiKey = Deno.env.get('ELEPHAN_API_KEY');
+  if (!apiKey) return [];
+  try {
+    const res = await fetch(`${ELEPHAN_API_BASE}/v1/insights?limit=200`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) {
+      log.warn('insights fetch failed', { transcribeId, status: res.status });
+      return [];
+    }
+    const body = await res.json();
+    const all = (body?.data ?? []) as Array<{
+      type: string; description: string; details?: string; transcribe?: { id: string };
+    }>;
+    return all
+      .filter(i => i.transcribe?.id === transcribeId)
+      .map(i => ({ type: i.type, description: i.description, details: i.details }));
+  } catch (err) {
+    log.error('insights fetch error', { transcribeId, error: err instanceof Error ? err.message : String(err) });
+    return [];
+  }
+}
+
 Deno.serve(async (req: Request) => {
   const log = createLogger('elephan-inbound');
 
@@ -331,8 +364,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const insights = await fetchInsights(transcribe.id, log);
     const topics = [...(transcribe.keywords ?? []), ...(transcribe.tags ?? [])];
-    if (transcribe.summary || transcribe.importantPoints?.length || topics.length || transcribe.sentimentAnalysis) {
+    if (transcribe.summary || transcribe.importantPoints?.length || topics.length || transcribe.sentimentAnalysis || insights.length) {
       records.push({
         meeting_id: meetingId,
         record_type: 'ai_summary',
@@ -340,13 +374,20 @@ Deno.serve(async (req: Request) => {
         content: transcribe.summary ?? null,
         ai_key_topics: topics.length ? topics : null,
         ai_next_steps: transcribe.importantPoints?.length ? transcribe.importantPoints : null,
-        ai_metadata: { sentimentAnalysis: transcribe.sentimentAnalysis ?? null, prompt: transcribe.prompt ?? null },
+        ai_metadata: {
+          sentimentAnalysis: transcribe.sentimentAnalysis ?? null,
+          prompt: transcribe.prompt ?? null,
+          insights: insights.length ? insights : null,
+        },
       });
     }
 
-    if (records.length > 0) {
-      const { error: recErr } = await supabase.from('meeting_records').insert(records);
-      if (recErr) log.error('failed to insert meeting_records', { error: recErr.message });
+    // Insere um de cada vez — o PostgREST rejeita insert em lote quando os
+    // objetos do array têm conjuntos de chaves diferentes (PGRST102), e aqui
+    // recording/transcript/ai_summary sempre têm formatos diferentes.
+    for (const record of records) {
+      const { error: recErr } = await supabase.from('meeting_records').insert(record);
+      if (recErr) log.error('failed to insert meeting_record', { record_type: record.record_type, error: recErr.message });
     }
 
     await supabase.from('webhook_logs').insert({

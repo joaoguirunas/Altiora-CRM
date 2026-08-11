@@ -43,6 +43,7 @@ function LinkDialog({
     try {
       await linkMutation.mutateAsync({
         pendenciaId: pendencia.id,
+        transcribeId: pendencia.transcribe_id,
         leadId: selected.id,
         leadPeopleId: selected.people_id,
         closerUserId: pendencia.closer_user_id,

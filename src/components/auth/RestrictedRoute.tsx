@@ -8,6 +8,8 @@ import { Shield, AlertTriangle, RefreshCw } from 'lucide-react';
 interface RestrictedRouteProps {
   children: ReactNode;
   requireGestor?: boolean;
+  /** Quando true, exige super_adm — nem gestor tem acesso (mais restrito que requireGestor) */
+  requireSuperAdmin?: boolean;
 }
 
 const PROFILE_NULL_TIMEOUT_MS = 5_000;
@@ -15,6 +17,7 @@ const PROFILE_NULL_TIMEOUT_MS = 5_000;
 const RestrictedRoute = ({
   children,
   requireGestor = false,
+  requireSuperAdmin = false,
 }: RestrictedRouteProps) => {
   const { user, profileRetryExhausted, refreshProfile } = useAuth();
 
@@ -98,6 +101,25 @@ const RestrictedRoute = ({
             <p className="text-muted-foreground text-center">
               Você não tem permissão para acessar esta área.
               Apenas gestores e administradores podem visualizar este conteúdo.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (requireSuperAdmin && !user.profile.super_adm) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <Card className="max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <CardTitle>Acesso Restrito</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground text-center">
+              Você não tem permissão para acessar esta área.
+              Apenas super administradores podem visualizar este conteúdo.
             </p>
           </CardContent>
         </Card>

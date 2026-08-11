@@ -28,6 +28,9 @@ import {
   CalendarCheck,
   Copy,
   Check,
+  AudioLines,
+  ListChecks,
+  Globe,
 } from "lucide-react";
 import {
   Collapsible,
@@ -103,6 +106,22 @@ const getModularSidebarItems = (t: (key: string) => string): SidebarItem[] => [
     icon: CalendarCheck,
     path: "/schedule",
     module: "agendamentos" as const,
+  },
+  {
+    title: "TAREFAS",
+    icon: ListChecks,
+    path: "/tarefas",
+  },
+  {
+    title: "INTRANET",
+    icon: Globe,
+    path: "/intranet",
+  },
+  {
+    title: "ELEPHAN",
+    icon: AudioLines,
+    path: "/elephan",
+    requireSuperAdmin: true,
   },
 ];
 
@@ -249,6 +268,9 @@ const DashLayout = () => {
     if (path === '/crm/clients' || path.startsWith('/crm/clients/')) return 'PIPELINE - CLIENTES';
     if (path === '/send' || path.startsWith('/send/')) return 'DISPAROS';
     if (path === '/schedule' || path.startsWith('/schedule/')) return 'AGENDA';
+    if (path === '/elephan' || path.startsWith('/elephan/')) return 'ELEPHAN';
+    if (path === '/tarefas' || path.startsWith('/tarefas/')) return 'TAREFAS';
+    if (path === '/intranet' || path.startsWith('/intranet/')) return 'INTRANET';
     if (path === '/omni' || path.startsWith('/omni/')) return 'CONVERSAS';
     if (path === '/lp' || path.startsWith('/lp/')) return 'FORMULÁRIOS';
     if (path === '/score' || path.startsWith('/score/')) return 'SCORE PRO™';
@@ -280,6 +302,11 @@ const DashLayout = () => {
     modularSidebarItems.forEach(item => {
       // Check permissions: if requireGestor, user must be gestor/admin
       if (item.requireGestor && !isGestorOrAdmin) {
+        return; // Skip this item
+      }
+
+      // Check permissions: if requireSuperAdmin, user must be super_adm (nem gestor tem acesso)
+      if (item.requireSuperAdmin && !isSuperAdmin) {
         return; // Skip this item
       }
 

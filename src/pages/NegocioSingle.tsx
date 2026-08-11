@@ -12,7 +12,7 @@ import {
   ArrowLeft, User, Mail, Phone, Calendar, CalendarPlus, DollarSign, Edit2, Check, X,
   Trophy, XCircle, RotateCcw, Users, UserCheck, FileText,
   Plus, TrendingUp, Clock, Target, UserCircle, Brain, AlertTriangle,
-  Settings, Building2, RefreshCw, ChevronsUpDown, Trash2, Flame, Star, GitBranch
+  Settings, Building2, RefreshCw, ChevronsUpDown, Trash2, Flame, Star, GitBranch, AudioLines
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AgentFlowViewer } from "@/components/agentes-ia/AgentFlowViewer";
@@ -51,6 +51,7 @@ import AltioraR2Section from "@/components/negocios/AltioraR2Section";
 import AltioraR3Section, { STAGE_EM_CONTRATACAO } from "@/components/negocios/AltioraR3Section";
 import AltioraContratacaoSection from "@/components/negocios/AltioraContratacaoSection";
 import AltioraTransicaoModal from "@/components/negocios/AltioraTransicaoModal";
+import ElephanTab from "@/components/negocios/ElephanTab";
 import RegistrarContatoModal, { type ContatoFormData } from "@/components/negocios/RegistrarContatoModal";
 import ProximaAcaoModal, { type ProximaAcaoFormData } from "@/components/negocios/ProximaAcaoModal";
 import { useRegistrarContato, useSalvarProximaAcao } from "@/hooks/useAltioraContatos";
@@ -796,6 +797,9 @@ const NegocioSingle = () => {
                     { value: 'informacoes', icon: UserCheck, label: 'Informações' },
                     { value: 'arquivos', icon: FileText, label: 'Notas' },
                     { value: 'reunioes', icon: Calendar, label: 'Reuniões' },
+                    ...(isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '')
+                      ? [{ value: 'elephan', icon: AudioLines, label: 'Elephan' }]
+                      : []),
                     ...(user?.profile?.super_adm === true
                       ? [{ value: 'fluxo', icon: GitBranch, label: 'Fluxo IA' }]
                       : []),
@@ -1042,6 +1046,13 @@ const NegocioSingle = () => {
                     />
                   )}
                 </TabsContent>
+
+                {/* Elephan.ai — call recordings/transcrições/resumos, só pipeline Altiora */}
+                {isAltioraPipeline(currentPipeline?.nome ?? currentPipeline?.name ?? '') && (
+                  <TabsContent value="elephan" className="mt-0 overflow-auto">
+                    <ElephanTab leadId={id!} />
+                  </TabsContent>
+                )}
 
                 {/* Fluxo IA — apenas super admins */}
                 {user?.profile?.super_adm === true && (

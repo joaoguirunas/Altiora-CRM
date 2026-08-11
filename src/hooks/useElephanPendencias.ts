@@ -38,6 +38,7 @@ export const useElephanPendencias = () => {
 
 interface LinkPendenciaParams {
   pendenciaId: string;
+  transcribeId: string;
   leadId: string;
   leadPeopleId: string | null;
   closerUserId: string | null;
@@ -49,6 +50,19 @@ interface LinkPendenciaParams {
   transcriptText: string | null;
   linkedBy: string;
 }
+
+/** Busca best-effort — se a Elephan falhar ou demorar, o vínculo segue sem insights. */
+const fetchElephanInsights = async (transcribeId: string): Promise<Record<string, unknown>[]> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('elephan-fetch-insights', {
+      body: { transcribeId },
+    });
+    if (error) return [];
+    return (data?.insights ?? []) as Record<string, unknown>[];
+  } catch {
+    return [];
+  }
+};
 
 export const useLinkElephanPendencia = () => {
   const queryClient = useQueryClient();
@@ -90,16 +104,22 @@ export const useLinkElephanPendencia = () => {
           content_format: 'text',
         });
       }
-      if (params.summary) {
+      const insights = await fetchElephanInsights(params.transcribeId);
+      if (params.summary || insights.length > 0) {
         records.push({
           meeting_id: meeting.id,
           record_type: 'ai_summary',
           source: 'elephan',
           content: params.summary,
+          content_format: 'html',
+          ai_metadata: insights.length > 0 ? { insights } : undefined,
         });
       }
-      if (records.length > 0) {
-        const { error: recErr } = await supabase.from('meeting_records').insert(records);
+      // Insere um de cada vez — o PostgREST rejeita insert em lote quando os
+      // objetos do array têm conjuntos de chaves diferentes (PGRST102), e aqui
+      // recording/transcript/ai_summary sempre têm formatos diferentes.
+      for (const record of records) {
+        const { error: recErr } = await supabase.from('meeting_records').insert(record);
         if (recErr) throw recErr;
       }
 
