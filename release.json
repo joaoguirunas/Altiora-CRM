@@ -1,12 +1,13 @@
 {
-  "version": "4.80",
+  "version": "4.81",
   "major": 4,
-  "minor": 80,
-  "created_at": "2026-08-07T20:45:40.000Z",
-  "git_sha": "d09187c",
+  "minor": 81,
+  "created_at": "2026-08-11T12:27:14.000Z",
+  "git_sha": "6abc184",
   "migrations": [
-    "supabase/migrations/20260807260000_create_meeting_collaborators.sql"
+    "supabase/migrations/20260811150000_create_user_tasks.sql",
+    "supabase/migrations/20260811160000_create_intranet.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "feat(ALTIORA-26): tabela meeting_collaborators|chore: remove módulo Disparos (aposentado)"
+  "changelog": "feat: aba Elephan.ai no negócio + módulo de pendências + Tarefas/Intranet|fix: busca de negócios sempre falhava (PGRST100)|revert: restaura o sufixo [ref:<id>] no título do convite|docs(ui): explica que o WhatsApp do consultor vai para o convite|fix: remove o sufixo [ref:<id>] do título do convite|fix: R1/R2/R3 violavam o check de meetings.meeting_type|refactor: Responsável logo abaixo do Status de Atendimento na aba Cliente|feat: dados do referral também na aba Cliente|feat: lista de reuniões mostra todos os consultores, não só o organizador|fix: convite saía genérico — meeting_type/altiora_tipo eram descartados|feat: wizard de reunião sempre escolhe consultor, e aceita mais de um|chore: atualiza deno.lock|feat(ALTIORA-27): organizador livre para Super Admin + colaboradores na reunião|feat(ALTIORA-28/29): colaboradores no convite e no Google Calendar"
 }
