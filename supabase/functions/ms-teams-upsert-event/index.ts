@@ -164,13 +164,9 @@ Deno.serve(async (req: Request) => {
     const clientEmail = (meeting.leads as { clients_people?: { email?: string } } | null)
       ?.clients_people?.email ?? '';
 
-    // NOTA: até 2026-08-07 o título levava um sufixo ` [ref:<meeting_id>]` para a
-    // Elephan.ai casar a transcrição da call com esta reunião (ela captura o título
-    // do evento como metadado). Removido a pedido do dono do produto: era visível
-    // para o cliente no convite e no assunto do e-mail. elephan-inbound CONTINUA
-    // lendo esse marcador, para os eventos criados antes desta mudança; para os
-    // novos, o casamento cai no tier por consultor + janela de horário.
-    let subject = meeting.title || (clientName ? `Reunião — ${clientName}` : 'Reunião');
+    // Sufixo [ref:<meeting_id>] — ver comentário equivalente em google-cal-upsert-event
+    const refSuffix = ` [ref:${meeting_id}]`;
+    let subject = (meeting.title || (clientName ? `Reunião — ${clientName}` : 'Reunião')) + refSuffix;
     let body    = [
       meeting.notes || '',
       '',
@@ -199,7 +195,7 @@ Deno.serve(async (req: Request) => {
         consultorTelefone: consultor?.whatsapp as string | null,
         notes: meeting.notes as string | null,
       });
-      subject = invite.title;
+      subject = invite.title + refSuffix;
       body = invite.description;
     }
 

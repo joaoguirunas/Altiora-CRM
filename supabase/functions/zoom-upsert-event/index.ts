@@ -160,12 +160,8 @@ Deno.serve(async (req: Request) => {
     const endDt   = new Date(meeting.end_time as string);
     const durationMin = Math.round((endDt.getTime() - startDt.getTime()) / 60_000);
 
-    // NOTA: até 2026-08-07 o título levava um sufixo ` [ref:<meeting_id>]` para a
-    // Elephan.ai casar a transcrição da call com esta reunião (ela captura o título
-    // do evento como metadado). Removido a pedido do dono do produto: era visível
-    // para o cliente no convite e no assunto do e-mail. elephan-inbound CONTINUA
-    // lendo esse marcador, para os eventos criados antes desta mudança; para os
-    // novos, o casamento cai no tier por consultor + janela de horário.
+    // Sufixo [ref:<meeting_id>] — ver comentário equivalente em google-cal-upsert-event
+    const refSuffix = ` [ref:${meeting_id}]`;
 
     let topic  = (meeting.title as string) || `Reunião — ${clientName}`;
     let agenda = (meeting.notes as string) || 'Agendado via Growth Sales.';
@@ -193,7 +189,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const zoomPayload = {
-      topic,
+      topic:    topic + refSuffix,
       type:     2, // scheduled
       start_time: startDt.toISOString(),
       duration:   durationMin,
