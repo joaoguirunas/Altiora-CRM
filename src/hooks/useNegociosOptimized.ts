@@ -135,12 +135,21 @@ export const useNegociosPipeline = (pipelineId: string, filters?: NegocioFilters
       if (filters?.utm_term) query = query.eq('utm_term', filters.utm_term);
       if (filters?.utm_content) query = query.eq('utm_content', filters.utm_content);
       if (filters?.searchFilter) {
-        query = query.or(
-          `title.ilike.%${filters.searchFilter}%,` +
-          `clients_people.name.ilike.%${filters.searchFilter}%,` +
-          `clients_people.email.ilike.%${filters.searchFilter}%,` +
-          `clients_people.whatsapp.ilike.%${filters.searchFilter}%`
-        );
+        // PostgREST não aceita filtrar coluna de tabela relacionada (clients_people)
+        // dentro de um or() — é sempre erro de parse (PGRST100), então essa busca
+        // nunca funcionou. Busca as pessoas que batem primeiro, depois filtra os
+        // leads por título OU people_id numa dessas pessoas.
+        const term = filters.searchFilter.replace(/[,()]/g, '');
+        const { data: matchingPeople } = await sbUntyped
+          .from('clients_people')
+          .select('id')
+          .or(`name.ilike.*${term}*,email.ilike.*${term}*,whatsapp.ilike.*${term}*`)
+          .limit(200);
+        const peopleIds = ((matchingPeople ?? []) as { id: string }[]).map(p => p.id);
+
+        query = peopleIds.length > 0
+          ? query.or(`title.ilike.*${term}*,people_id.in.(${peopleIds.join(',')})`)
+          : query.ilike('title', `*${term}*`);
       }
       // AC1 (ALTIORA-10): filtro por Closer responsável via altiora_closer_id
       if (filters?.closerIdFilter) query = query.eq('altiora_closer_id', filters.closerIdFilter);
