@@ -1,17 +1,31 @@
 import { useMemo, useState } from 'react';
 import {
   AudioLines, Clock, Play, Sparkles, ChevronDown, ChevronUp, ListTree,
-  Lightbulb, MessageSquareWarning, ThumbsUp, Bug, Swords, Eye,
+  Lightbulb, MessageSquareWarning, ThumbsUp, Bug, Swords, Eye, ClipboardCheck,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useElephanReuniao, type AltioraTipo, type ElephanTipoData } from '@/hooks/useElephanReuniao';
 import type { MeetingRecord } from '@/hooks/useMeetingRecords';
+import {
+  ALTIORA_REUNIAO_NOME,
+  ALTIORA_REUNIAO_NOME_CURTO,
+  ALTIORA_REUNIAO_COR,
+} from '@/constants/altioraReunioes';
+import {
+  readScorecard,
+  toRows,
+  scoreColor,
+  type ElephanScorecard,
+} from '@/utils/elephanScorecard';
 
-const TIPO_CONFIG: Record<AltioraTipo, { label: string; color: string }> = {
-  R1: { label: 'R1 — Diagnóstico', color: '#3B82F6' },
-  R2: { label: 'R2 — Proposta',    color: '#8B5CF6' },
-  R3: { label: 'R3 — Fechamento',  color: '#10B981' },
+// As três sub-abas ficam lado a lado numa barra estreita, onde o nome completo
+// do convite não cabe — aqui vai a forma curta, com o nome completo no title.
+// Ver src/constants/altioraReunioes.ts.
+const TIPO_CONFIG: Record<AltioraTipo, { label: string; full: string; color: string }> = {
+  R1: { label: ALTIORA_REUNIAO_NOME_CURTO.R1, full: ALTIORA_REUNIAO_NOME.R1, color: ALTIORA_REUNIAO_COR.R1 },
+  R2: { label: ALTIORA_REUNIAO_NOME_CURTO.R2, full: ALTIORA_REUNIAO_NOME.R2, color: ALTIORA_REUNIAO_COR.R2 },
+  R3: { label: ALTIORA_REUNIAO_NOME_CURTO.R3, full: ALTIORA_REUNIAO_NOME.R3, color: ALTIORA_REUNIAO_COR.R3 },
 };
 
 const SENTIMENT_LABELS: Record<string, { label: string; cls: string }> = {
@@ -128,6 +142,92 @@ const InsightsSection = ({ insights }: { insights: ElephanInsight[] }) => {
   );
 };
 
+/**
+ * Score card da call — o playbook que a Elephan aplicou, pergunta a pergunta.
+ * Renderiza o que vier: cada prompt tem seu próprio conjunto (13 perguntas no
+ * "Agendamento", 10 no "Checkpoint"), então nada aqui é fixo.
+ */
+const ScorecardSection = ({ scorecard }: { scorecard: ElephanScorecard }) => {
+  const [expanded, setExpanded] = useState(false);
+  const rows = useMemo(() => toRows(scorecard), [scorecard]);
+  const { stats } = scorecard;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <ClipboardCheck className="h-3 w-3" /> Score card
+        </p>
+        {stats.scoreAverage != null && (
+          <span className="flex items-baseline gap-1">
+            <span className={cn('text-[15px] font-semibold tabular-nums', scoreColor(stats.scoreAverage))}>
+              {stats.scoreAverage.toFixed(1)}
+            </span>
+            <span className="text-[10px] text-muted-foreground/50">/ 10</span>
+          </span>
+        )}
+      </div>
+
+      <div className="rounded-[2px] border border-border bg-muted/30 p-3 space-y-2.5">
+        {scorecard.prompt?.name && (
+          <p className="text-[11px] font-medium text-foreground">{scorecard.prompt.name}</p>
+        )}
+
+        {/* Contagem honesta do que a nota representa — ver regra da média em
+            src/utils/elephanScorecard.ts. */}
+        <p className="text-[10px] leading-relaxed text-muted-foreground/60">
+          {stats.scoreCount - stats.scoreZero} de {stats.scoreCount} perguntas pontuadas entram na média
+          {stats.scoreZero > 0 && ` · ${stats.scoreZero} sem pontuação (0)`}
+          {stats.yesCount + stats.noCount > 0 && ` · ${stats.yesCount + stats.noCount} sim/não`}
+          {stats.openCount > 0 && ` · ${stats.openAnswered}/${stats.openCount} abertas respondidas`}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="flex items-center gap-1.5 text-[11px] text-primary hover:underline"
+        >
+          {expanded ? 'Ocultar respostas' : `Ver as ${rows.length} respostas`}
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+
+        {expanded && (
+          <div className="space-y-2 border-t border-border pt-2.5">
+            {rows.map((row, i) => (
+              <div key={row.questionId ?? i} className="flex items-start gap-2.5">
+                <span className="w-9 shrink-0 pt-px text-right">
+                  {row.kind === 'score' && (
+                    <span className={cn('text-[12px] font-semibold tabular-nums', scoreColor(row.value))}>
+                      {row.value > 0 ? row.value : '—'}
+                    </span>
+                  )}
+                  {row.kind === 'yesNo' && (
+                    <span className={cn('text-[11px] font-medium', row.value ? 'text-emerald-500' : 'text-rose-500')}>
+                      {row.value ? 'Sim' : 'Não'}
+                    </span>
+                  )}
+                  {row.kind === 'open' && <span className="text-[11px] text-muted-foreground/30">—</span>}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">{row.question}</p>
+                  {row.kind === 'open' &&
+                    (row.value ? (
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-foreground">{row.value}</p>
+                    ) : (
+                      <p className="mt-0.5 text-[10px] italic text-muted-foreground/40">
+                        Sem resposta da Elephan
+                      </p>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const TranscriptPanel = ({ record }: { record: MeetingRecord }) => {
   const [expanded, setExpanded] = useState(false);
   const speakers = (record.ai_metadata?.speakers ?? null) as
@@ -182,6 +282,7 @@ const ElephanCallCard = ({ data }: { data: ElephanTipoData }) => {
     | { totalSentiment?: Array<{ sentimental: string; perc: number }> }
     | undefined;
   const insights = (summary?.ai_metadata?.insights ?? []) as ElephanInsight[];
+  const scorecard = readScorecard(summary?.ai_metadata);
 
   const summaryParagraphs = useMemo(
     () => (summary?.content ? parseSummary(summary.content) : []),
@@ -226,6 +327,8 @@ const ElephanCallCard = ({ data }: { data: ElephanTipoData }) => {
           <audio controls src={recording.url} className="h-9 w-full" />
         </div>
       )}
+
+      {scorecard && <ScorecardSection scorecard={scorecard} />}
 
       {sentimentAnalysis?.totalSentiment && <SentimentBar totalSentiment={sentimentAnalysis.totalSentiment} />}
 
@@ -280,6 +383,7 @@ export const ElephanTab = ({ leadId }: ElephanTabProps) => {
             <button
               key={tipo}
               type="button"
+              title={config.full}
               onClick={() => setActiveTipo(tipo)}
               className={cn(
                 'flex items-center gap-1.5 border-b-2 px-3 py-2 text-[12px] transition-colors',

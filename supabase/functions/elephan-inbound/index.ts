@@ -66,10 +66,30 @@ interface ElephanSpeaker {
   sentiment?: { Sentiment: string; SentimentScore?: Record<string, number> };
 }
 
+/**
+ * Uma linha do score card. A Elephan aplica um `prompt` (playbook) à call e
+ * devolve uma resposta por pergunta, em três formatos:
+ *   - `score`  — nota numérica (0–10)
+ *   - `yesNo`  — 'yes' | 'no'
+ *   - aberta   — só question/questionId, e o texto (quando existe) vem em
+ *                `answer`/`text`. Nos payloads observados até hoje as abertas
+ *                chegaram SEM campo de resposta; por isso ambos são opcionais e
+ *                a UI trata ausência como "não respondida".
+ */
+interface ElephanAnswer {
+  questionId?: string;
+  question?: string;
+  score?: number;
+  yesNo?: 'yes' | 'no' | string;
+  answer?: string;
+  text?: string;
+}
+
 interface ElephanTranscribe {
   id: string;
   title?: string;
   dateIncluded: string;
+  dateModified?: string;
   status: string;
   duration?: number;
   user?: { id: string; name: string; email: string };
@@ -82,6 +102,49 @@ interface ElephanTranscribe {
   summary?: string | null;
   deal?: { id: string; type: string; crmUrl: string | null } | null;
   url_file?: string;
+  /** Score card — ver ElephanAnswer. Estava chegando e sendo descartado. */
+  answers?: ElephanAnswer[];
+  competitors?: unknown[];
+}
+
+/**
+ * Normaliza o score card para gravar em `meeting_records.ai_metadata.scorecard`.
+ *
+ * Sobre `scoreAverage`: a média ignora notas 0. Nos payloads reais, 0 aparece em
+ * perguntas que não se aplicaram àquela call (ex: "o quanto o silêncio do
+ * cliente foi conduzido sem soar insistente", numa conversa em que o cliente
+ * respondeu na hora) — contá-las como zero derrubaria a nota de forma enganosa.
+ * `scoreZero` fica exposto para a UI poder dizer quantas ficaram de fora, em vez
+ * de esconder a decisão. Se a Elephan confirmar que 0 é nota real, basta trocar
+ * o filtro aqui e no espelho do frontend (src/utils/elephanScorecard.ts).
+ */
+function buildScorecard(transcribe: ElephanTranscribe) {
+  const answers = Array.isArray(transcribe.answers) ? transcribe.answers : [];
+  if (answers.length === 0) return null;
+
+  const scores = answers
+    .filter((a) => typeof a.score === 'number')
+    .map((a) => a.score as number);
+  const scored = scores.filter((s) => s > 0);
+  const yesNo = answers.filter((a) => a.yesNo === 'yes' || a.yesNo === 'no');
+  const open = answers.filter((a) => typeof a.score !== 'number' && !a.yesNo);
+
+  return {
+    prompt: transcribe.prompt ?? null,
+    answers,
+    stats: {
+      total: answers.length,
+      scoreCount: scores.length,
+      scoreZero: scores.length - scored.length,
+      scoreAverage: scored.length
+        ? Math.round((scored.reduce((a, b) => a + b, 0) / scored.length) * 10) / 10
+        : null,
+      yesCount: yesNo.filter((a) => a.yesNo === 'yes').length,
+      noCount: yesNo.filter((a) => a.yesNo === 'no').length,
+      openCount: open.length,
+      openAnswered: open.filter((a) => !!(a.answer ?? a.text)).length,
+    },
+  };
 }
 
 interface ElephanWebhookEnvelope {
@@ -366,7 +429,8 @@ Deno.serve(async (req: Request) => {
 
     const insights = await fetchInsights(transcribe.id, log);
     const topics = [...(transcribe.keywords ?? []), ...(transcribe.tags ?? [])];
-    if (transcribe.summary || transcribe.importantPoints?.length || topics.length || transcribe.sentimentAnalysis || insights.length) {
+    const scorecard = buildScorecard(transcribe);
+    if (transcribe.summary || transcribe.importantPoints?.length || topics.length || transcribe.sentimentAnalysis || insights.length || scorecard) {
       records.push({
         meeting_id: meetingId,
         record_type: 'ai_summary',
@@ -374,10 +438,20 @@ Deno.serve(async (req: Request) => {
         content: transcribe.summary ?? null,
         ai_key_topics: topics.length ? topics : null,
         ai_next_steps: transcribe.importantPoints?.length ? transcribe.importantPoints : null,
+        // Nota agregada do score card, ARREDONDADA: a coluna é integer e um
+        // 8.7 faria o Postgres rejeitar (22P02) e o registro inteiro se perder.
+        // A média exata fica em ai_metadata.scorecard.stats.scoreAverage.
+        // Nullable de propósito: call sem prompt aplicado não tem nota, e 0 aqui
+        // seria lido como "péssima".
+        ai_score: typeof scorecard?.stats.scoreAverage === 'number'
+          ? Math.round(scorecard.stats.scoreAverage)
+          : null,
         ai_metadata: {
           sentimentAnalysis: transcribe.sentimentAnalysis ?? null,
           prompt: transcribe.prompt ?? null,
           insights: insights.length ? insights : null,
+          scorecard,
+          competitors: transcribe.competitors?.length ? transcribe.competitors : null,
         },
       });
     }

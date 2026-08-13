@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  buildScorecard,
+  toAiScoreColumn,
+  type ElephanAnswer,
+  type ElephanScorecard,
+} from '@/utils/elephanScorecard';
 
 export interface ElephanPendencia {
   id: string;
@@ -15,6 +21,12 @@ export interface ElephanPendencia {
   transcript_text: string | null;
   status: 'pending' | 'linked' | 'ignored';
   created_at: string;
+  /**
+   * Payload completo do transcribe, como a Elephan mandou. É daqui que sai o
+   * score card no vínculo manual — o webhook guarda tudo antes de estacionar a
+   * pendência, então nada se perde por não ter casado na hora.
+   */
+  raw_payload?: { answers?: ElephanAnswer[]; prompt?: ElephanScorecard['prompt'] } | null;
 }
 
 export const useElephanPendencias = () => {
@@ -49,6 +61,9 @@ interface LinkPendenciaParams {
   recordingUrl: string | null;
   transcriptText: string | null;
   linkedBy: string;
+  /** Respostas do score card, vindas de `elephan_unmatched_events.raw_payload`. */
+  answers?: ElephanAnswer[] | null;
+  scorecardPrompt?: ElephanScorecard['prompt'];
 }
 
 /** Busca best-effort — se a Elephan falhar ou demorar, o vínculo segue sem insights. */
@@ -105,14 +120,24 @@ export const useLinkElephanPendencia = () => {
         });
       }
       const insights = await fetchElephanInsights(params.transcribeId);
-      if (params.summary || insights.length > 0) {
+      // Score card do payload original — mesma normalização do webhook, para o
+      // vínculo manual não gerar um registro mais pobre que o automático.
+      const scorecard = buildScorecard(params.answers, params.scorecardPrompt ?? null);
+      if (params.summary || insights.length > 0 || scorecard) {
         records.push({
           meeting_id: meeting.id,
           record_type: 'ai_summary',
           source: 'elephan',
           content: params.summary,
           content_format: 'html',
-          ai_metadata: insights.length > 0 ? { insights } : undefined,
+          ai_score: toAiScoreColumn(scorecard?.stats.scoreAverage),
+          ai_metadata:
+            insights.length > 0 || scorecard
+              ? {
+                  ...(insights.length > 0 ? { insights } : {}),
+                  ...(scorecard ? { scorecard } : {}),
+                }
+              : undefined,
         });
       }
       // Insere um de cada vez — o PostgREST rejeita insert em lote quando os
