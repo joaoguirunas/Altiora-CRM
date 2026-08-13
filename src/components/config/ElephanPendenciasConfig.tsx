@@ -54,6 +54,9 @@ function LinkDialog({
         recordingUrl: pendencia.recording_url,
         transcriptText: pendencia.transcript_text,
         linkedBy: user.profile.id,
+        // Score card guardado no payload cru quando a call não casou sozinha.
+        answers: pendencia.raw_payload?.answers ?? null,
+        scorecardPrompt: pendencia.raw_payload?.prompt ?? null,
       });
       toast.success('Reunião vinculada ao negócio');
       onClose();
