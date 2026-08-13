@@ -20,6 +20,8 @@ import { useConsultorDisponibilidade } from '@/hooks/useConsultorDisponibilidade
 import { useCriarAgendamento } from '@/hooks/useAgendamentos';
 import { useAuth } from '@/hooks/useAuth';
 import { isAltioraPipeline } from '@/utils/pipelineLabels';
+import { ALTIORA_TIPOS, ALTIORA_REUNIAO_NOME } from '@/constants/altioraReunioes';
+import ConvidadosEmailField from '@/components/reunioes/ConvidadosEmailField';
 
 type MeetingType = 'discovery' | 'demo' | 'closing' | 'consulting' | 'mentoring' | 'qbr' | 'followup' | 'other' | 'R1' | 'R2' | 'R3';
 
@@ -51,6 +53,11 @@ interface WizardState {
    * convidados do evento — nunca donos. Ver ADR-ALTIORA-01.
    */
   selectedConsultores: SelectedConsultor[];
+  /**
+   * Convidados de fora do time, por e-mail (`meeting_guests`). Só participantes
+   * do evento: não são organizador nem co-host e não têm conta no CRM.
+   */
+  guestEmails: string[];
   selectedDate: Date | undefined;
   selectedDuration: number;
   selectedTimeSlot: { start: string; end: string } | null;
@@ -63,6 +70,7 @@ const INITIAL_STATE: WizardState = {
   step: 1,
   selectedLead: null,
   selectedConsultores: [],
+  guestEmails: [],
   selectedDate: undefined,
   selectedDuration: 60,
   selectedTimeSlot: null,
@@ -82,13 +90,11 @@ const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
   { value: 'other',      label: 'Outro' },
 ];
 
-// Pipeline Altiora usa a própria nomenclatura de reunião (R1/R2/R3) em vez
-// da genérica — ver AltioraAgendarReuniaoModal.tsx (TIPO_LABELS).
-const ALTIORA_MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] = [
-  { value: 'R1', label: 'R1 — Reunião de Diagnóstico' },
-  { value: 'R2', label: 'R2 — Apresentação de Proposta' },
-  { value: 'R3', label: 'R3 — Fechamento' },
-];
+// Pipeline Altiora usa a própria nomenclatura de reunião em vez da genérica.
+// O rótulo é o mesmo nome que vai para o título do convite do cliente —
+// ver src/constants/altioraReunioes.ts.
+const ALTIORA_MEETING_TYPE_OPTIONS: { value: MeetingType; label: string }[] =
+  ALTIORA_TIPOS.map(tipo => ({ value: tipo, label: ALTIORA_REUNIAO_NOME[tipo] }));
 
 const DURATION_OPTIONS = [
   { value: 30, label: '30min' },
@@ -257,6 +263,8 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
         // Gravados dentro do hook, antes do evento ir pro Google Calendar, para
         // que organizador, cliente e colaboradores entrem no MESMO convite.
         collaboratorIds: colaboradores.map((c) => c.id),
+        // Convidados externos — gravados na mesma janela, ver useAgendamentos.
+        guestEmails: state.guestEmails,
         // R1/R2/R3 vira altiora_tipo no hook, que é o que faz o convite usar o
         // template do playbook em vez do texto genérico.
         meeting_type: state.meetingType || undefined,
@@ -452,6 +460,25 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
               );
             })
           )}
+        </div>
+
+        {/* Convidados de fora do time — o cliente e os consultores acima já
+            entram no convite por outra via. */}
+        <div className="pt-1 border-t border-border/60">
+          <div className="pt-3">
+            {/* `alreadyInvited` cobre só os consultores: o e-mail do cliente não
+                está no estado do wizard (SelectedLead traz id/nome/valor). A edge
+                function deduplica attendees por e-mail, então digitar o do
+                cliente é inofensivo — só não é avisado aqui. */}
+            <ConvidadosEmailField
+              value={state.guestEmails}
+              onChange={(guestEmails) => setState((prev) => ({ ...prev, guestEmails }))}
+              alreadyInvited={state.selectedConsultores
+                .map((c) => c.email)
+                .filter((e): e is string => !!e)}
+              label="Convidar por e-mail (fora do time)"
+            />
+          </div>
         </div>
       </div>
     );

@@ -77,7 +77,7 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
   if (currentStagePosition < R2_REALIZADA_MIN_POSITION) {
     return (
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado da R2</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado — Wealth Planning Presentation</p>
         <div className="flex items-center gap-2 p-3 rounded-[4px] border border-dashed border-border/40 text-muted-foreground/50">
           <Clock className="w-4 h-4 flex-none" strokeWidth={1.5} />
           <span className="text-[12px]">Preencher após a R2</span>
@@ -118,7 +118,7 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
   if (isLoading) {
     return (
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado da R2</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado — Wealth Planning Presentation</p>
         <div className="flex justify-center py-5"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" /></div>
       </div>
     );
@@ -131,7 +131,7 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
     <div className="space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado da R2</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado — Wealth Planning Presentation</p>
         <div className="flex items-center gap-2">
           {isFilled && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 rounded-[2px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
@@ -155,11 +155,11 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
         </div>
       )}
 
-      {/* AC2: Contexto R1 (read-only) */}
+      {/* AC2: Contexto — Wealth Planning Discovery (read-only) */}
       {r1Diagnostico && (r1Diagnostico.situacao_patrimonial || r1Diagnostico.perfil_risco) && (
         <div className="border border-border/50 rounded-[2px] overflow-hidden">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40 px-3 py-1.5 bg-muted/20">
-            Contexto R1
+            Contexto — Wealth Planning Discovery
           </p>
           <div className="divide-y divide-border/30">
             {r1Diagnostico.situacao_patrimonial && (
@@ -176,7 +176,7 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
             )}
             {r1Diagnostico.score_interesse && (
               <div className="flex items-center justify-between px-3 py-1.5">
-                <span className="text-[11px] text-muted-foreground/60">Score de interesse R1</span>
+                <span className="text-[11px] text-muted-foreground/60">Score de interesse</span>
                 <span className="text-[11px] font-medium">{r1Diagnostico.score_interesse}/5</span>
               </div>
             )}
@@ -213,7 +213,7 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
               )}
               {r2Data?.data_r3_prevista && (
                 <div className="flex items-center justify-between px-4 py-2">
-                  <span className="text-[12px] text-muted-foreground/60">Data prevista R3</span>
+                  <span className="text-[12px] text-muted-foreground/60">Data prevista da IUL Implementation</span>
                   <span className="text-[12px] font-medium">
                     {new Date(r2Data.data_r3_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </span>
@@ -222,7 +222,7 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-5 gap-2">
-              <p className="text-[12px] text-muted-foreground/50">Resultado da R2 não registrado</p>
+              <p className="text-[12px] text-muted-foreground/50">Resultado da Wealth Planning Presentation não registrado</p>
               <Button variant="outline" size="sm" onClick={startEditing} className="h-7 px-3 text-xs rounded-[4px]">
                 Preencher
               </Button>
@@ -278,10 +278,10 @@ const AltioraR2Section = ({ leadId, currentStagePosition = 0 }: AltioraR2Section
             <Textarea value={resultadoGeral} onChange={e => setResultadoGeral(e.target.value)} placeholder="Descreva o resultado..." className="min-h-[80px] text-xs rounded-[4px]" />
           </div>
 
-          {/* Data prevista R3 — obrigatória se interesse alto/médio */}
+          {/* Data prevista da IUL Implementation — obrigatória se interesse alto/médio */}
           <div>
             <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Data prevista da R3
+              Data prevista da IUL Implementation
               {needsR3 && <span className="text-destructive"> *</span>}
             </Label>
             <Input

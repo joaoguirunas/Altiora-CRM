@@ -97,7 +97,7 @@ const RegistrarResultadoDrawer = ({
 
     // AC5: R1 realizada → sugestão de preencher diagnóstico R1
     if (status === 'realizada' && tipo === 'R1') {
-      toast.info('Preencha o diagnóstico da R1 na seção "Diagnóstico R1" da ficha.', {
+      toast.info('Preencha o diagnóstico na seção "Diagnóstico — Wealth Planning Discovery" da ficha.', {
         duration: 6000,
       });
     }

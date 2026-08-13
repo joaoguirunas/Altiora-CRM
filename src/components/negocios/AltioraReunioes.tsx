@@ -47,16 +47,23 @@ import {
   useMeetingCollaborators,
 } from '@/hooks/useAltioraMeetings';
 import { AltioraAgendarReuniaoModal } from './AltioraAgendarReuniaoModal';
+import {
+  ALTIORA_TIPOS,
+  ALTIORA_REUNIAO_NOME,
+  ALTIORA_REUNIAO_COR,
+  nomeReuniao,
+} from '@/constants/altioraReunioes';
 import RegistrarResultadoDrawer from './RegistrarResultadoDrawer';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TIPOS: AltioraMeetingType[] = ['R1', 'R2', 'R3'];
+const TIPOS: AltioraMeetingType[] = ALTIORA_TIPOS;
 
+// Rótulo = nome do convite (src/constants/altioraReunioes.ts).
 const TIPO_CONFIG: Record<AltioraMeetingType, { label: string; color: string; bgColor: string }> = {
-  R1: { label: 'R1 — Diagnóstico',      color: '#3B82F6', bgColor: 'bg-[#3B82F6]/10' },
-  R2: { label: 'R2 — Proposta',          color: '#8B5CF6', bgColor: 'bg-[#8B5CF6]/10' },
-  R3: { label: 'R3 — Fechamento',        color: '#10B981', bgColor: 'bg-[#10B981]/10' },
+  R1: { label: ALTIORA_REUNIAO_NOME.R1, color: ALTIORA_REUNIAO_COR.R1, bgColor: 'bg-[#3B82F6]/10' },
+  R2: { label: ALTIORA_REUNIAO_NOME.R2, color: ALTIORA_REUNIAO_COR.R2, bgColor: 'bg-[#8B5CF6]/10' },
+  R3: { label: ALTIORA_REUNIAO_NOME.R3, color: ALTIORA_REUNIAO_COR.R3, bgColor: 'bg-[#10B981]/10' },
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -354,7 +361,9 @@ export const AltioraReunioes = ({
                   className="h-7 px-2.5 text-[11px] gap-1.5 rounded-[3px]"
                 >
                   <Plus className="w-3 h-3" />
-                  Agendar {tipo}
+                  {/* O nome da reunião já está no cabeçalho logo acima — repetir
+                      aqui estouraria o botão. */}
+                  Agendar
                 </Button>
               )}
             </div>
@@ -373,7 +382,7 @@ export const AltioraReunioes = ({
             ) : (
               <div className="border border-dashed border-border/40 rounded-[4px] py-4 text-center">
                 <p className="text-[12px] text-muted-foreground/40">
-                  {tipo} ainda não agendada
+                  {config.label} ainda não agendada
                 </p>
               </div>
             )}
@@ -472,7 +481,7 @@ export const AltioraReunioes = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar reunião?</AlertDialogTitle>
             <AlertDialogDescription>
-              A {cancelTarget?.altiora_tipo} agendada para{' '}
+              A reunião {nomeReuniao(cancelTarget?.altiora_tipo)} agendada para{' '}
               {cancelTarget && format(new Date(cancelTarget.start_time), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}{' '}
               será cancelada e o evento será removido do Google Calendar.
             </AlertDialogDescription>

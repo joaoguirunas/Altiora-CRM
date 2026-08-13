@@ -18,6 +18,20 @@ const sbUntyped = supabase as unknown as SupabaseClient;
 
 export type AltioraMeetingType = 'R1' | 'R2' | 'R3';
 
+/**
+ * Convidado externo de uma reunião — e-mail livre, sem linha em settings_users.
+ * Entra só em attendees[] do evento; não é co-host e não assina o convite.
+ * Ver migration 20260813180000_create_meeting_guests.sql.
+ */
+export interface MeetingGuest {
+  id: string;
+  meeting_id: string;
+  email: string;
+  name?: string | null;
+  added_by?: string | null;
+  created_at: string;
+}
+
 /** ALTIORA-27: colaborador adicional de uma reunião (co-host/observer). */
 export interface MeetingCollaborator {
   id: string;
@@ -73,6 +87,17 @@ export interface CreateAltioraMeetingParams {
   clientEmail?: string; // para convite
   /** ALTIORA-27: colaboradores adicionais (co-hosts) — settings_users.id[]. */
   collaboratorIds?: string[];
+  /**
+   * Convidados externos por e-mail (estilo Google Meet). Só entram em
+   * attendees[] do evento — não são co-hosts nem assinam o convite.
+   */
+  guests?: MeetingGuestInput[];
+}
+
+/** E-mail obrigatório; nome é opcional (o fluxo padrão captura só o e-mail). */
+export interface MeetingGuestInput {
+  email: string;
+  name?: string | null;
 }
 
 export interface UpdateAltioraMeetingParams {
@@ -87,6 +112,11 @@ export interface UpdateAltioraMeetingParams {
    * `undefined` = não mexer nos colaboradores existentes.
    */
   collaboratorIds?: string[];
+  /**
+   * Lista completa de convidados externos desejada após o reagendamento — o
+   * hook calcula o diff por e-mail (case-insensitive). `undefined` = não mexer.
+   */
+  guests?: MeetingGuestInput[];
 }
 
 // ── Hook: listar reuniões Altiora de um lead ──────────────────────────────────
@@ -178,6 +208,65 @@ export const useMeetingCollaborators = (meetingId?: string | null) => {
   });
 };
 
+export const useMeetingGuests = (meetingId?: string | null) => {
+  return useQuery<MeetingGuest[]>({
+    queryKey: ['meeting-guests', meetingId],
+    queryFn: async () => {
+      if (!meetingId) return [];
+      const { data, error } = await sbUntyped
+        .from('meeting_guests')
+        .select('id, meeting_id, email, name, added_by, created_at')
+        .eq('meeting_id', meetingId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw new Error((error as { message: string }).message);
+      return (data ?? []) as unknown as MeetingGuest[];
+    },
+    enabled: !!meetingId,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+
+// ── Helper: convidados externos ──────────────────────────────────────────────
+
+/** Chave de comparação/dedup de convidado: e-mail normalizado. */
+const guestKey = (email: string) => email.trim().toLowerCase();
+
+/**
+ * Normaliza a lista vinda do modal: apara, remove vazios e deduplica por
+ * e-mail case-insensitive (o índice único do banco faria isso doer em vez de
+ * silenciar). Mantém a primeira ocorrência — é a que o usuário digitou antes.
+ */
+function normalizeGuests(guests: MeetingGuestInput[]): MeetingGuestInput[] {
+  const seen = new Set<string>();
+  const out: MeetingGuestInput[] = [];
+  for (const g of guests) {
+    const email = (g.email ?? '').trim();
+    if (!email) continue;
+    const key = guestKey(email);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ email, name: g.name?.trim() || null });
+  }
+  return out;
+}
+
+async function insertMeetingGuests(
+  meetingId: string,
+  guests: MeetingGuestInput[],
+  addedBy?: string | null,
+): Promise<void> {
+  const rows = normalizeGuests(guests).map(g => ({
+    meeting_id: meetingId,
+    email: g.email,
+    name: g.name ?? null,
+    added_by: addedBy ?? null,
+  }));
+  if (!rows.length) return;
+  const { error } = await sbUntyped.from('meeting_guests').insert(rows);
+  if (error) throw new Error((error as { message: string }).message);
+}
+
 // ── Helper: persistir colaboradores adicionais (insert em lote) ──────────────
 
 async function insertMeetingCollaborators(
@@ -241,6 +330,12 @@ export const useCreateAltioraMeeting = () => {
         await insertMeetingCollaborators(meetingId, params.collaboratorIds, params.closerId);
       }
 
+      // 1.2 Convidados externos — também antes do sync, pelo mesmo motivo:
+      // a edge function monta attendees[] lendo do banco.
+      if (params.guests?.length) {
+        await insertMeetingGuests(meetingId, params.guests, params.closerId);
+      }
+
       // 2. Sync Google Calendar (async, não bloqueia)
       const gcalResult = await supabase.functions.invoke('google-cal-upsert-event', {
         body: { meeting_id: meetingId, action: 'create' },
@@ -278,6 +373,7 @@ export const useCreateAltioraMeeting = () => {
       queryClient.invalidateQueries({ queryKey: ['altiora-meetings', variables.leadId] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
       queryClient.invalidateQueries({ queryKey: ['meeting-collaborators', result.meetingId] });
+      queryClient.invalidateQueries({ queryKey: ['meeting-guests', result.meetingId] });
 
       if (result.gcalSynced) {
         toast.success(`${variables.tipo} agendada com Google Meet criado`);
@@ -356,6 +452,36 @@ export const useUpdateAltioraMeeting = () => {
         }
       }
 
+      // 1.2 Diff de convidados externos — mesma lógica, comparando por e-mail
+      // normalizado em vez de user_id.
+      if (params.guests !== undefined) {
+        const { data: existing, error: existingError } = await sbUntyped
+          .from('meeting_guests')
+          .select('id, email')
+          .eq('meeting_id', params.meetingId);
+
+        if (existingError) throw new Error((existingError as { message: string }).message);
+
+        const existingRows = (existing ?? []) as unknown as Array<{ id: string; email: string }>;
+        const existingKeys = new Set(existingRows.map(r => guestKey(r.email)));
+        const desired = normalizeGuests(params.guests);
+        const desiredKeys = new Set(desired.map(g => guestKey(g.email)));
+
+        const toAdd = desired.filter(g => !existingKeys.has(guestKey(g.email)));
+        const toRemove = existingRows.filter(r => !desiredKeys.has(guestKey(r.email)));
+
+        if (toAdd.length) {
+          await insertMeetingGuests(params.meetingId, toAdd);
+        }
+        if (toRemove.length) {
+          const { error: deleteError } = await sbUntyped
+            .from('meeting_guests')
+            .delete()
+            .in('id', toRemove.map(r => r.id));
+          if (deleteError) throw new Error((deleteError as { message: string }).message);
+        }
+      }
+
       // 2. Sync Google Calendar (PATCH do evento existente)
       const gcalResult = await supabase.functions.invoke('google-cal-upsert-event', {
         body: { meeting_id: params.meetingId, action: 'update' },
@@ -380,6 +506,7 @@ export const useUpdateAltioraMeeting = () => {
       queryClient.invalidateQueries({ queryKey: ['altiora-meetings', variables.leadId] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-simple'] });
       queryClient.invalidateQueries({ queryKey: ['meeting-collaborators', variables.meetingId] });
+      queryClient.invalidateQueries({ queryKey: ['meeting-guests', variables.meetingId] });
       toast.success(`${variables.tipo} reagendada com sucesso`);
     },
     onError: (error: Error) => {

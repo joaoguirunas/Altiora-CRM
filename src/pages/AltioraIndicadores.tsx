@@ -23,6 +23,7 @@ import {
   useAltioraMetrics, getPeriodoRange,
   type Periodo, type PeriodoRange,
 } from '@/hooks/useAltioraMetrics';
+import { ALTIORA_REUNIAO_NOME } from '@/constants/altioraReunioes';
 
 // ── Metric card ───────────────────────────────────────────────────────────────
 
@@ -274,21 +275,21 @@ const AltioraIndicadores = () => {
               <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
                 <MetricCard
                   icon={Calendar}
-                  label="R1s agendadas"
+                  label={`${ALTIORA_REUNIAO_NOME.R1} — agendadas`}
                   value={metrics.totalR1}
                   sub={`${metrics.totalR1Compareceu} compareceram · ${metrics.taxaComparecimentoR1}%`}
                   colorClass="text-sky-400"
                 />
                 <MetricCard
                   icon={Calendar}
-                  label="R2s agendadas"
+                  label={`${ALTIORA_REUNIAO_NOME.R2} — agendadas`}
                   value={metrics.totalR2}
                   sub={`${metrics.totalR2Compareceu} compareceram`}
                   colorClass="text-indigo-400"
                 />
                 <MetricCard
                   icon={Calendar}
-                  label="R3s agendadas"
+                  label={`${ALTIORA_REUNIAO_NOME.R3} — agendadas`}
                   value={metrics.totalR3}
                   sub={`${metrics.totalR3Compareceu} compareceram`}
                   colorClass="text-purple-400"

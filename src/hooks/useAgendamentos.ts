@@ -1,8 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAgendamentosSimple } from './useAgendamentosSimple';
 import { auditLogger } from '@/utils/auditLogger';
+
+// `meeting_collaborators` e `meeting_guests` ainda não estão nos tipos gerados
+// do Supabase — mesmo cast usado em useAltioraMeetings.ts.
+const sbUntyped = supabase as unknown as SupabaseClient;
 
 interface CreateAgendamentoData {
   lead_id?: string | null;
@@ -32,6 +37,13 @@ interface CreateAgendamentoData {
    * Ver ADR-ALTIORA-01.
    */
   collaboratorIds?: string[];
+  /**
+   * Convidados externos por e-mail (`meeting_guests`), estilo "Adicionar
+   * convidados" do Google Meet. Gravados no mesmo ponto e pelo mesmo motivo que
+   * os colaboradores — convite único. Diferença: não são co-hosts, não assinam
+   * o convite e não têm conta no CRM.
+   */
+  guestEmails?: string[];
 }
 
 interface UpdateAgendamentoData {
@@ -115,10 +127,7 @@ export const useCriarAgendamento = () => {
       // attendees. Falha aqui não derruba a reunião — o evento ainda é válido
       // com o organizador, e o usuário é avisado pela tela.
       if (data.collaboratorIds?.length) {
-        // meeting_collaborators não está nos tipos gerados — mesmo padrão de
-        // cast usado em useAltioraMeetings/NovoReferralModal.
-        const db = supabase as unknown as { from: (t: string) => any };
-        const { error: collabError } = await db.from('meeting_collaborators').insert(
+        const { error: collabError } = await sbUntyped.from('meeting_collaborators').insert(
           data.collaboratorIds.map((userId) => ({
             meeting_id: meeting.id,
             user_id: userId,
@@ -126,6 +135,28 @@ export const useCriarAgendamento = () => {
           })),
         );
         if (collabError) console.warn('[collaborators] insert error:', collabError);
+      }
+
+      // Convidados externos — mesma janela (antes do GCal), mesma tolerância a
+      // falha. Dedup por e-mail normalizado antes de inserir: o índice único do
+      // banco é case-insensitive e recusaria a leva inteira por uma repetição.
+      if (data.guestEmails?.length) {
+        const seen = new Set<string>();
+        const guestRows = data.guestEmails
+          .map((e) => e.trim())
+          .filter((e) => {
+            if (!e) return false;
+            const k = e.toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          })
+          .map((email) => ({ meeting_id: meeting.id, email }));
+
+        if (guestRows.length) {
+          const { error: guestError } = await sbUntyped.from('meeting_guests').insert(guestRows);
+          if (guestError) console.warn('[guests] insert error:', guestError);
+        }
       }
 
       // Rollback helper — deletes the meeting if GCal confirmation fails

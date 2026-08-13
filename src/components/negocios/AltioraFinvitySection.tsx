@@ -241,7 +241,7 @@ const AltioraFinvitySection = ({ leadId, currentStagePosition }: AltioraFinvityS
         <div className="flex items-start gap-2 p-3 rounded-[4px] border border-orange-500/30 bg-orange-500/8 text-orange-600 dark:text-orange-400">
           <AlertTriangle className="w-4 h-4 flex-none mt-0.5" strokeWidth={1.5} />
           <p className="text-xs leading-relaxed">
-            <span className="font-medium">Análise Finvity não registrada</span> — referral já está em etapa R2 ou posterior.
+            <span className="font-medium">Análise Finvity não registrada</span> — referral já está na etapa "R2 agendada" ou posterior.
             Preencha o relatório para embasar a reunião.
           </p>
         </div>
