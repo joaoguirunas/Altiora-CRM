@@ -133,11 +133,11 @@ const AltioraR1Section = ({ leadId, currentStagePosition = 0 }: AltioraR1Section
     return (
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-          Diagnóstico R1
+          Diagnóstico — Wealth Planning Discovery
         </p>
         <div className="flex items-center gap-2 p-3 rounded-[4px] border border-dashed border-border/40 text-muted-foreground/50">
           <Clock className="w-4 h-4 flex-none" strokeWidth={1.5} />
-          <span className="text-[12px]">Preencher após a R1</span>
+          <span className="text-[12px]">Preencher após a Wealth Planning Discovery</span>
         </div>
       </div>
     );
@@ -147,7 +147,7 @@ const AltioraR1Section = ({ leadId, currentStagePosition = 0 }: AltioraR1Section
     return (
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-          Diagnóstico R1
+          Diagnóstico — Wealth Planning Discovery
         </p>
         <div className="flex items-center justify-center py-6">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" />
@@ -161,7 +161,7 @@ const AltioraR1Section = ({ leadId, currentStagePosition = 0 }: AltioraR1Section
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-          Diagnóstico R1
+          Diagnóstico — Wealth Planning Discovery
         </p>
         <div className="flex items-center gap-2">
           {isFilled && (
@@ -237,7 +237,7 @@ const AltioraR1Section = ({ leadId, currentStagePosition = 0 }: AltioraR1Section
               )}
               {r1Data?.data_r2_prevista && (
                 <div className="flex items-center justify-between px-4 py-2">
-                  <span className="text-[12px] text-muted-foreground/60">Data prevista R2</span>
+                  <span className="text-[12px] text-muted-foreground/60">Data prevista da Wealth Planning Presentation</span>
                   <span className="text-[12px] font-medium">
                     {new Date(r1Data.data_r2_prevista + 'T00:00:00').toLocaleDateString('pt-BR')}
                   </span>
@@ -260,7 +260,7 @@ const AltioraR1Section = ({ leadId, currentStagePosition = 0 }: AltioraR1Section
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
               <ClipboardList className="w-8 h-8 text-muted-foreground/20" strokeWidth={1.5} />
               <p className="text-[12px] text-muted-foreground/50">
-                Diagnóstico R1 não registrado
+                Diagnóstico da Wealth Planning Discovery não registrado
               </p>
               <Button
                 variant="outline"
@@ -391,10 +391,10 @@ const AltioraR1Section = ({ leadId, currentStagePosition = 0 }: AltioraR1Section
             </div>
           </div>
 
-          {/* Data prevista da R2 */}
+          {/* Data prevista da Wealth Planning Presentation */}
           <div>
             <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Data prevista da R2
+              Data prevista da Wealth Planning Presentation
             </Label>
             <Input
               type="date"

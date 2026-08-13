@@ -53,6 +53,12 @@ import { useGoogleCalendarStatus } from "@/hooks/useGoogleCalendarStatus";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  ALTIORA_TIPOS,
+  ALTIORA_REUNIAO_NOME,
+  nomeReuniao,
+  nomeReuniaoCurto,
+} from "@/constants/altioraReunioes";
 
 type ViewMode = "list" | "calendar" | "weekly";
 
@@ -679,9 +685,11 @@ const Reunioes = () => {
                   </SelectTrigger>
                   <SelectContent className="rounded-[4px] text-xs">
                     <SelectItem value="all" className="text-xs">Todos os tipos</SelectItem>
-                    <SelectItem value="R1" className="text-xs">R1 — Diagnóstico</SelectItem>
-                    <SelectItem value="R2" className="text-xs">R2 — Proposta</SelectItem>
-                    <SelectItem value="R3" className="text-xs">R3 — Fechamento</SelectItem>
+                    {ALTIORA_TIPOS.map(tipo => (
+                      <SelectItem key={tipo} value={tipo} className="text-xs">
+                        {ALTIORA_REUNIAO_NOME[tipo]}
+                      </SelectItem>
+                    ))}
                     <SelectItem value="outras" className="text-xs">Outras reuniões</SelectItem>
                   </SelectContent>
                 </Select>
@@ -831,9 +839,14 @@ const Reunioes = () => {
                             {isBlocked
                               ? <span className="flex items-center gap-1.5 text-muted-foreground"><Shield className="w-3.5 h-3.5 text-slate-400" />Bloqueio</span>
                               : <span className="flex items-center gap-1.5">
+                                  {/* Badge dividindo 180px com o nome da pessoa: forma
+                                      curta do nome do convite, completa no title. */}
                                   {a.altiora_tipo && (
-                                    <span className={cn("shrink-0 inline-flex items-center justify-center h-4 px-1 rounded-[2px] text-[9px] font-bold border leading-none", TIPO_BADGE[a.altiora_tipo])}>
-                                      {a.altiora_tipo}
+                                    <span
+                                      title={nomeReuniao(a.altiora_tipo)}
+                                      className={cn("shrink-0 inline-flex items-center justify-center h-4 px-1 rounded-[2px] text-[9px] font-bold border leading-none", TIPO_BADGE[a.altiora_tipo])}
+                                    >
+                                      {nomeReuniaoCurto(a.altiora_tipo)}
                                     </span>
                                   )}
                                   <span className="truncate">{pessoa?.nome ?? "—"}</span>

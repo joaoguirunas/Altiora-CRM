@@ -162,6 +162,33 @@ Deno.serve(async (req: Request) => {
       collaboratorAttendees.push({ email });
     }
 
+    // === Fetch convidados externos (meeting_guests) ===
+    // E-mails digitados à mão no modal, estilo "Adicionar convidados" do Meet.
+    // Diferente de meeting_collaborators: entram só em attendees[], NÃO na
+    // assinatura do convite (não são co-hosts). Mesma degradação graciosa —
+    // falhar aqui não pode impedir o evento de ser criado.
+    const guestAttendees: Array<{ email: string }> = [];
+    try {
+      const { data: guestData, error: guestError } = await supabase
+        .from('meeting_guests')
+        .select('email')
+        .eq('meeting_id', meeting_id);
+      if (guestError) {
+        console.warn('[GCal] Failed to fetch meeting_guests:', guestError.message);
+      } else {
+        for (const g of guestData ?? []) {
+          const email = (g.email ?? '').trim();
+          if (email) guestAttendees.push({ email });
+        }
+      }
+    } catch (err) {
+      console.warn('[GCal] Unexpected error fetching meeting_guests:', String(err));
+    }
+
+    // Colaboradores e convidados compartilham o mesmo attendees[]; a ordem
+    // (colaboradores antes) só afeta a listagem no evento.
+    const extraAttendees: Array<{ email: string }> = [...collaboratorAttendees, ...guestAttendees];
+
     // === Fetch ALL google connections for consultant that sync bookings ===
     // Ordered by created_at so the oldest row is the PRIMARY (owns meetings.google_event_id).
     const { data: connections } = await supabase
@@ -347,12 +374,12 @@ Deno.serve(async (req: Request) => {
       const primaryBase = `${CALENDAR_EVENTS_URL}/${encodeURIComponent(primaryCalId)}/events`;
       const primaryAttendees: Array<{ email: string }> = [{ email: primary.google_email }];
       if (clientEmail) primaryAttendees.push({ email: clientEmail });
-      // Colaboradores adicionais (ALTIORA-28) — convidados extra, nunca donos
-      // do evento. Dedup por e-mail para não repetir organizador/cliente caso
-      // um colaborador coincida com um deles (edge case raro, mas inofensivo
-      // de proteger).
+      // Colaboradores adicionais (ALTIORA-28) e convidados externos — convidados
+      // extra, nunca donos do evento. Dedup por e-mail para não repetir
+      // organizador/cliente caso um deles coincida (ex: alguém digita à mão o
+      // e-mail do próprio cliente).
       const seenAttendeeEmails = new Set(primaryAttendees.map((a) => a.email.toLowerCase()));
-      for (const ca of collaboratorAttendees) {
+      for (const ca of extraAttendees) {
         const key = ca.email.toLowerCase();
         if (seenAttendeeEmails.has(key)) continue;
         seenAttendeeEmails.add(key);
@@ -398,12 +425,12 @@ Deno.serve(async (req: Request) => {
       const primaryBase = `${CALENDAR_EVENTS_URL}/${encodeURIComponent(primaryCalId)}/events`;
       const primaryAttendees: Array<{ email: string }> = [{ email: primary.google_email }];
       if (clientEmail) primaryAttendees.push({ email: clientEmail });
-      // Colaboradores adicionais (ALTIORA-28) — convidados extra, nunca donos
-      // do evento. Dedup por e-mail para não repetir organizador/cliente caso
-      // um colaborador coincida com um deles (edge case raro, mas inofensivo
-      // de proteger).
+      // Colaboradores adicionais (ALTIORA-28) e convidados externos — convidados
+      // extra, nunca donos do evento. Dedup por e-mail para não repetir
+      // organizador/cliente caso um deles coincida (ex: alguém digita à mão o
+      // e-mail do próprio cliente).
       const seenAttendeeEmails = new Set(primaryAttendees.map((a) => a.email.toLowerCase()));
-      for (const ca of collaboratorAttendees) {
+      for (const ca of extraAttendees) {
         const key = ca.email.toLowerCase();
         if (seenAttendeeEmails.has(key)) continue;
         seenAttendeeEmails.add(key);

@@ -66,7 +66,10 @@ import {
   useUpdateAltioraMeeting,
   useCheckAltioraConflict,
   useMeetingCollaborators,
+  useMeetingGuests,
 } from '@/hooks/useAltioraMeetings';
+import ConvidadosEmailField from '@/components/reunioes/ConvidadosEmailField';
+import { ALTIORA_REUNIAO_NOME } from '@/constants/altioraReunioes';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -85,11 +88,9 @@ const TIME_SLOTS = Array.from({ length: 28 }, (_, i) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 });
 
-const TIPO_LABELS: Record<AltioraMeetingType, string> = {
-  R1: 'R1 — Reunião de Diagnóstico',
-  R2: 'R2 — Apresentação de Proposta',
-  R3: 'R3 — Fechamento',
-};
+// Mesmo nome que o cliente vê no título do convite — ver
+// src/constants/altioraReunioes.ts.
+const TIPO_LABELS: Record<AltioraMeetingType, string> = ALTIORA_REUNIAO_NOME;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,7 @@ export const AltioraAgendarReuniaoModal = ({
   const collaboratorSource: AltioraCloser[] = isSuperAdmin ? internalUsers : closers;
 
   const { data: existingCollaborators = [] } = useMeetingCollaborators(meetingToEdit?.id);
+  const { data: existingGuests = [] } = useMeetingGuests(meetingToEdit?.id);
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [tipo, setTipo] = useState<AltioraMeetingType>(
@@ -146,6 +148,8 @@ export const AltioraAgendarReuniaoModal = ({
     meetingToEdit?.user_id ?? currentUserId ?? closerId,
   );
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
+  /** Convidados externos por e-mail — ver ConvidadosEmailField. */
+  const [guestEmails, setGuestEmails] = useState<string[]>([]);
   const [showCollaborators, setShowCollaborators] = useState(false);
   const [collaboratorsPopoverOpen, setCollaboratorsPopoverOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
@@ -189,6 +193,7 @@ export const AltioraAgendarReuniaoModal = ({
       setCollaboratorsPopoverOpen(false);
       if (!meetingToEdit) {
         setCollaboratorIds([]);
+        setGuestEmails([]);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,6 +207,15 @@ export const AltioraAgendarReuniaoModal = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, meetingToEdit?.id, existingCollaborators]);
+
+  // Idem para os convidados externos já salvos.
+  useEffect(() => {
+    if (open && meetingToEdit) {
+      setGuestEmails(existingGuests.map(g => g.email));
+      if (existingGuests.length > 0) setShowCollaborators(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, meetingToEdit?.id, existingGuests]);
 
   // Organizador efetivo: Closer comum e reagendamento nunca escolhem —
   // organizador é sempre o closerId da ficha (ou o organizador já salvo).
@@ -218,6 +232,18 @@ export const AltioraAgendarReuniaoModal = ({
     () => collaboratorSource.filter(u => collaboratorIds.includes(u.id)),
     [collaboratorSource, collaboratorIds],
   );
+
+  // Quem já recebe o convite por outra via. Digitar um destes no campo de
+  // e-mail não adiciona nada — o campo avisa em vez de criar duplicata (que o
+  // índice único do banco recusaria, e o Google deduplicaria de todo modo).
+  const alreadyInvitedEmails = useMemo(() => {
+    const organizer = collaboratorSource.find(u => u.id === effectiveOrganizerId);
+    return [
+      clientEmail,
+      organizer?.email,
+      ...selectedCollaborators.map(u => u.email),
+    ].filter((e): e is string => !!e);
+  }, [clientEmail, collaboratorSource, effectiveOrganizerId, selectedCollaborators]);
 
   const toggleCollaborator = (id: string) => {
     setCollaboratorIds(prev =>
@@ -274,6 +300,8 @@ export const AltioraAgendarReuniaoModal = ({
           duracaoMinutos: duracao,
           notes: notes || undefined,
           collaboratorIds,
+          // Lista completa: o hook faz o diff (remove quem saiu do campo).
+          guests: guestEmails.map(email => ({ email })),
         },
         { onSuccess: () => onOpenChange(false) },
       );
@@ -291,6 +319,7 @@ export const AltioraAgendarReuniaoModal = ({
           meetingLink: manualLink || undefined,
           clientEmail: clientEmail ?? undefined,
           collaboratorIds: collaboratorIds.length ? collaboratorIds : undefined,
+          guests: guestEmails.length ? guestEmails.map(email => ({ email })) : undefined,
         },
         { onSuccess: () => onOpenChange(false) },
       );
@@ -303,7 +332,7 @@ export const AltioraAgendarReuniaoModal = ({
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold">
-            {isEditing ? `Reagendar ${tipo}` : 'Agendar Reunião'}
+            {isEditing ? `Reagendar ${TIPO_LABELS[tipo]}` : 'Agendar Reunião'}
           </DialogTitle>
         </DialogHeader>
 
@@ -439,7 +468,9 @@ export const AltioraAgendarReuniaoModal = ({
             </div>
           )}
 
-          {/* Colaboradores adicionais — ALTIORA-27 (AC1/AC2/AC3): opcional/colapsado */}
+          {/* Mais participantes — colegas do time (multi-select) e convidados
+              externos por e-mail. Colapsado por padrão: a maioria das reuniões
+              é só organizador + cliente. */}
           <div className="space-y-1.5">
             {!showCollaborators ? (
               <Button
@@ -450,13 +481,13 @@ export const AltioraAgendarReuniaoModal = ({
                 className="h-7 px-1.5 text-[12px] gap-1.5 text-muted-foreground hover:text-foreground rounded-[3px]"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Adicionar colaborador
+                Adicionar participantes
               </Button>
             ) : (
               <>
                 <Label className="text-[12px] text-muted-foreground flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5" />
-                  Colaboradores adicionais (exceção)
+                  Colegas do time
                 </Label>
 
                 <Popover open={collaboratorsPopoverOpen} onOpenChange={setCollaboratorsPopoverOpen}>
@@ -533,6 +564,15 @@ export const AltioraAgendarReuniaoModal = ({
                 <p className="text-[11px] text-muted-foreground/50">
                   Colegas que também vão participar como responsáveis desta reunião (co-host no convite).
                 </p>
+
+                {/* Convidados de fora — não são co-hosts, só participantes. */}
+                <div className="pt-2">
+                  <ConvidadosEmailField
+                    value={guestEmails}
+                    onChange={setGuestEmails}
+                    alreadyInvited={alreadyInvitedEmails}
+                  />
+                </div>
               </>
             )}
           </div>
@@ -626,8 +666,8 @@ export const AltioraAgendarReuniaoModal = ({
             {isPending
               ? 'Salvando...'
               : isEditing
-              ? `Reagendar ${tipo}`
-              : `Agendar ${tipo}`}
+              ? `Reagendar ${TIPO_LABELS[tipo]}`
+              : `Agendar ${TIPO_LABELS[tipo]}`}
           </Button>
         </DialogFooter>
       </DialogContent>

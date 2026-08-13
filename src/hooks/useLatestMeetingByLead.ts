@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { nomeReuniaoCurto } from '@/constants/altioraReunioes';
 
 // Rótulo curto para o chip "Reunião" do card de pipeline.
 const MEETING_TYPE_SHORT_LABELS: Record<string, string> = {
@@ -19,7 +20,9 @@ export interface LeadMeetingInfo {
 }
 
 function resolveLabel(altioraTipo: string | null, meetingType: string | null): string {
-  if (altioraTipo) return altioraTipo;
+  // Chip estreito no card do pipeline: forma curta do nome do convite
+  // ("Discovery"), não o código interno R1/R2/R3.
+  if (altioraTipo) return nomeReuniaoCurto(altioraTipo);
   if (meetingType) return MEETING_TYPE_SHORT_LABELS[meetingType] || 'Reunião';
   return 'Reunião';
 }

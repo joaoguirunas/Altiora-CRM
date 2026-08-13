@@ -86,7 +86,7 @@ const AltioraR3Section = ({
   if (currentStagePosition < R3_REALIZADA_MIN_POSITION) {
     return (
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado da R3</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado — IUL Implementation</p>
         <div className="flex items-center gap-2 p-3 rounded-[4px] border border-dashed border-border/40 text-muted-foreground/50">
           <Clock className="w-4 h-4 flex-none" strokeWidth={1.5} />
           <span className="text-[12px]">Preencher após a R3</span>
@@ -137,7 +137,7 @@ const AltioraR3Section = ({
   if (isLoading) {
     return (
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado da R3</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado — IUL Implementation</p>
         <div className="flex justify-center py-5"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground/40" /></div>
       </div>
     );
@@ -147,7 +147,7 @@ const AltioraR3Section = ({
     <div className="space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado da R3</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Resultado — IUL Implementation</p>
         <div className="flex items-center gap-2">
           {isFilled && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 rounded-[2px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
@@ -210,7 +210,7 @@ const AltioraR3Section = ({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-5 gap-2">
-              <p className="text-[12px] text-muted-foreground/50">Resultado da R3 não registrado</p>
+              <p className="text-[12px] text-muted-foreground/50">Resultado da IUL Implementation não registrado</p>
               <Button variant="outline" size="sm" onClick={startEditing} className="h-7 px-3 text-xs rounded-[4px]">
                 Preencher
               </Button>
