@@ -38,6 +38,14 @@ interface ConvidadosEmailFieldProps {
   alreadyInvited?: string[];
   label?: string;
   disabled?: boolean;
+  /**
+   * Desliga os chips internos quando quem usa o campo já lista os e-mails em
+   * outro lugar — caso do dropdown de participantes, onde os chips ficam fora
+   * do popover (senão sumiriam ao fechá-lo).
+   */
+  showChips?: boolean;
+  /** Texto de ajuda abaixo do input. `null` esconde. */
+  hint?: string | null;
 }
 
 export const ConvidadosEmailField = ({
@@ -46,6 +54,8 @@ export const ConvidadosEmailField = ({
   alreadyInvited = [],
   label = 'Convidar por e-mail',
   disabled = false,
+  showChips = true,
+  hint = 'Enter ou vírgula para adicionar. Recebem o convite do calendário como participantes, sem acesso ao CRM.',
 }: ConvidadosEmailFieldProps) => {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +145,7 @@ export const ConvidadosEmailField = ({
 
       {error && <p className="text-[11px] text-destructive">{error}</p>}
 
-      {value.length > 0 && (
+      {showChips && value.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1">
           {value.map(email => (
             <Badge
@@ -157,10 +167,7 @@ export const ConvidadosEmailField = ({
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground/50">
-        Enter ou vírgula para adicionar. Recebem o convite do calendário como
-        participantes, sem acesso ao CRM.
-      </p>
+      {hint && <p className="text-[11px] text-muted-foreground/50">{hint}</p>}
     </div>
   );
 };

@@ -84,7 +84,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, title, notes, zoom_meeting_id,
-        user_id, altiora_tipo,
+        user_id, altiora_tipo, invite_title, invite_description,
         leads ( id, clients_people ( id, name, email ) ),
         clients_people ( id, name, email )
       `)
@@ -187,6 +187,12 @@ Deno.serve(async (req: Request) => {
       topic  = invite.title;
       agenda = invite.description;
     }
+
+    // Override do closer — ver comentário equivalente em google-cal-upsert-event.
+    const inviteTitleOverride = ((meeting.invite_title as string | null) ?? '').trim();
+    const inviteAgendaOverride = ((meeting.invite_description as string | null) ?? '').trim();
+    if (inviteTitleOverride) topic = inviteTitleOverride;
+    if (inviteAgendaOverride) agenda = inviteAgendaOverride;
 
     const zoomPayload = {
       topic:    topic + refSuffix,

@@ -13,6 +13,8 @@ export interface AltioraCloser {
   name: string;
   email: string;
   fuso_horario?: string | null;
+  /** WhatsApp cru de settings_users — usado no preview do convite. */
+  whatsapp?: string | null;
 }
 
 export interface AtribuirCloserParams {
@@ -30,7 +32,7 @@ export const useAltioraClosers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('settings_users')
-        .select('id, name, email, fuso_horario')
+        .select('id, name, email, fuso_horario, whatsapp')
         .eq('user_type', 'closer')
         .eq('active', true)
         .is('deleted_at', null)
@@ -59,7 +61,7 @@ export const useAltioraInternalUsers = (options?: { enabled?: boolean }) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('settings_users')
-        .select('id, name, email, fuso_horario')
+        .select('id, name, email, fuso_horario, whatsapp')
         .eq('active', true)
         .is('deleted_at', null)
         .order('name') as unknown as {

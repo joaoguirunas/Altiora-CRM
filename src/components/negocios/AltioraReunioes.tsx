@@ -64,7 +64,19 @@ const TIPO_CONFIG: Record<AltioraMeetingType, { label: string; color: string; bg
   R1: { label: ALTIORA_REUNIAO_NOME.R1, color: ALTIORA_REUNIAO_COR.R1, bgColor: 'bg-[#3B82F6]/10' },
   R2: { label: ALTIORA_REUNIAO_NOME.R2, color: ALTIORA_REUNIAO_COR.R2, bgColor: 'bg-[#8B5CF6]/10' },
   R3: { label: ALTIORA_REUNIAO_NOME.R3, color: ALTIORA_REUNIAO_COR.R3, bgColor: 'bg-[#10B981]/10' },
+  EXTRA: { label: ALTIORA_REUNIAO_NOME.EXTRA, color: ALTIORA_REUNIAO_COR.EXTRA, bgColor: 'bg-[#F59E0B]/10' },
 };
+
+/**
+ * Tipos que podem se repetir no mesmo negócio. R1/R2/R3 são etapas do funil —
+ * acontecem uma vez (as tentativas anteriores viram histórico). Reunião Extra é
+ * avulsa: podem existir várias, todas ativas ao mesmo tempo.
+ */
+const TIPOS_MULTIPLOS: AltioraMeetingType[] = ['EXTRA'];
+
+/** Nome de exibição da reunião: a Extra usa o título dado pelo closer. */
+const tituloReuniao = (meeting: AltioraMeeting, fallback: string): string =>
+  (meeting.invite_title?.trim() || meeting.title?.trim() || fallback);
 
 const STATUS_BADGE: Record<string, string> = {
   agendado:    'text-[#3B82F6] bg-[#3B82F6]/10 border-[#3B82F6]/20',
@@ -144,6 +156,14 @@ const MeetingCard = ({ meeting, tipo, onReschedule, onCancel, onRegistrarResulta
       'border border-border rounded-[4px] bg-card p-3 space-y-2',
       isCancelled && 'opacity-60',
     )}>
+      {/* Reunião Extra não tem nome fixo — mostra o título dado pelo closer,
+          que é o mesmo que o cliente viu no convite. */}
+      {tipo === 'EXTRA' && (
+        <p className="text-[12px] font-medium text-foreground truncate">
+          {tituloReuniao(meeting, TIPO_CONFIG.EXTRA.label)}
+        </p>
+      )}
+
       {/* Header: data + status */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -277,7 +297,7 @@ export const AltioraReunioes = ({
   // ALTIORA-14: drawer de resultado
   const [resultadoTarget, setResultadoTarget] = useState<AltioraMeeting | undefined>(undefined);
   // Histórico: tentativas anteriores do mesmo tipo (canceladas, no-show, etc.)
-  const [expandedHistory, setExpandedHistory] = useState<Record<AltioraMeetingType, boolean>>({ R1: false, R2: false, R3: false });
+  const [expandedHistory, setExpandedHistory] = useState<Record<AltioraMeetingType, boolean>>({ R1: false, R2: false, R3: false, EXTRA: false });
 
   const openScheduleModal = (tipo: AltioraMeetingType) => {
     setSelectedTipo(tipo);
@@ -326,10 +346,17 @@ export const AltioraReunioes = ({
         const tipoMeets  = [...meetings.filter(m => m.altiora_tipo === tipo)].sort(
           (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
         );
-        const [latestMeet, ...historyMeets] = tipoMeets;
-        const hasScheduled = tipoMeets.some(
-          m => m.status !== 'cancelada' && m.status !== 'cancelado',
-        );
+        const permiteVarias = TIPOS_MULTIPLOS.includes(tipo);
+        const isCancelada = (m: AltioraMeeting) =>
+          m.status === 'cancelada' || m.status === 'cancelado';
+        const ativas = tipoMeets.filter(m => !isCancelada(m));
+        // Tipo avulso (Extra) mostra todas as ativas lado a lado; tipo de funil
+        // mostra só a mais recente e manda as tentativas anteriores ao histórico.
+        const cardMeets = permiteVarias
+          ? (ativas.length ? ativas : tipoMeets.slice(0, 1))
+          : tipoMeets.slice(0, 1);
+        const historicoMeets = tipoMeets.filter(m => !cardMeets.includes(m));
+        const hasScheduled = ativas.length > 0;
         const historyOpen = expandedHistory[tipo];
 
         return (
@@ -353,7 +380,7 @@ export const AltioraReunioes = ({
                 )}
               </div>
 
-              {canSchedule && !hasScheduled && (
+              {canSchedule && (!hasScheduled || permiteVarias) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -368,27 +395,32 @@ export const AltioraReunioes = ({
               )}
             </div>
 
-            {/* Meeting card ou empty state */}
-            {latestMeet ? (
-              <MeetingCard
-                meeting={latestMeet}
-                tipo={tipo}
-                leadId={leadId}
-                onReschedule={openRescheduleModal}
-                onCancel={m => setCancelTarget(m)}
-                onRegistrarResultado={m => setResultadoTarget(m)}
-                canSchedule={canSchedule}
-              />
+            {/* Meeting cards ou empty state */}
+            {cardMeets.length > 0 ? (
+              cardMeets.map(m => (
+                <MeetingCard
+                  key={m.id}
+                  meeting={m}
+                  tipo={tipo}
+                  leadId={leadId}
+                  onReschedule={openRescheduleModal}
+                  onCancel={target => setCancelTarget(target)}
+                  onRegistrarResultado={target => setResultadoTarget(target)}
+                  canSchedule={canSchedule}
+                />
+              ))
             ) : (
               <div className="border border-dashed border-border/40 rounded-[4px] py-4 text-center">
                 <p className="text-[12px] text-muted-foreground/40">
-                  {config.label} ainda não agendada
+                  {permiteVarias
+                    ? `Nenhuma ${config.label.toLowerCase()} agendada`
+                    : `${config.label} ainda não agendada`}
                 </p>
               </div>
             )}
 
             {/* Histórico: demais tentativas desse tipo (mantém o histórico completo do cliente) */}
-            {historyMeets.length > 0 && (
+            {historicoMeets.length > 0 && (
               <div>
                 <button
                   type="button"
@@ -396,13 +428,13 @@ export const AltioraReunioes = ({
                   className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors py-1"
                 >
                   <History className="w-3 h-3" />
-                  Histórico ({historyMeets.length})
+                  Histórico ({historicoMeets.length})
                   {historyOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
 
                 {historyOpen && (
                   <div className="space-y-1.5 pl-1">
-                    {historyMeets.map(m => {
+                    {historicoMeets.map(m => {
                       const statusKey   = getDisplayStatusKey(m);
                       const badgeClass  = STATUS_BADGE[statusKey] ?? 'text-muted-foreground bg-muted border-border';
                       const statusLabel = STATUS_LABEL[statusKey] ?? m.status;
@@ -416,6 +448,11 @@ export const AltioraReunioes = ({
                             <span className="text-[11px] text-muted-foreground truncate">
                               {format(new Date(m.start_time), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                             </span>
+                            {tipo === 'EXTRA' && (
+                              <span className="text-[11px] text-muted-foreground/50 truncate">
+                                — {tituloReuniao(m, config.label)}
+                              </span>
+                            )}
                             {m.altiora_resultado && (
                               <span className="text-[11px] text-muted-foreground/50 truncate">
                                 — {m.altiora_resultado}

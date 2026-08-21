@@ -7,7 +7,7 @@
  *      Cria evento no Google Calendar do Closer + Google Meet automático.
  * AC3: Detecta conflito de horário no banco local e exibe aviso.
  * AC4: Botão "Reagendar" pré-preenche modal e faz PATCH do evento.
- * AC5: Fallback manual quando GCal não configurado — Closer insere link manualmente.
+ * AC5: O link do Meet é sempre gerado pelo Google Calendar — não há campo manual.
  * AC6: Registra interação em `altiora_lead_interactions`.
  */
 
@@ -18,8 +18,6 @@ import {
   Calendar,
   Clock,
   AlertTriangle,
-  Link as LinkIcon,
-  Video,
   Check,
   ChevronDown,
   Plus,
@@ -34,8 +32,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -69,6 +67,7 @@ import {
   useMeetingGuests,
 } from '@/hooks/useAltioraMeetings';
 import ConvidadosEmailField from '@/components/reunioes/ConvidadosEmailField';
+import { buildInvitePreview } from '@/lib/invitePreview';
 import { ALTIORA_REUNIAO_NOME } from '@/constants/altioraReunioes';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -150,7 +149,6 @@ export const AltioraAgendarReuniaoModal = ({
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
   /** Convidados externos por e-mail — ver ConvidadosEmailField. */
   const [guestEmails, setGuestEmails] = useState<string[]>([]);
-  const [showCollaborators, setShowCollaborators] = useState(false);
   const [collaboratorsPopoverOpen, setCollaboratorsPopoverOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     meetingToEdit ? new Date(meetingToEdit.start_time) : undefined,
@@ -166,7 +164,16 @@ export const AltioraAgendarReuniaoModal = ({
     meetingToEdit?.altiora_duracao_minutos ?? 60,
   );
   const [notes, setNotes] = useState(meetingToEdit?.notes ?? '');
-  const [manualLink, setManualLink] = useState(meetingToEdit?.meeting_link ?? '');
+  // Convite: o texto do template fica pré-preenchido e o closer pode ajustar.
+  // Enquanto ele não editar (`*Dirty` false), os campos acompanham as mudanças
+  // do formulário (tipo, duração, colaboradores, observações) e nada é salvo —
+  // o servidor continua montando o convite pelo template. Ao editar, o texto
+  // dele é gravado em `meetings.invite_title` / `invite_description` e passa a
+  // valer sobre o template.
+  const [inviteTitle, setInviteTitle] = useState('');
+  const [inviteBody, setInviteBody] = useState('');
+  const [inviteTitleDirty, setInviteTitleDirty] = useState(false);
+  const [inviteBodyDirty, setInviteBodyDirty] = useState(false);
   const [forceConflict, setForceConflict] = useState(false);
   const [conflict, setConflict] = useState<{ hasConflict: boolean; slots: Array<{ start: string; end: string }> } | null>(null);
 
@@ -184,12 +191,18 @@ export const AltioraAgendarReuniaoModal = ({
       });
       setDuracao(meetingToEdit?.altiora_duracao_minutos ?? 60);
       setNotes(meetingToEdit?.notes ?? '');
-      setManualLink(meetingToEdit?.meeting_link ?? '');
+      // Reagendamento de reunião que já tinha convite customizado reabre com o
+      // texto salvo (e já "sujo", para não ser sobrescrito pelo template).
+      const savedTitle = meetingToEdit?.invite_title?.trim() ?? '';
+      const savedBody  = meetingToEdit?.invite_description?.trim() ?? '';
+      setInviteTitle(savedTitle);
+      setInviteBody(savedBody);
+      setInviteTitleDirty(!!savedTitle);
+      setInviteBodyDirty(!!savedBody);
       setForceConflict(false);
       setConflict(null);
       // ALTIORA-27: reset organizador/colaboradores
       setOrganizerId(meetingToEdit?.user_id ?? currentUserId ?? closerId);
-      setShowCollaborators(false);
       setCollaboratorsPopoverOpen(false);
       if (!meetingToEdit) {
         setCollaboratorIds([]);
@@ -203,7 +216,6 @@ export const AltioraAgendarReuniaoModal = ({
   useEffect(() => {
     if (open && meetingToEdit) {
       setCollaboratorIds(existingCollaborators.map(c => c.user_id));
-      if (existingCollaborators.length > 0) setShowCollaborators(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, meetingToEdit?.id, existingCollaborators]);
@@ -212,7 +224,6 @@ export const AltioraAgendarReuniaoModal = ({
   useEffect(() => {
     if (open && meetingToEdit) {
       setGuestEmails(existingGuests.map(g => g.email));
-      if (existingGuests.length > 0) setShowCollaborators(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, meetingToEdit?.id, existingGuests]);
@@ -244,6 +255,48 @@ export const AltioraAgendarReuniaoModal = ({
       ...selectedCollaborators.map(u => u.email),
     ].filter((e): e is string => !!e);
   }, [clientEmail, collaboratorSource, effectiveOrganizerId, selectedCollaborators]);
+
+  const totalParticipantes = selectedCollaborators.length + guestEmails.length;
+
+  // ── Convite (título + corpo do e-mail) ────────────────────────────────────
+  // Mesmo builder usado pela edge function (ver src/lib/invitePreview.ts), para
+  // que o texto exibido aqui seja o mesmo que o cliente recebe.
+  const organizerUser = useMemo(
+    () => collaboratorSource.find(u => u.id === effectiveOrganizerId),
+    [collaboratorSource, effectiveOrganizerId],
+  );
+
+  const invitePreview = useMemo(
+    () => buildInvitePreview({
+      tipo,
+      clientName,
+      durationMinutes: duracao,
+      consultorNome: organizerUser?.name ?? meetingToEdit?.settings_users?.name ?? null,
+      consultorTelefone: organizerUser?.whatsapp ?? null,
+      notes,
+      colaboradores: selectedCollaborators.map(u => ({ nome: u.name })),
+    }),
+    [tipo, clientName, duracao, organizerUser, meetingToEdit, notes, selectedCollaborators],
+  );
+
+  // Campos não editados seguem o template; os editados ficam intocados.
+  useEffect(() => {
+    if (!inviteTitleDirty) setInviteTitle(invitePreview.title);
+    if (!inviteBodyDirty) setInviteBody(invitePreview.description);
+  }, [invitePreview, inviteTitleDirty, inviteBodyDirty]);
+
+  const restaurarConvitePadrao = () => {
+    setInviteTitleDirty(false);
+    setInviteBodyDirty(false);
+    setInviteTitle(invitePreview.title);
+    setInviteBody(invitePreview.description);
+  };
+
+  const inviteCustomizado = inviteTitleDirty || inviteBodyDirty;
+
+  // Reunião Extra não tem nome fixo no playbook: o título do convite é o nome
+  // dela, então é sempre gravado (mesmo sem edição) e não pode ficar vazio.
+  const isExtra = tipo === 'EXTRA';
 
   const toggleCollaborator = (id: string) => {
     setCollaboratorIds(prev =>
@@ -302,6 +355,11 @@ export const AltioraAgendarReuniaoModal = ({
           collaboratorIds,
           // Lista completa: o hook faz o diff (remove quem saiu do campo).
           guests: guestEmails.map(email => ({ email })),
+          // Só grava override do que foi realmente editado — o resto continua
+          // sendo montado pelo template no servidor.
+          inviteTitle: inviteTitleDirty || isExtra ? inviteTitle : null,
+          inviteDescription: inviteBodyDirty ? inviteBody : null,
+          title: isExtra ? inviteTitle : undefined,
         },
         { onSuccess: () => onOpenChange(false) },
       );
@@ -316,10 +374,12 @@ export const AltioraAgendarReuniaoModal = ({
           endTime: computedTimes.endTime,
           duracaoMinutos: duracao,
           notes: notes || undefined,
-          meetingLink: manualLink || undefined,
           clientEmail: clientEmail ?? undefined,
           collaboratorIds: collaboratorIds.length ? collaboratorIds : undefined,
           guests: guestEmails.length ? guestEmails.map(email => ({ email })) : undefined,
+          inviteTitle: inviteTitleDirty || isExtra ? inviteTitle : undefined,
+          inviteDescription: inviteBodyDirty ? inviteBody : undefined,
+          title: isExtra ? inviteTitle : undefined,
         },
         { onSuccess: () => onOpenChange(false) },
       );
@@ -336,7 +396,7 @@ export const AltioraAgendarReuniaoModal = ({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-1 -mr-1">
           {/* Tipo de reunião */}
           {!isEditing && (
             <div className="space-y-1.5">
@@ -468,112 +528,119 @@ export const AltioraAgendarReuniaoModal = ({
             </div>
           )}
 
-          {/* Mais participantes — colegas do time (multi-select) e convidados
-              externos por e-mail. Colapsado por padrão: a maioria das reuniões
-              é só organizador + cliente. */}
+          {/* Adicionar participantes — um único dropdown, sempre visível: em
+              cima os colegas do time (co-hosts), embaixo o campo de e-mail para
+              quem é de fora. Os chips ficam fora do popover para continuarem
+              visíveis com ele fechado. */}
           <div className="space-y-1.5">
-            {!showCollaborators ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCollaborators(true)}
-                className="h-7 px-1.5 text-[12px] gap-1.5 text-muted-foreground hover:text-foreground rounded-[3px]"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar participantes
-              </Button>
-            ) : (
-              <>
-                <Label className="text-[12px] text-muted-foreground flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5" />
-                  Colegas do time
-                </Label>
+            <Label className="text-[12px] text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Adicionar participantes
+            </Label>
 
-                <Popover open={collaboratorsPopoverOpen} onOpenChange={setCollaboratorsPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={collaboratorsPopoverOpen}
-                      className="w-full justify-between h-9 text-[13px] font-normal rounded-[4px]"
-                    >
-                      <span className="text-muted-foreground/60 truncate">
-                        {selectedCollaborators.length > 0
-                          ? `${selectedCollaborators.length} selecionado${selectedCollaborators.length > 1 ? 's' : ''}`
-                          : 'Selecionar colega(s)'}
-                      </span>
-                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Buscar..." className="h-9 text-[13px]" />
-                      <CommandList>
-                        <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
-                        <CommandGroup>
-                          {availableCollaborators.map(u => (
-                            <CommandItem
-                              key={u.id}
-                              value={u.name}
-                              onSelect={() => toggleCollaborator(u.id)}
-                              className="text-[13px] cursor-pointer"
-                            >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-3.5 w-3.5',
-                                  collaboratorIds.includes(u.id) ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                              <div className="flex flex-col">
-                                <span>{u.name}</span>
-                                {u.email && (
-                                  <span className="text-[11px] text-muted-foreground/50">{u.email}</span>
-                                )}
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-
-                {selectedCollaborators.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {selectedCollaborators.map(u => (
-                      <Badge
-                        key={u.id}
-                        variant="outline"
-                        className="text-[11px] gap-1 pl-2 pr-1 py-0.5 rounded-[3px] font-normal"
-                      >
-                        {u.name}
-                        <button
-                          type="button"
-                          onClick={() => toggleCollaborator(u.id)}
-                          className="hover:text-destructive"
-                          aria-label={`Remover ${u.name}`}
+            <Popover open={collaboratorsPopoverOpen} onOpenChange={setCollaboratorsPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={collaboratorsPopoverOpen}
+                  className="w-full justify-between h-9 text-[13px] font-normal rounded-[4px]"
+                >
+                  <span className="text-muted-foreground/60 truncate flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5" />
+                    {totalParticipantes > 0
+                      ? `${totalParticipantes} adicionado${totalParticipantes > 1 ? 's' : ''}`
+                      : 'Adicionar participantes'}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar colega..." className="h-9 text-[13px]" />
+                  <CommandList className="max-h-56">
+                    <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+                    <CommandGroup heading="Colegas do time">
+                      {availableCollaborators.map(u => (
+                        <CommandItem
+                          key={u.id}
+                          value={u.name}
+                          onSelect={() => toggleCollaborator(u.id)}
+                          className="text-[13px] cursor-pointer"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <p className="text-[11px] text-muted-foreground/50">
-                  Colegas que também vão participar como responsáveis desta reunião (co-host no convite).
-                </p>
+                          <Check
+                            className={cn(
+                              'mr-2 h-3.5 w-3.5',
+                              collaboratorIds.includes(u.id) ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                          <div className="flex flex-col">
+                            <span>{u.name}</span>
+                            {u.email && (
+                              <span className="text-[11px] text-muted-foreground/50">{u.email}</span>
+                            )}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
 
                 {/* Convidados de fora — não são co-hosts, só participantes. */}
-                <div className="pt-2">
+                <div className="border-t border-border p-2">
                   <ConvidadosEmailField
                     value={guestEmails}
                     onChange={setGuestEmails}
                     alreadyInvited={alreadyInvitedEmails}
+                    label="Adicionar por e-mail"
+                    showChips={false}
+                    hint="Enter ou vírgula para adicionar. Recebem só o convite do calendário."
                   />
                 </div>
-              </>
+              </PopoverContent>
+            </Popover>
+
+            {(selectedCollaborators.length > 0 || guestEmails.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {selectedCollaborators.map(u => (
+                  <Badge
+                    key={u.id}
+                    variant="outline"
+                    className="text-[11px] gap-1 pl-2 pr-1 py-0.5 rounded-[3px] font-normal max-w-full"
+                  >
+                    <span className="truncate">{u.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleCollaborator(u.id)}
+                      className="hover:text-destructive flex-shrink-0"
+                      aria-label={`Remover ${u.name}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {guestEmails.map(email => (
+                  <Badge
+                    key={email.toLowerCase()}
+                    variant="outline"
+                    className="text-[11px] gap-1 pl-2 pr-1 py-0.5 rounded-[3px] font-normal max-w-full"
+                  >
+                    <span className="truncate">{email}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGuestEmails(prev =>
+                          prev.filter(e => e.toLowerCase() !== email.toLowerCase()),
+                        )
+                      }
+                      className="hover:text-destructive flex-shrink-0"
+                      aria-label={`Remover ${email}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
             )}
           </div>
 
@@ -588,24 +655,46 @@ export const AltioraAgendarReuniaoModal = ({
             />
           </div>
 
-          {/* Fallback manual — AC5 */}
+          {/* Convite — o que o cliente recebe por e-mail. Vem pronto pelo
+              template; editar substitui o texto do servidor. */}
           <div className="space-y-1.5">
-            <Label className="text-[12px] text-muted-foreground flex items-center gap-1.5">
-              <Video className="w-3.5 h-3.5" />
-              Link do Meet (opcional — gerado automaticamente pelo Google Calendar)
-            </Label>
-            <div className="relative">
-              <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40" />
-              <Input
-                value={manualLink}
-                onChange={e => setManualLink(e.target.value)}
-                placeholder="https://meet.google.com/... (deixe em branco para gerar)"
-                className="pl-9 h-9 text-[13px] rounded-[4px]"
-              />
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[12px] text-muted-foreground">
+                {isExtra ? 'Título da reunião (convite)' : 'Título do e-mail (convite)'}
+              </Label>
+              {inviteCustomizado && (
+                <button
+                  type="button"
+                  onClick={restaurarConvitePadrao}
+                  className="text-[11px] text-muted-foreground/60 hover:text-foreground underline underline-offset-2"
+                >
+                  Restaurar padrão
+                </button>
+              )}
             </div>
+            <Input
+              value={inviteTitle}
+              onChange={e => { setInviteTitle(e.target.value); setInviteTitleDirty(true); }}
+              className="h-9 text-[13px] rounded-[4px]"
+            />
+            {isExtra && (
+              <p className="text-[11px] text-muted-foreground/50">
+                É este título que o cliente vê no convite e que identifica a reunião na aba Reuniões.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[12px] text-muted-foreground">Corpo do e-mail (convite)</Label>
+            <Textarea
+              value={inviteBody}
+              onChange={e => { setInviteBody(e.target.value); setInviteBodyDirty(true); }}
+              className="text-[13px] rounded-[4px] min-h-[160px]"
+            />
             <p className="text-[11px] text-muted-foreground/50">
-              Se o Google Calendar estiver conectado, o Meet é criado automaticamente.
-              Insira apenas se precisar de um link externo.
+              {inviteCustomizado
+                ? 'Convite personalizado — este texto substitui o modelo padrão.'
+                : 'Preenchido pelo modelo padrão. Edite apenas se precisar de um texto diferente.'}
             </p>
           </div>
 
@@ -660,7 +749,7 @@ export const AltioraAgendarReuniaoModal = ({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isPending || !selectedDate || !startHour}
+            disabled={isPending || !selectedDate || !startHour || (isExtra && !inviteTitle.trim())}
             className="text-[13px] rounded-[4px]"
           >
             {isPending

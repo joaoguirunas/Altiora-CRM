@@ -65,8 +65,15 @@ Deno.test('títulos R1/R2/R3 (ajustados 2026-08-07) permanecem os esperados', ()
   assertEquals(buildAltioraInvite({ ...BASE_INPUT, tipo: 'R3' }).title, 'IUL Implementation — Maria Silva');
 });
 
+Deno.test('EXTRA — título padrão da reunião avulsa (o closer troca no modal)', () => {
+  const invite = buildAltioraInvite({ ...BASE_INPUT, tipo: 'EXTRA' });
+  assertEquals(invite.title, 'Reunião Extra — Maria Silva');
+  assertStringIncludes(invite.description, 'Olá, Maria Silva.');
+});
+
 Deno.test('isAltioraMeetingType e formatConsultorPhone seguem funcionando (smoke test de regressão)', () => {
   assertEquals(isAltioraMeetingType('R1'), true);
+  assertEquals(isAltioraMeetingType('EXTRA'), true);
   assertEquals(isAltioraMeetingType('R4'), false);
   assertEquals(formatConsultorPhone('11912345678'), '+55 (11) 91234-5678');
 });

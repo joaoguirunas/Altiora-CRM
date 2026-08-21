@@ -1,5 +1,5 @@
 /**
- * ALTIORA — Templates de convite de reunião (R1 / R2 / R3)
+ * ALTIORA — Templates de convite de reunião (R1 / R2 / R3 / EXTRA)
  *
  * Fonte: "Fluxo Operacional — Da Indicação Avenue até agendamento R1" (slides 8–10),
  * seção "04 | Invite — Template Obrigatório".
@@ -9,9 +9,13 @@
  *
  * Quando `meetings.altiora_tipo` é NULL (reunião fora do fluxo Altiora), o
  * chamador mantém o texto genérico legado — este módulo devolve `null`.
+ *
+ * Em qualquer tipo, o texto daqui é só o padrão: se o closer editou o convite no
+ * modal de agendamento, `meetings.invite_title`/`invite_description` substituem
+ * o que este módulo devolve (ver 20260821120000_add_meeting_invite_override.sql).
  */
 
-export type AltioraMeetingType = 'R1' | 'R2' | 'R3';
+export type AltioraMeetingType = 'R1' | 'R2' | 'R3' | 'EXTRA';
 
 /** Rótulo do provedor de videoconferência, usado no corpo da descrição. */
 export type ConferenceProvider = 'Google Meet' | 'Microsoft Teams' | 'Zoom';
@@ -39,10 +43,19 @@ const COPY: Record<AltioraMeetingType, InviteCopy> = {
     objetivo:
       'Nesta reunião, vamos alinhar os detalhes finais e os próximos passos para a formalização da estrutura.',
   },
+  // Reunião avulsa, fora da sequência R1→R2→R3. O texto aqui é só o ponto de
+  // partida: no modal de agendamento o closer edita título e corpo, e o que ele
+  // escrever é gravado em meetings.invite_title/invite_description e substitui
+  // este template (ver 20260821120000_add_meeting_invite_override.sql).
+  EXTRA: {
+    titulo: 'Reunião Extra',
+    objetivo:
+      'Reservamos este horário para tratarmos os pontos que combinamos.',
+  },
 };
 
 export function isAltioraMeetingType(value: unknown): value is AltioraMeetingType {
-  return value === 'R1' || value === 'R2' || value === 'R3';
+  return value === 'R1' || value === 'R2' || value === 'R3' || value === 'EXTRA';
 }
 
 /**

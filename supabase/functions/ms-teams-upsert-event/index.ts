@@ -61,6 +61,7 @@ Deno.serve(async (req: Request) => {
       .select(`
         id, start_time, end_time, location, notes, meeting_link,
         status, title, ms_meeting_id, users_id, altiora_tipo,
+        invite_title, invite_description,
         leads (id, title, clients_people (id, name, email))
       `)
       .eq('id', meeting_id)
@@ -198,6 +199,12 @@ Deno.serve(async (req: Request) => {
       subject = invite.title + refSuffix;
       body = invite.description;
     }
+
+    // Override do closer — ver comentário equivalente em google-cal-upsert-event.
+    const inviteTitleOverride = ((meeting as Record<string, unknown>).invite_title as string ?? '').trim();
+    const inviteBodyOverride = ((meeting as Record<string, unknown>).invite_description as string ?? '').trim();
+    if (inviteTitleOverride) subject = inviteTitleOverride + refSuffix;
+    if (inviteBodyOverride) body = inviteBodyOverride;
 
     const payload = {
       subject,

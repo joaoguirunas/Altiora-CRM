@@ -21,7 +21,7 @@ export interface AgendamentoSimple {
   calendar_id?: string;
   gcal_sync_error?: string | null;
   /** R1/R2/R3 — presente apenas em reuniões Altiora; ausente em reuniões avulsas */
-  altiora_tipo?: 'R1' | 'R2' | 'R3' | null;
+  altiora_tipo?: 'R1' | 'R2' | 'R3' | 'EXTRA' | null;
   // Backward compatibility
   data?: string;
   hora_inicio?: string;

@@ -4391,6 +4391,8 @@ export type Database = {
           google_event_id: string | null
           google_meet_link: string | null
           id: string
+          invite_description: string | null
+          invite_title: string | null
           leads_id: string | null
           location: string | null
           meeting_type: string | null
@@ -4400,6 +4402,7 @@ export type Database = {
           source: string | null
           start_time: string
           status: string | null
+          title: string | null
           users_id: string | null
         }
         Insert: {
@@ -4421,6 +4424,8 @@ export type Database = {
           google_event_id?: string | null
           google_meet_link?: string | null
           id?: string
+          invite_description?: string | null
+          invite_title?: string | null
           leads_id?: string | null
           location?: string | null
           meeting_type?: string | null
@@ -4430,6 +4435,7 @@ export type Database = {
           source?: string | null
           start_time: string
           status?: string | null
+          title?: string | null
           users_id?: string | null
         }
         Update: {
@@ -4451,6 +4457,8 @@ export type Database = {
           google_event_id?: string | null
           google_meet_link?: string | null
           id?: string
+          invite_description?: string | null
+          invite_title?: string | null
           leads_id?: string | null
           location?: string | null
           meeting_type?: string | null
@@ -4460,6 +4468,7 @@ export type Database = {
           source?: string | null
           start_time?: string
           status?: string | null
+          title?: string | null
           users_id?: string | null
         }
         Relationships: [

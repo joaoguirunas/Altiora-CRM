@@ -20,10 +20,10 @@ import { useConsultorDisponibilidade } from '@/hooks/useConsultorDisponibilidade
 import { useCriarAgendamento } from '@/hooks/useAgendamentos';
 import { useAuth } from '@/hooks/useAuth';
 import { isAltioraPipeline } from '@/utils/pipelineLabels';
-import { ALTIORA_TIPOS, ALTIORA_REUNIAO_NOME } from '@/constants/altioraReunioes';
+import { ALTIORA_TIPOS, ALTIORA_REUNIAO_NOME, isAltioraTipoReuniao } from '@/constants/altioraReunioes';
 import ConvidadosEmailField from '@/components/reunioes/ConvidadosEmailField';
 
-type MeetingType = 'discovery' | 'demo' | 'closing' | 'consulting' | 'mentoring' | 'qbr' | 'followup' | 'other' | 'R1' | 'R2' | 'R3';
+type MeetingType = 'discovery' | 'demo' | 'closing' | 'consulting' | 'mentoring' | 'qbr' | 'followup' | 'other' | 'R1' | 'R2' | 'R3' | 'EXTRA';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -347,7 +347,7 @@ const NovaReuniaoWizardModal = ({ open, onOpenChange, initialLead }: Props) => {
                 type="button"
                 onClick={() =>
                   setState((prev) => {
-                    const wasAltiora = ['R1', 'R2', 'R3'].includes(prev.meetingType);
+                    const wasAltiora = isAltioraTipoReuniao(prev.meetingType);
                     // Altiora usa R1/R2/R3 — troca o default ao trocar de negócio, só quando
                     // o tipo atual não faz sentido pro pipeline recém-selecionado.
                     const meetingType = isAltiora

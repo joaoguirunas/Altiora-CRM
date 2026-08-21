@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
       .from('meetings')
       .select(`
         id, start_time, end_time, location, notes, meeting_link, status, title, google_event_id,
-        altiora_tipo,
+        altiora_tipo, invite_title, invite_description,
         users_id, people_id,
         leads (
           id, title,
@@ -248,6 +248,15 @@ Deno.serve(async (req: Request) => {
       summary = invite.title;
       description = invite.description;
     }
+
+    // Override do closer (modal de agendamento): quando ele edita o título ou o
+    // corpo do convite, o texto dele vale sobre o template — inclusive fora do
+    // fluxo Altiora. Campo vazio continua caindo no template, então reunião
+    // nenhuma muda de comportamento por causa desta migration.
+    const inviteTitleOverride = ((meeting as any).invite_title ?? '').trim();
+    const inviteDescriptionOverride = ((meeting as any).invite_description ?? '').trim();
+    if (inviteTitleOverride) summary = inviteTitleOverride;
+    if (inviteDescriptionOverride) description = inviteDescriptionOverride;
 
     const eventPayload: Record<string, unknown> = {
       summary: `${summary}${refSuffix}`,

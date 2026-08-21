@@ -16,7 +16,7 @@ const sbUntyped = supabase as unknown as SupabaseClient;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type AltioraMeetingType = 'R1' | 'R2' | 'R3';
+export type AltioraMeetingType = 'R1' | 'R2' | 'R3' | 'EXTRA';
 
 /**
  * Convidado externo de uma reunião — e-mail livre, sem linha em settings_users.
@@ -60,10 +60,15 @@ export interface AltioraMeeting {
   meeting_link?: string | null;
   google_event_id?: string | null;
   altiora_tipo?: AltioraMeetingType | null;
+  /** Título salvo em meetings.title — para EXTRA, é o título dado pelo closer. */
+  title?: string | null;
   altiora_duracao_minutos?: number | null;
   altiora_data_hora?: string | null;
   altiora_compareceu?: boolean | null;
   altiora_resultado?: string | null;
+  /** Override do convite feito pelo closer — vazio/NULL = template do servidor. */
+  invite_title?: string | null;
+  invite_description?: string | null;
   created_at: string;
   settings_users?: { id: string; name: string; email?: string } | null;
 }
@@ -92,6 +97,15 @@ export interface CreateAltioraMeetingParams {
    * attendees[] do evento — não são co-hosts nem assinam o convite.
    */
   guests?: MeetingGuestInput[];
+  /**
+   * Título/corpo do convite editados pelo closer no modal. Só vêm preenchidos
+   * quando ele de fato mexeu no texto — caso contrário ficam `undefined` e a
+   * edge function segue montando o convite pelo template do playbook.
+   */
+  inviteTitle?: string | null;
+  inviteDescription?: string | null;
+  /** Nome da reunião dentro do CRM (`meetings.title`). Usado pela Reunião Extra. */
+  title?: string | null;
 }
 
 /** E-mail obrigatório; nome é opcional (o fluxo padrão captura só o e-mail). */
@@ -117,6 +131,11 @@ export interface UpdateAltioraMeetingParams {
    * hook calcula o diff por e-mail (case-insensitive). `undefined` = não mexer.
    */
   guests?: MeetingGuestInput[];
+  /** Override do convite — ver CreateAltioraMeetingParams. */
+  inviteTitle?: string | null;
+  inviteDescription?: string | null;
+  /** Nome da reunião no CRM — ver CreateAltioraMeetingParams. */
+  title?: string | null;
 }
 
 // ── Hook: listar reuniões Altiora de um lead ──────────────────────────────────
@@ -128,10 +147,10 @@ export const useAltioraMeetings = (leadId: string) => {
       const { data, error } = await supabase
         .from('meetings')
         .select(`
-          id, leads_id, users_id, date, start_time, end_time, status, notes,
+          id, leads_id, users_id, date, start_time, end_time, status, notes, title,
           location, google_meet_link, google_event_id,
           altiora_tipo, altiora_duracao_minutos, altiora_data_hora,
-          altiora_compareceu, altiora_resultado, created_at,
+          altiora_compareceu, altiora_resultado, invite_title, invite_description, created_at,
           settings_users ( id, name, email )
         `)
         .eq('leads_id', leadId)
@@ -311,9 +330,14 @@ export const useCreateAltioraMeeting = () => {
           google_meet_link:      params.meetingLink ?? null,
           status:                'agendado',
           altiora_tipo:          params.tipo,
+          // Reunião Extra não tem nome fixo: o título do convite é também o
+          // nome dela dentro do CRM.
+          ...(params.title?.trim() ? { title: params.title.trim() } : {}),
           altiora_duracao_minutos: params.duracaoMinutos,
           altiora_data_hora:     startIso,
           altiora_created_by:    params.closerId,
+          invite_title:          params.inviteTitle?.trim() || null,
+          invite_description:    params.inviteDescription?.trim() || null,
         })
         .select('id')
         .single();
@@ -417,6 +441,15 @@ export const useUpdateAltioraMeeting = () => {
           notes:                   params.notes ?? null,
           altiora_duracao_minutos: params.duracaoMinutos,
           altiora_data_hora:       startIso,
+          // Só toca no override quando o modal manda o campo: reagendamento
+          // que não mexeu no texto não pode apagar um convite já customizado.
+          ...(params.inviteTitle !== undefined
+            ? { invite_title: params.inviteTitle?.trim() || null }
+            : {}),
+          ...(params.inviteDescription !== undefined
+            ? { invite_description: params.inviteDescription?.trim() || null }
+            : {}),
+          ...(params.title?.trim() ? { title: params.title.trim() } : {}),
         })
         .eq('id', params.meetingId);
 

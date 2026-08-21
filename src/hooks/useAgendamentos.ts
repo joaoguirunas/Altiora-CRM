@@ -44,6 +44,14 @@ interface CreateAgendamentoData {
    * o convite e não têm conta no CRM.
    */
   guestEmails?: string[];
+  /**
+   * Título/corpo do convite editados à mão na tela de agendamento. Vazios ⇒ a
+   * edge function monta o convite pelo template (comportamento padrão); com
+   * texto ⇒ é ele que o cliente recebe. Ver migration
+   * 20260821120000_add_meeting_invite_override.sql.
+   */
+  invite_title?: string | null;
+  invite_description?: string | null;
 }
 
 interface UpdateAgendamentoData {
@@ -93,6 +101,7 @@ export const useCriarAgendamento = () => {
         R1: 'discovery', // R1 — Reunião de Diagnóstico
         R2: 'demo',      // R2 — Apresentação de Proposta
         R3: 'closing',   // R3 — Fechamento
+        EXTRA: 'other',  // Reunião Extra — fora da sequência R1→R2→R3
       };
       const altioraTipo = data.meeting_type && ALTIORA_PARA_MEETING_TYPE[data.meeting_type]
         ? data.meeting_type
@@ -117,6 +126,8 @@ export const useCriarAgendamento = () => {
           google_meet_link: data.google_meet_link || null,
           status: data.status || 'agendado',
           title: data.title || 'Reunião',
+          invite_title: data.invite_title?.trim() || null,
+          invite_description: data.invite_description?.trim() || null,
         })
         .select()
         .single();

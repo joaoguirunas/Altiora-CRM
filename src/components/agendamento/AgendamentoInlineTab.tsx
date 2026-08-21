@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,6 +10,7 @@ import {
   Loader2, CalendarPlus, CheckCircle2, Briefcase, Link2, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildInvitePreview } from '@/lib/invitePreview';
 
 interface AgendamentoInlineTabProps {
   personId: string | null;
@@ -30,6 +31,33 @@ export function AgendamentoInlineTab({
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime]     = useState('');
   const [done, setDone]           = useState(false);
+  // Convite enviado ao cliente. Vem pré-preenchido pelo mesmo modelo que a edge
+  // function usa; enquanto não for editado (`*Dirty` false) acompanha o
+  // formulário e nada é gravado — o servidor segue montando o texto sozinho.
+  // Editado, é o texto daqui que o cliente recebe (meetings.invite_*).
+  const [inviteTitle, setInviteTitle] = useState('');
+  const [inviteBody, setInviteBody]   = useState('');
+  const [inviteTitleDirty, setInviteTitleDirty] = useState(false);
+  const [inviteBodyDirty, setInviteBodyDirty]   = useState(false);
+
+  const invitePreview = useMemo(
+    () => buildInvitePreview({ clientName: personName, notes }),
+    [personName, notes],
+  );
+
+  useEffect(() => {
+    if (!inviteTitleDirty) setInviteTitle(invitePreview.title);
+    if (!inviteBodyDirty) setInviteBody(invitePreview.description);
+  }, [invitePreview, inviteTitleDirty, inviteBodyDirty]);
+
+  const inviteCustomizado = inviteTitleDirty || inviteBodyDirty;
+
+  const restaurarConvitePadrao = () => {
+    setInviteTitleDirty(false);
+    setInviteBodyDirty(false);
+    setInviteTitle(invitePreview.title);
+    setInviteBody(invitePreview.description);
+  };
 
   const canCreate = !!date && !!startTime && !!endTime && !!title.trim();
 
@@ -51,6 +79,9 @@ export function AgendamentoInlineTab({
         end_time: endTime,
         notes,
         status: 'agendado',
+        // Só vai override do que o usuário de fato editou.
+        invite_title: inviteTitleDirty ? inviteTitle : null,
+        invite_description: inviteBodyDirty ? inviteBody : null,
       },
       {
         onSuccess: () => { toast.success('Agendamento criado'); setDone(true); },
@@ -83,7 +114,10 @@ export function AgendamentoInlineTab({
         {linkedLeadId && (
           <p className="text-[11px] text-emerald-600 dark:text-emerald-400">Vinculado ao negócio selecionado</p>
         )}
-        <Button variant="outline" size="sm" onClick={() => { setDone(false); setDate(''); setStartTime(''); setEndTime(''); }} className="mt-1 h-[30px] text-xs rounded-[4px]">
+        <Button variant="outline" size="sm" onClick={() => {
+          setDone(false); setDate(''); setStartTime(''); setEndTime('');
+          setInviteTitleDirty(false); setInviteBodyDirty(false);
+        }} className="mt-1 h-[30px] text-xs rounded-[4px]">
           Criar outro agendamento
         </Button>
       </div>
@@ -133,6 +167,42 @@ export function AgendamentoInlineTab({
           rows={2}
           className="text-xs resize-none"
         />
+      </div>
+
+      {/* Convite — o que o cliente recebe por e-mail */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-[10px] text-white/40">Título do e-mail (convite)</Label>
+          {inviteCustomizado && (
+            <button
+              type="button"
+              onClick={restaurarConvitePadrao}
+              className="text-[10px] text-white/40 hover:text-foreground underline underline-offset-2"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
+        <Input
+          value={inviteTitle}
+          onChange={e => { setInviteTitle(e.target.value); setInviteTitleDirty(true); }}
+          className="h-8 text-xs"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-[10px] text-white/40">Corpo do e-mail (convite)</Label>
+        <Textarea
+          value={inviteBody}
+          onChange={e => { setInviteBody(e.target.value); setInviteBodyDirty(true); }}
+          rows={6}
+          className="text-xs"
+        />
+        <p className="text-[10px] text-white/40">
+          {inviteCustomizado
+            ? 'Convite personalizado — substitui o modelo padrão.'
+            : 'Preenchido pelo modelo padrão. Edite só se precisar.'}
+        </p>
       </div>
 
       <Button
