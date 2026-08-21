@@ -1,12 +1,13 @@
 {
-  "version": "4.82",
+  "version": "4.83",
   "major": 4,
-  "minor": 82,
-  "created_at": "2026-08-13T11:29:05.000Z",
-  "git_sha": "672d77c",
+  "minor": 83,
+  "created_at": "2026-08-21T10:38:27.000Z",
+  "git_sha": "4c3da4a",
   "migrations": [
-    "supabase/migrations/20260813180000_create_meeting_guests.sql"
+    "supabase/migrations/20260821120000_add_meeting_invite_override.sql",
+    "supabase/migrations/20260821130000_add_meeting_tipo_extra.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "feat(elephan): capture and display the call score card|feat(reunioes): use invite names in the UI and invite external guests by e-mail"
+  "changelog": "feat(reunioes): convite editável no agendamento e tipo \"Reunião Extra\""
 }
