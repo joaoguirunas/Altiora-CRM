@@ -1,13 +1,12 @@
 {
-  "version": "4.83",
+  "version": "4.84",
   "major": 4,
-  "minor": 83,
-  "created_at": "2026-08-21T10:38:27.000Z",
-  "git_sha": "4c3da4a",
+  "minor": 84,
+  "created_at": "2026-08-21T10:39:32.000Z",
+  "git_sha": "4f9d0d9",
   "migrations": [
-    "supabase/migrations/20260821120000_add_meeting_invite_override.sql",
-    "supabase/migrations/20260821130000_add_meeting_tipo_extra.sql"
+    "supabase/migrations/20260821140000_elephan_candidate_meetings.sql"
   ],
   "min_compat_from": "1.0",
-  "changelog": "feat(reunioes): convite editável no agendamento e tipo \"Reunião Extra\""
+  "changelog": "feat(elephan): pedir confirmação do contato quando o match da call é ambíguo"
 }
