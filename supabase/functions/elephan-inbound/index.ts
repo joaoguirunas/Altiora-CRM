@@ -31,6 +31,12 @@
  * `elephan_unmatched_events` (status='pending') para vínculo manual —
  * nada se perde, só não fica visível no negócio até alguém resolver.
  *
+ * O vínculo automático por horário só acontece quando é inequívoco: uma única
+ * reunião candidata na janela de ±90min. Se houver mais de uma, ou se a única
+ * candidata só apareceu numa janela larga, a call também vira pendência — com
+ * status='needs_confirmation' e os candidatos em `candidate_meeting_ids`, para
+ * o closer dizer de qual contato era a reunião (migration 20260821140000).
+ *
  * O webhook de teste da Elephan manda `{ event: "test", data: { message, webhookId } }`
  * — sem `data.id`, então é ignorado (logado, não processado).
  *
@@ -336,10 +342,14 @@ Deno.serve(async (req: Request) => {
       3 * 24 * 60 * 60_000, // ±3 dias — último recurso antes de virar pendência manual
     ];
 
+    // Reuniões plausíveis que NÃO foram vinculadas sozinhas — o closer escolhe
+    // qual delas era esta call. Ver migration 20260821140000.
+    let candidateMeetingIds: string[] = [];
+
     if (!meetingId && closerUserId) {
       const callTime = new Date(transcribe.dateIncluded).getTime();
       for (const windowMs of MATCH_WINDOWS_MS) {
-        const { data: candidateMeeting } = await supabase
+        const { data: candidates } = await supabase
           .from('meetings')
           .select('id, leads_id, start_time')
           .eq('users_id', closerUserId)
@@ -347,22 +357,37 @@ Deno.serve(async (req: Request) => {
           .gte('start_time', new Date(callTime - windowMs).toISOString())
           .lte('start_time', new Date(callTime + windowMs).toISOString())
           .order('start_time', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (candidateMeeting) {
-          meetingId = candidateMeeting.id;
-          leadId = candidateMeeting.leads_id;
+          .limit(5);
+
+        if (!candidates?.length) continue;
+
+        // Só vincula sozinho quando é inequívoco: um único candidato dentro da
+        // janela mais estreita. Vários candidatos, ou match que só apareceu numa
+        // janela larga, viram confirmação — colar no negócio errado em silêncio
+        // é pior do que pedir um clique ao closer.
+        const isNarrowWindow = windowMs === MATCH_WINDOWS_MS[0];
+        if (candidates.length === 1 && isNarrowWindow) {
+          meetingId = candidates[0].id;
+          leadId = candidates[0].leads_id;
           matchWindowUsed = windowMs;
-          break;
+        } else {
+          candidateMeetingIds = candidates.map((c) => c.id);
+          log.info('ambiguous or low-confidence match — asking for confirmation', {
+            transcribeId: transcribe.id,
+            candidates: candidateMeetingIds.length,
+            windowMs,
+          });
         }
+        break;
       }
     }
 
     if (!meetingId) {
-      log.warn('no matching meeting for this call — parking as pending', {
+      log.warn('call not linked automatically — parking for manual resolution', {
         transcribeId: transcribe.id,
         closerEmail: transcribe.user?.email,
         dateIncluded: transcribe.dateIncluded,
+        candidates: candidateMeetingIds.length,
       });
 
       const topics = [...(transcribe.keywords ?? []), ...(transcribe.tags ?? [])];
@@ -378,7 +403,10 @@ Deno.serve(async (req: Request) => {
           recording_url: transcribe.url_file ?? null,
           transcript_text: transcribe.transcript?.text ?? null,
           raw_payload: transcribe,
-          status: 'pending',
+          candidate_meeting_ids: candidateMeetingIds,
+          // 'needs_confirmation' = achamos reuniões plausíveis e queremos que o
+          // closer diga qual; 'pending' = não achamos nada e ele busca o negócio.
+          status: candidateMeetingIds.length ? 'needs_confirmation' : 'pending',
         },
         { onConflict: 'transcribe_id', ignoreDuplicates: false },
       );

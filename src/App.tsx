@@ -592,7 +592,9 @@ function AppContent() {
         } />
       </Route>
 
-      {/* ELEPHAN — pendências de vínculo manual, apenas super admin */}
+      {/* ELEPHAN — calls sem contato definido. Aberto a todo usuário logado: o
+          closer resolve as próprias calls (a tela filtra por consultor) e o
+          super admin vê as do time. */}
       <Route path="/elephan" element={
         <ProtectedRoute>
           <SectionErrorBoundary section="Layout">
@@ -601,11 +603,9 @@ function AppContent() {
         </ProtectedRoute>
       }>
         <Route index element={
-          <RestrictedRoute requireSuperAdmin>
-            <SectionErrorBoundary section="Elephan">
-              <Elephan />
-            </SectionErrorBoundary>
-          </RestrictedRoute>
+          <SectionErrorBoundary section="Elephan">
+            <Elephan />
+          </SectionErrorBoundary>
         } />
       </Route>
 

@@ -1,6 +1,6 @@
 {
   "baseline_generated_at": "2026-07-25T09:18:22Z",
-  "migrations_count": 864,
+  "migrations_count": 866,
   "migrations": [
     "_TEMPLATE.sql",
     "20250624143518-692fb78f-5eae-40f2-b384-c364f9f20eb4-ok.sql",
@@ -865,6 +865,8 @@
     "20260717140000_pipeline_kiwify_product_link.sql",
     "20260721120000_retorno_01_scheduled_callbacks.sql",
     "20260722010000_retorno_06_callback_cron.sql",
+    "20260821140000_elephan_candidate_meetings.rollback.sql",
+    "20260821140000_elephan_candidate_meetings.sql",
     "DRAFT_remove_q_field_columns.sql"
   ]
 }

@@ -121,7 +121,6 @@ const getModularSidebarItems = (t: (key: string) => string): SidebarItem[] => [
     title: "ELEPHAN",
     icon: AudioLines,
     path: "/elephan",
-    requireSuperAdmin: true,
   },
 ];
 

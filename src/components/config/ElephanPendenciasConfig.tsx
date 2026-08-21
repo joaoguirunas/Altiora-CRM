@@ -1,3 +1,15 @@
+/**
+ * Calls gravadas pela Elephan que ainda não têm contato definido no CRM.
+ *
+ * Dois casos, vindos do elephan-inbound (ver migration 20260821140000):
+ *   - 'needs_confirmation' — o match achou reuniões plausíveis do mesmo closer
+ *     no mesmo horário e quer confirmação de qual delas era a call. As
+ *     candidatas aparecem prontas para um clique.
+ *   - 'pending' — não achou nada; o closer busca o negócio na mão.
+ *
+ * Escopo: quem não é super admin só vê (e resolve) as calls que gravou.
+ */
+
 import { useState } from 'react';
 import { Bot, Calendar, Check, Loader2, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,13 +27,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { ALTIORA_REUNIAO_NOME_CURTO } from '@/constants/altioraReunioes';
 import {
   useElephanPendencias,
   useLinkElephanPendencia,
   useIgnoreElephanPendencia,
   useSearchNegocios,
+  useCandidateMeetings,
   type ElephanPendencia,
 } from '@/hooks/useElephanPendencias';
+
+/** O que o closer escolheu: uma reunião que já existe, ou um negócio novo. */
+type Escolha =
+  | { kind: 'candidate'; meetingId: string; leadId: string; leadPeopleId: string | null }
+  | { kind: 'negocio'; leadId: string; leadPeopleId: string | null };
 
 function LinkDialog({
   pendencia,
@@ -32,20 +51,24 @@ function LinkDialog({
 }) {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [escolha, setEscolha] = useState<Escolha | null>(null);
   const { data: results = [], isFetching } = useSearchNegocios(search);
+  const { data: candidatas = [], isLoading: loadingCandidatas } = useCandidateMeetings(
+    pendencia.candidate_meeting_ids,
+  );
   const linkMutation = useLinkElephanPendencia();
 
-  const selected = results.find((r) => r.id === selectedId);
-
   const handleConfirm = async () => {
-    if (!selected || !user?.profile?.id) return;
+    if (!escolha || !user?.profile?.id) return;
     try {
       await linkMutation.mutateAsync({
         pendenciaId: pendencia.id,
         transcribeId: pendencia.transcribe_id,
-        leadId: selected.id,
-        leadPeopleId: selected.people_id,
+        leadId: escolha.leadId,
+        leadPeopleId: escolha.leadPeopleId,
+        // Candidata = reunião que já está na agenda; anexa nela em vez de criar
+        // uma segunda reunião para o mesmo encontro.
+        meetingId: escolha.kind === 'candidate' ? escolha.meetingId : null,
         closerUserId: pendencia.closer_user_id,
         callDate: pendencia.call_date,
         title: pendencia.title,
@@ -58,7 +81,7 @@ function LinkDialog({
         answers: pendencia.raw_payload?.answers ?? null,
         scorecardPrompt: pendencia.raw_payload?.prompt ?? null,
       });
-      toast.success('Reunião vinculada ao negócio');
+      toast.success('Call vinculada ao contato');
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao vincular');
@@ -69,11 +92,62 @@ function LinkDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">Vincular call da Elephan a um negócio</DialogTitle>
+          <DialogTitle className="text-[15px]">De qual contato era essa call?</DialogTitle>
           <DialogDescription className="text-[12px]">
-            Busque pelo nome do negócio ou do cliente para vincular esta gravação.
+            {candidatas.length > 0
+              ? 'Escolha a reunião correspondente ou busque outro negócio.'
+              : 'Busque pelo nome do negócio ou do cliente para vincular esta gravação.'}
           </DialogDescription>
         </DialogHeader>
+
+        {(loadingCandidatas || candidatas.length > 0) && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground/60">
+              Reuniões desse horário
+            </p>
+            {loadingCandidatas && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
+              </div>
+            )}
+            <div className="space-y-1">
+              {candidatas.map((c) => {
+                const selected = escolha?.kind === 'candidate' && escolha.meetingId === c.meeting_id;
+                const tipo = c.altiora_tipo
+                  ? ALTIORA_REUNIAO_NOME_CURTO[c.altiora_tipo as keyof typeof ALTIORA_REUNIAO_NOME_CURTO]
+                  : null;
+                return (
+                  <button
+                    key={c.meeting_id}
+                    type="button"
+                    onClick={() =>
+                      setEscolha({
+                        kind: 'candidate',
+                        meetingId: c.meeting_id,
+                        leadId: c.lead_id,
+                        leadPeopleId: c.lead_people_id,
+                      })
+                    }
+                    className={`w-full text-left px-2.5 py-2 rounded-[4px] border text-[13px] transition-colors ${
+                      selected
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border hover:bg-accent/50'
+                    }`}
+                  >
+                    <p className="font-medium truncate">
+                      {c.pessoa_nome || c.lead_title || 'Negócio sem título'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/60 truncate">
+                      {format(new Date(c.start_time), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      {tipo ? ` · ${tipo}` : ''}
+                      {c.pessoa_nome && c.lead_title ? ` · ${c.lead_title}` : ''}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
@@ -81,51 +155,53 @@ function LinkDialog({
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setSelectedId(null);
+              setEscolha(null);
             }}
-            placeholder="Nome do negócio ou do cliente..."
+            placeholder="Buscar outro negócio ou cliente..."
             className="h-[34px] text-[13px] pl-8"
-            autoFocus
+            autoFocus={candidatas.length === 0}
           />
         </div>
 
-        <div className="max-h-56 overflow-y-auto space-y-1 border border-border rounded-[4px] p-1 min-h-[60px]">
-          {isFetching && (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
-            </div>
-          )}
-          {!isFetching && search.trim().length >= 2 && results.length === 0 && (
-            <p className="text-[12px] text-muted-foreground/50 text-center py-4">
-              Nenhum negócio encontrado
-            </p>
-          )}
-          {results.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setSelectedId(r.id)}
-              className={`w-full text-left px-2.5 py-2 rounded-[4px] text-[13px] transition-colors ${
-                selectedId === r.id ? 'bg-primary/10 text-primary' : 'hover:bg-accent/50'
-              }`}
-            >
-              <p className="font-medium truncate">{r.title || 'Sem título'}</p>
-              {r.pessoa_nome && (
-                <p className="text-[11px] text-muted-foreground/60 truncate">{r.pessoa_nome}</p>
-              )}
-            </button>
-          ))}
-        </div>
+        {search.trim().length >= 2 && (
+          <div className="max-h-48 overflow-y-auto space-y-1 border border-border rounded-[4px] p-1 min-h-[60px]">
+            {isFetching && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/50" />
+              </div>
+            )}
+            {!isFetching && results.length === 0 && (
+              <p className="text-[12px] text-muted-foreground/50 text-center py-4">
+                Nenhum negócio encontrado
+              </p>
+            )}
+            {results.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() =>
+                  setEscolha({ kind: 'negocio', leadId: r.id, leadPeopleId: r.people_id })
+                }
+                className={`w-full text-left px-2.5 py-2 rounded-[4px] text-[13px] transition-colors ${
+                  escolha?.kind === 'negocio' && escolha.leadId === r.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'hover:bg-accent/50'
+                }`}
+              >
+                <p className="font-medium truncate">{r.title || 'Sem título'}</p>
+                {r.pessoa_nome && (
+                  <p className="text-[11px] text-muted-foreground/60 truncate">{r.pessoa_nome}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>
             Cancelar
           </Button>
-          <Button
-            size="sm"
-            disabled={!selected || linkMutation.isPending}
-            onClick={handleConfirm}
-          >
+          <Button size="sm" disabled={!escolha || linkMutation.isPending} onClick={handleConfirm}>
             {linkMutation.isPending ? (
               <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
             ) : (
@@ -140,7 +216,12 @@ function LinkDialog({
 }
 
 export default function ElephanPendenciasConfig() {
-  const { data: pendencias = [], isLoading } = useElephanPendencias();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.profile?.super_adm === true;
+  // Closer comum resolve só as próprias calls; super admin enxerga o time todo.
+  const { data: pendencias = [], isLoading } = useElephanPendencias(
+    isSuperAdmin ? null : user?.profile?.id ?? null,
+  );
   const ignoreMutation = useIgnoreElephanPendencia();
   const [linkTarget, setLinkTarget] = useState<ElephanPendencia | null>(null);
 
@@ -157,11 +238,13 @@ export default function ElephanPendenciasConfig() {
     <div className="max-w-3xl">
       <div className="flex items-center gap-2 mb-1">
         <Bot className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-        <h2 className="text-[15px] font-semibold text-foreground">Pendências Elephan.ai</h2>
+        <h2 className="text-[15px] font-semibold text-foreground">Calls sem contato definido</h2>
       </div>
       <p className="text-[13px] text-muted-foreground mb-4">
-        Calls gravadas pela Elephan que não conseguimos vincular automaticamente a um negócio
-        (consultor ou reunião não encontrados na janela de tempo). Vincule manualmente ou ignore.
+        Calls gravadas pela Elephan que o CRM não conseguiu vincular sozinho a um contato — porque
+        não achou a reunião, ou porque achou mais de uma no mesmo horário. Escolha o contato certo
+        ou ignore.
+        {isSuperAdmin && ' Você está vendo as calls de todo o time.'}
       </p>
 
       {isLoading && (
@@ -187,9 +270,18 @@ export default function ElephanPendenciasConfig() {
                 <p className="text-[13px] font-medium text-foreground truncate">
                   {p.title || 'Reunião sem título'}
                 </p>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-[3px]">
-                  Elephan
-                </Badge>
+                {p.status === 'needs_confirmation' ? (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 rounded-[3px] border-amber-500/40 text-amber-600"
+                  >
+                    Confirmar contato
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 rounded-[3px]">
+                    Sem reunião
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-3 text-[11px] text-muted-foreground/60 mb-1.5">
                 <span className="flex items-center gap-1">
@@ -210,7 +302,7 @@ export default function ElephanPendenciasConfig() {
                 className="h-7 px-2.5 text-[11px]"
                 onClick={() => setLinkTarget(p)}
               >
-                Vincular
+                {p.status === 'needs_confirmation' ? 'Escolher contato' : 'Vincular'}
               </Button>
               <Button
                 size="sm"

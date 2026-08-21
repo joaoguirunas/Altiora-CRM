@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import {
   buildScorecard,
@@ -6,6 +7,15 @@ import {
   type ElephanAnswer,
   type ElephanScorecard,
 } from '@/utils/elephanScorecard';
+
+/**
+ * `elephan_unmatched_events` ainda não existe no types.ts gerado (o arquivo está
+ * atrás do banco). Sem a tabela no schema, o cliente tipado não tem overload
+ * para ela e a inferência do PostgREST estoura. O formato real das linhas está
+ * em ElephanPendencia, logo abaixo.
+ */
+const pendenciasTable = () =>
+  (supabase as unknown as SupabaseClient).from('elephan_unmatched_events');
 
 export interface ElephanPendencia {
   id: string;
@@ -19,7 +29,14 @@ export interface ElephanPendencia {
   duration_seconds: number | null;
   recording_url: string | null;
   transcript_text: string | null;
-  status: 'pending' | 'linked' | 'ignored';
+  /**
+   * 'pending' = o webhook não achou reunião nenhuma e o closer busca o negócio.
+   * 'needs_confirmation' = achou candidatas e quer que ele diga qual era.
+   * Ver migration 20260821140000_elephan_candidate_meetings.sql.
+   */
+  status: 'pending' | 'needs_confirmation' | 'linked' | 'ignored';
+  /** Reuniões que o match automático considerou plausíveis (status needs_confirmation). */
+  candidate_meeting_ids: string[] | null;
   created_at: string;
   /**
    * Payload completo do transcribe, como a Elephan mandou. É daqui que sai o
@@ -29,20 +46,30 @@ export interface ElephanPendencia {
   raw_payload?: { answers?: ElephanAnswer[]; prompt?: ElephanScorecard['prompt'] } | null;
 }
 
-export const useElephanPendencias = () => {
+/**
+ * Pendências em aberto. `closerUserId` restringe às calls do próprio consultor —
+ * é assim que o closer resolve as dele sem enxergar (nem mexer n)as dos outros.
+ * Sem o filtro, lista tudo (visão de gestão).
+ */
+export const useElephanPendencias = (closerUserId?: string | null) => {
   return useQuery({
-    queryKey: ['elephan-pendencias'],
+    queryKey: ['elephan-pendencias', closerUserId ?? 'all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('elephan_unmatched_events')
+      // Sem reatribuir o builder: reatribuição faz o TS reinferir a cadeia
+      // inteira do PostgREST e estourar em "type instantiation excessively deep".
+      const base = pendenciasTable()
         .select('*, closer:settings_users(name)')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'needs_confirmation'])
         .order('call_date', { ascending: false });
+
+      const { data, error } = await (closerUserId
+        ? base.eq('closer_user_id', closerUserId)
+        : base);
       if (error) throw error;
       return (data ?? []).map((r) => ({
         ...r,
         closer_name: (r as unknown as { closer?: { name?: string } }).closer?.name ?? null,
-      })) as ElephanPendencia[];
+      })) as unknown as ElephanPendencia[];
     },
     staleTime: 15_000,
   });
@@ -52,6 +79,13 @@ interface LinkPendenciaParams {
   pendenciaId: string;
   transcribeId: string;
   leadId: string;
+  /**
+   * Reunião que já existe no CRM (candidata sugerida pelo match). Quando vem,
+   * os artefatos da call são anexados a ela; sem isso, criaríamos uma segunda
+   * reunião para o mesmo encontro e o negócio ficaria com a agenda duplicada.
+   * Ausente = call sem reunião correspondente, aí sim criamos uma.
+   */
+  meetingId?: string | null;
   leadPeopleId: string | null;
   closerUserId: string | null;
   callDate: string;
@@ -83,27 +117,32 @@ export const useLinkElephanPendencia = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (params: LinkPendenciaParams) => {
-      const { data: meeting, error: meetingErr } = await supabase
-        .from('meetings')
-        .insert({
-          leads_id: params.leadId,
-          people_id: params.leadPeopleId,
-          users_id: params.closerUserId,
-          title: params.title ?? 'Reunião (Elephan.ai — vínculo manual)',
-          date: params.callDate.slice(0, 10),
-          start_time: params.callDate,
-          end_time: params.callDate,
-          source: 'elephan',
-          status: 'realizado',
-        })
-        .select('id')
-        .single();
-      if (meetingErr) throw meetingErr;
+      let meetingId = params.meetingId ?? null;
+
+      if (!meetingId) {
+        const { data: meeting, error: meetingErr } = await supabase
+          .from('meetings')
+          .insert({
+            leads_id: params.leadId,
+            people_id: params.leadPeopleId,
+            users_id: params.closerUserId,
+            title: params.title ?? 'Reunião (Elephan.ai — vínculo manual)',
+            date: params.callDate.slice(0, 10),
+            start_time: params.callDate,
+            end_time: params.callDate,
+            source: 'elephan',
+            status: 'realizado',
+          })
+          .select('id')
+          .single();
+        if (meetingErr) throw meetingErr;
+        meetingId = meeting.id;
+      }
 
       const records: Record<string, unknown>[] = [];
       if (params.recordingUrl) {
         records.push({
-          meeting_id: meeting.id,
+          meeting_id: meetingId,
           record_type: 'recording',
           source: 'elephan',
           url: params.recordingUrl,
@@ -112,7 +151,7 @@ export const useLinkElephanPendencia = () => {
       }
       if (params.transcriptText) {
         records.push({
-          meeting_id: meeting.id,
+          meeting_id: meetingId,
           record_type: 'transcript',
           source: 'elephan',
           content: params.transcriptText,
@@ -125,7 +164,7 @@ export const useLinkElephanPendencia = () => {
       const scorecard = buildScorecard(params.answers, params.scorecardPrompt ?? null);
       if (params.summary || insights.length > 0 || scorecard) {
         records.push({
-          meeting_id: meeting.id,
+          meeting_id: meetingId,
           record_type: 'ai_summary',
           source: 'elephan',
           content: params.summary,
@@ -148,19 +187,18 @@ export const useLinkElephanPendencia = () => {
         if (recErr) throw recErr;
       }
 
-      const { error: updateErr } = await supabase
-        .from('elephan_unmatched_events')
+      const { error: updateErr } = await pendenciasTable()
         .update({
           status: 'linked',
           linked_lead_id: params.leadId,
-          linked_meeting_id: meeting.id,
+          linked_meeting_id: meetingId,
           linked_by: params.linkedBy,
           linked_at: new Date().toISOString(),
         })
         .eq('id', params.pendenciaId);
       if (updateErr) throw updateErr;
 
-      return meeting.id;
+      return meetingId;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['elephan-pendencias'] });
@@ -172,8 +210,7 @@ export const useIgnoreElephanPendencia = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (pendenciaId: string) => {
-      const { error } = await supabase
-        .from('elephan_unmatched_events')
+      const { error } = await pendenciasTable()
         .update({ status: 'ignored' })
         .eq('id', pendenciaId);
       if (error) throw error;
@@ -235,5 +272,76 @@ export const useSearchNegocios = (search: string) => {
     },
     enabled: search.trim().length >= 2,
     staleTime: 10_000,
+  });
+};
+
+// ── Candidatas sugeridas pelo match automático ───────────────────────────────
+
+export interface CandidateMeeting {
+  meeting_id: string;
+  start_time: string;
+  meeting_title: string | null;
+  altiora_tipo: string | null;
+  lead_id: string;
+  lead_title: string | null;
+  lead_people_id: string | null;
+  pessoa_nome: string | null;
+}
+
+/**
+ * Resolve os `candidate_meeting_ids` de uma pendência em algo exibível. Os nomes
+ * vêm do banco na hora (e não do payload da Elephan) para a sugestão nunca
+ * mostrar um negócio com nome velho.
+ */
+export const useCandidateMeetings = (meetingIds: string[] | null | undefined) => {
+  const ids = meetingIds ?? [];
+  return useQuery({
+    queryKey: ['elephan-candidate-meetings', ids.join(',')],
+    queryFn: async () => {
+      const { data: meetings, error } = await supabase
+        .from('meetings')
+        .select('id, leads_id, start_time, title, altiora_tipo')
+        .in('id', ids)
+        .order('start_time', { ascending: true });
+      if (error) throw error;
+
+      const leadIds = [...new Set((meetings ?? []).map(m => m.leads_id).filter(Boolean))] as string[];
+      if (leadIds.length === 0) return [] as CandidateMeeting[];
+
+      const { data: leads, error: leadsErr } = await supabase
+        .from('leads')
+        .select('id, title, people_id, pessoa:clients_people(name)')
+        .in('id', leadIds);
+      if (leadsErr) throw leadsErr;
+
+      const leadById = new Map(
+        (leads ?? []).map(l => [
+          l.id,
+          {
+            title: l.title,
+            people_id: l.people_id,
+            pessoa_nome: (l as unknown as { pessoa?: { name?: string } }).pessoa?.name ?? null,
+          },
+        ]),
+      );
+
+      return (meetings ?? [])
+        .filter(m => m.leads_id && leadById.has(m.leads_id))
+        .map(m => {
+          const lead = leadById.get(m.leads_id as string)!;
+          return {
+            meeting_id: m.id,
+            start_time: m.start_time,
+            meeting_title: m.title ?? null,
+            altiora_tipo: m.altiora_tipo ?? null,
+            lead_id: m.leads_id as string,
+            lead_title: lead.title,
+            lead_people_id: lead.people_id,
+            pessoa_nome: lead.pessoa_nome,
+          };
+        }) as CandidateMeeting[];
+    },
+    enabled: ids.length > 0,
+    staleTime: 30_000,
   });
 };
